@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ========================================
+         COLORES PRINCIPALES
+         ======================================== -->
+
+    <!-- Color primario: Azul de la Asociación Cigüeña -->
+    <color name="md_theme_light_primary">#0061A4</color>
+    <color name="md_theme_light_onPrimary">#FFFFFF</color>
+    <color name="md_theme_light_primaryContainer">#D1E4FF</color>
+    <color name="md_theme_light_onPrimaryContainer">#001D36</color>
+
+    <!-- Color secundario: Verde naturaleza -->
+    <color name="md_theme_light_secondary">#2D6A4F</color>
+    <color name="md_theme_light_onSecondary">#FFFFFF</color>
+    <color name="md_theme_light_secondaryContainer">#B7E4C7</color>
+    <color name="md_theme_light_onSecondaryContainer">#0A2E1A</color>
+
+    <!-- Color terciario: Naranja energía -->
+    <color name="md_theme_light_tertiary">#F77F00</color>
+    <color name="md_theme_light_onTertiary">#FFFFFF</color>
+    <color name="md_theme_light_tertiaryContainer">#FFDBC8</color>
+    <color name="md_theme_light_onTertiaryContainer">#2B1700</color>
+
+    <!-- Colores de fondo -->
+    <color name="md_theme_light_background">#FDFCFF</color>
+    <color name="md_theme_light_onBackground">#1A1C1E</color>
+
+    <!-- Colores de superficie -->
+    <color name="md_theme_light_surface">#FDFCFF</color>
+    <color name="md_theme_light_onSurface">#1A1C1E</color>
+    <color name="md_theme_light_surfaceVariant">#DFE2EB</color>
+    <color name="md_theme_light_onSurfaceVariant">#43474E</color>
+
+    <!-- Colores de error -->
+    <color name="md_theme_light_error">#BA1A1A</color>
+    <color name="md_theme_light_onError">#FFFFFF</color>
+    <color name="md_theme_light_errorContainer">#FFDAD6</color>
+    <color name="md_theme_light_onErrorContainer">#410002</color>
+
+    <!-- ========================================
+         TEMA OSCURO (OPCIONAL)
+         ======================================== -->
+
+    <color name="md_theme_dark_primary">#9ECAFF</color>
+    <color name="md_theme_dark_onPrimary">#003258</color>
+    <color name="md_theme_dark_primaryContainer">#00497D</color>
+    <color name="md_theme_dark_onPrimaryContainer">#D1E4FF</color>
+
+    <!-- ... resto de colores oscuros si quieres theme oscuro -->
+
+    <!-- ========================================
+         COLORES PERSONALIZADOS
+         ======================================== -->
+
+    <!-- Estados -->
+    <color name="success">#2D6A4F</color>
+    <color name="warning">#F77F00</color>
+    <color name="danger">#BA1A1A</color>
+    <color name="info">#0061A4</color>
+
+    <!-- Dividers -->
+    <color name="divider">#E0E0E0</color>
+
+    <!-- Transparencias -->
+    <color name="scrim">#80000000</color>
+    <color name="overlay">#33000000</color>
+</resources>

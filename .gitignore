@@ -1,0 +1,52 @@
+# Android / IntelliJ / Gradle - plantilla recomendada
+.gradle/
+.idea/
+*.iml
+*.hprof
+
+# Gradle
+build/
+*/build/
+!gradle-wrapper.jar
+
+# Local properties
+local.properties
+
+# Keystore files (do not commit these)
+*.jks
+*.keystore
+key.properties
+
+# Google services - optional, do not commit if contains secrets
+google-services.json
+
+# Android Studio specific
+captures/
+.externalNativeBuild/
+.cxx/
+*.log
+
+# Kotlin/Java build
+out/
+bin/
+
+# KSP / KAPT / generated
+.ksp/
+ksp/
+kapt/
+kapt3/
+**/build/generated/
+**/build/tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+gradle-app.setting
+gradle/wrapper/gradle-wrapper.jar
+
+# Optional: exclude IDE run configs
+.run/

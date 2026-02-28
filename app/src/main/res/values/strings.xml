@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ========================================
+         GENERAL
+         ======================================== -->
+    <string name="app_name">Asociación Cigüeña</string>
+
+    <!-- ========================================
+         NAVEGACIÓN
+         ======================================== -->
+    <string name="nav_news">Noticias</string>
+    <string name="nav_calendar">Calendario</string>
+    <string name="nav_members">Socios</string>
+    <string name="nav_profile">Perfil</string>
+
+    <!-- ========================================
+         PANTALLAS
+         ======================================== -->
+
+    <!-- Splash -->
+    <string name="splash_loading">Cargando…</string>
+    <string name="splash_welcome">Bienvenido a Asociación Cigüeña</string>
+
+    <!-- Noticias -->
+    <string name="news_title">Últimas Noticias</string>
+    <string name="news_empty">No hay noticias disponibles</string>
+    <string name="news_error">Error al cargar noticias</string>
+
+    <!-- Calendario -->
+    <string name="calendar_title">Próximas Excursiones</string>
+    <string name="calendar_empty">No hay excursiones programadas</string>
+    <string name="calendar_register">Inscribirse</string>
+
+    <!-- Login -->
+    <string name="login_title">Iniciar Sesión</string>
+    <string name="login_email">Email</string>
+    <string name="login_password">Contraseña</string>
+    <string name="login_button">Entrar</string>
+    <string name="login_forgot_password">¿Olvidaste tu contraseña?</string>
+    <string name="login_error">Email o contraseña incorrectos</string>
+
+    <!-- Galería -->
+    <string name="gallery_title">Galería de Fotos</string>
+    <string name="gallery_empty">No hay fotos disponibles</string>
+    <string name="gallery_unauthorized">No tienes permiso para ver estas fotos</string>
+
+    <!-- ========================================
+         MENSAJES COMUNES
+         ======================================== -->
+    <string name="loading">Cargando…</string>
+    <string name="error_general">Ha ocurrido un error</string>
+    <string name="error_network">Sin conexión a internet</string>
+    <string name="error_auth">Debes iniciar sesión</string>
+    <string name="retry">Reintentar</string>
+    <string name="ok">Aceptar</string>
+    <string name="cancel">Cancelar</string>
+    <string name="save">Guardar</string>
+    <string name="delete">Eliminar</string>
+    <string name="logout">Cerrar sesión</string>
+</resources>
