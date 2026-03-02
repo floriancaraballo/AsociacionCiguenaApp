@@ -32,12 +32,51 @@ class FirebaseAuthDataSourceImpl @Inject constructor(
 
     override suspend fun getUserData(userId: String): UserDto? {
         return try {
-            val doc = firestore.collection(Constants.COLLECTION_USERS)
+            // PASO 1: Intentar buscar por UID
+            var doc = firestore.collection(Constants.COLLECTION_USERS)
                 .document(userId)
                 .get()
                 .await()
 
+            // PASO 2: Si no existe, buscar por email y migrar
+            if (!doc.exists()) {
+                val userEmail = auth.currentUser?.email
+
+                if (userEmail != null) {
+                    // Buscar documento por email
+                    val querySnapshot = firestore.collection(Constants.COLLECTION_USERS)
+                        .whereEqualTo("email", userEmail)
+                        .limit(1)
+                        .get()
+                        .await()
+
+                    if (!querySnapshot.isEmpty) {
+                        val tempDoc = querySnapshot.documents[0]
+                        val userData = tempDoc.data
+
+                        if (userData != null) {
+                            // Migrar documento al UID correcto
+                            firestore.collection(Constants.COLLECTION_USERS)
+                                .document(userId)
+                                .set(userData)
+                                .await()
+
+                            // Eliminar documento temporal
+                            tempDoc.reference.delete().await()
+
+                            // Obtener el documento recién migrado
+                            doc = firestore.collection(Constants.COLLECTION_USERS)
+                                .document(userId)
+                                .get()
+                                .await()
+                        }
+                    }
+                }
+            }
+
+            // PASO 3: Retornar el usuario
             doc.toObject(UserDto::class.java)?.copy(id = doc.id)
+
         } catch (e: Exception) {
             null
         }

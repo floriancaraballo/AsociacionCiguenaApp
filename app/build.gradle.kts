@@ -200,5 +200,6 @@ dependencies {
     implementation("com.google.firebase:firebase-storage-ktx")
     // Accompanist Permissions - AÑADIR
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
+    implementation("com.google.accompanist:accompanist-swiperefresh:0.32.0")
 }
 

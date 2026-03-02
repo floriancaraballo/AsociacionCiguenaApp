@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -40,7 +41,18 @@ fun NewsDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Noticia") },
+                title = {
+                    when (val state = uiState) {
+                        is NewsDetailUiState.Success -> {
+                            Text(
+                                text = state.news.title,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        else -> Text("Noticia")
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, "Volver")
@@ -119,7 +131,10 @@ private fun NewsDetailContent(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator()
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                strokeWidth = 3.dp
+                            )
                         }
                     }
                 )
@@ -230,7 +245,10 @@ private fun PhotoCarousel(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator()
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
                         }
                     }
                 )
@@ -289,24 +307,29 @@ private fun FullscreenGalleryDialog(
                 .background(Color.Black)
         ) {
             // HorizontalPager para swipe entre fotos
+            // HorizontalPager para swipe entre fotos
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize()
             ) { page ->
-                Box(
+                SubcomposeAsyncImage(
+                    model = photos[page],
+                    contentDescription = "Foto ${page + 1}",
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    SubcomposeAsyncImage(
-                        model = photos[page],
-                        contentDescription = "Foto ${page + 1}",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit,
-                        loading = {
-                            CircularProgressIndicator(color = Color.White)
+                    contentScale = ContentScale.Fit,
+                    loading = {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(48.dp),
+                                strokeWidth = 4.dp,
+                                color = Color.White
+                            )
                         }
-                    )
-                }
+                    }
+                )
             }
 
             // Botón cerrar

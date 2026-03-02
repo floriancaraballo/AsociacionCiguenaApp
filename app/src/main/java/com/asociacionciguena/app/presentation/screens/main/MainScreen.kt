@@ -29,6 +29,7 @@ import com.asociacionciguena.app.presentation.screens.admin.news.NewsManagementS
 import com.asociacionciguena.app.presentation.screens.admin.excursions.ExcursionFormScreen
 import com.asociacionciguena.app.presentation.screens.admin.excursions.ExcursionManagementScreen
 import com.asociacionciguena.app.presentation.screens.admin.photos.PhotoUploadScreen
+import com.asociacionciguena.app.presentation.screens.admin.users.UserManagementScreen
 
 /**
  * Pantalla principal con Bottom Navigation Bar
@@ -97,9 +98,13 @@ fun MainScreen(
                     onNavigateToPhotos = {
                         navController.navigate(Screen.PhotoUpload.route)
                     },
+                    onNavigateToUsers = {
+                        navController.navigate(Screen.UserManagement.route)
+                    },
                     onNavigateBack = {
                         navController.popBackStack()
                     }
+
                 )
             }
             composable(Screen.NewsManagement.route) {
@@ -156,6 +161,14 @@ fun MainScreen(
             // Admin Photo Upload
             composable(Screen.PhotoUpload.route) {
                 PhotoUploadScreen(
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            composable(Screen.UserManagement.route) {
+                UserManagementScreen(
                     onNavigateBack = {
                         navController.popBackStack()
                     }

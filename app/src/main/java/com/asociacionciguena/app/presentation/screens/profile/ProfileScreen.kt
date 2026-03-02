@@ -155,7 +155,7 @@ private fun ProfileContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         // NUEVO - Botón Panel Admin (solo si es admin)
-        if (user.role == "admin") {
+        if (user?.role == "admin" || user?.role == "superadmin") {
             Button(
                 onClick = onNavigateToAdminPanel,
                 modifier = Modifier

@@ -1,184 +1,270 @@
 package com.asociacionciguena.app.presentation.screens.admin.dashboard
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.asociacionciguena.app.presentation.components.AdminOnly
+import com.google.accompanist.swiperefresh.SwipeRefresh
+import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 
-/**
- * Panel principal de administración
- * ACTUALIZADO - Con botón de volver
- */
 @Composable
 fun AdminDashboardScreen(
     viewModel: AdminDashboardViewModel = hiltViewModel(),
     onNavigateToNews: () -> Unit,
     onNavigateToExcursions: () -> Unit,
     onNavigateToPhotos: () -> Unit,
+    onNavigateToUsers: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
-    val isAdmin by viewModel.isAdmin.collectAsState()
-    val userName by viewModel.userName.collectAsState()
+    val stats by viewModel.stats.collectAsState()
+    val isLoadingStats by viewModel.isLoadingStats.collectAsState()
 
-    AdminOnly(
-        isAdmin = isAdmin,
-        onNavigateBack = onNavigateBack
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Panel de Administración") },
-                    navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowBack,
-                                contentDescription = "Volver"
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Panel de Administración") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.ArrowBack, "Volver")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.loadStats() }) {
+                        Icon(Icons.Default.Refresh, "Actualizar")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-            }
-        ) { paddingValues ->
+            )
+        }
+    ) { paddingValues ->
+        SwipeRefresh(
+            state = rememberSwipeRefreshState(isLoadingStats),
+            onRefresh = { viewModel.loadStats() },
+            modifier = Modifier.padding(paddingValues)
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Bienvenida
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Bienvenido, $userName",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                        Text(
-                            text = "Administrador",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                }
+                // Card de estadísticas generales
+                StatsOverviewCard(stats = stats, isLoading = isLoadingStats)
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Grid de opciones
-                val adminOptions = listOf(
-                    AdminOption(
-                        icon = Icons.Default.Article,
-                        title = "Gestionar Noticias",
-                        description = "Crear, editar y eliminar noticias",
-                        onClick = onNavigateToNews
-                    ),
-                    AdminOption(
-                        icon = Icons.Default.CalendarMonth,
-                        title = "Gestionar Excursiones",
-                        description = "Crear, editar y eliminar excursiones",
-                        onClick = onNavigateToExcursions
-                    ),
-                    AdminOption(
-                        icon = Icons.Default.PhotoLibrary,
-                        title = "Subir Fotos",
-                        description = "Subir y gestionar fotos de excursiones",
-                        onClick = onNavigateToPhotos
-                    ),
-                    AdminOption(
-                        icon = Icons.Default.People,
-                        title = "Gestionar Usuarios",
-                        description = "Ver y modificar permisos",
-                        onClick = { /* TODO */ }
-                    )
+                Text(
+                    text = "Gestión",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
 
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                // Grid 2x2 como antes
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(adminOptions) { option ->
-                        AdminOptionCard(option = option)
-                    }
+                    AdminOptionCard(
+                        title = "Gestionar Noticias",
+                        icon = Icons.Default.Article,
+                        onClick = onNavigateToNews,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    AdminOptionCard(
+                        title = "Gestionar Excursiones",
+                        icon = Icons.Default.CalendarMonth,
+                        onClick = onNavigateToExcursions,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    AdminOptionCard(
+                        title = "Subir Fotos",
+                        icon = Icons.Default.Photo,
+                        onClick = onNavigateToPhotos,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    AdminOptionCard(
+                        title = "Gestionar Usuarios",
+                        icon = Icons.Default.People,
+                        onClick = onNavigateToUsers,  // ← Nueva función
+                        modifier = Modifier.weight(1f),
+                        enabled = true  // ← Habilitada
+                    )
                 }
             }
         }
     }
 }
 
-/**
- * Card de opción del panel
- */
 @Composable
-private fun AdminOptionCard(
-    option: AdminOption
+private fun StatsOverviewCard(
+    stats: DashboardStats,
+    isLoading: Boolean,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        onClick = option.onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(160.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Resumen",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                }
+            }
+
+            Divider()
+
+            StatRow(
+                icon = Icons.Default.Article,
+                label = "Noticias",
+                value = "${stats.totalNews}",
+                detail = "${stats.publicNews} públicas • ${stats.privateNews} privadas"
+            )
+
+            StatRow(
+                icon = Icons.Default.CalendarMonth,
+                label = "Excursiones",
+                value = "${stats.totalExcursions}"
+            )
+
+            StatRow(
+                icon = Icons.Default.Photo,
+                label = "Fotos",
+                value = "${stats.totalPhotos}"
+            )
+
+            StatRow(
+                icon = Icons.Default.People,
+                label = "Usuarios",
+                value = "${stats.totalUsers}",
+                detail = "${stats.adminUsers} administradores"
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    detail: String? = null,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+
+            Column {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (detail != null) {
+                    Text(
+                        text = detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+private fun AdminOptionCard(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.aspectRatio(1f),
+        enabled = enabled
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
             Icon(
-                imageVector = option.icon,
-                contentDescription = null,
+                imageVector = icon,
+                contentDescription = title,
                 modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
+                tint = if (enabled)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+
             Text(
-                text = option.title,
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-
-            Text(
-                text = option.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                color = if (enabled)
+                    MaterialTheme.colorScheme.onSurface
+                else
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             )
         }
     }
 }
-
-/**
- * Data class para opciones del admin
- */
-private data class AdminOption(
-    val icon: ImageVector,
-    val title: String,
-    val description: String,
-    val onClick: () -> Unit
-)
