@@ -22,7 +22,7 @@ class NewsViewModel @Inject constructor(
     private val getNewsUseCase: GetNewsUseCase
 ) : ViewModel() {
 
-    // Estado privado (mutable) - solo el ViewModel puede modificarlo
+    // Estado o (mutable) - solo el ViewModel puede modificarlo
     private val _uiState = MutableStateFlow<NewsUiState>(NewsUiState.Loading)
 
     // Estado público (inmutable) - la UI solo puede observarlo

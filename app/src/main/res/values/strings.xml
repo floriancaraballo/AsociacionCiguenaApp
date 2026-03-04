@@ -8,7 +8,7 @@
     <!-- ========================================
          NAVEGACIÓN
          ======================================== -->
-    <string name="nav_news">Noticias</string>
+    <string name="nav_news">Publicaciones</string>
     <string name="nav_calendar">Calendario</string>
     <string name="nav_members">Socios</string>
     <string name="nav_profile">Perfil</string>
@@ -22,9 +22,9 @@
     <string name="splash_welcome">Bienvenido a Asociación Cigüeña</string>
 
     <!-- Noticias -->
-    <string name="news_title">Últimas Noticias</string>
-    <string name="news_empty">No hay noticias disponibles</string>
-    <string name="news_error">Error al cargar noticias</string>
+    <string name="news_title">Últimas Publicaciones</string>
+    <string name="news_empty">No hay publicaciones disponibles</string>
+    <string name="news_error">Error al cargar publicaciones</string>
 
     <!-- Calendario -->
     <string name="calendar_title">Próximas Excursiones</string>
@@ -57,4 +57,8 @@
     <string name="save">Guardar</string>
     <string name="delete">Eliminar</string>
     <string name="logout">Cerrar sesión</string>
+
+    <string name="default_notification_channel_id">asociacion_ciguena_notifications</string>
+    <string name="default_notification_channel_name">Notificaciones Generales</string>
+    <string name="default_notification_channel_description">Notificaciones de publicaciones, excursiones y fotos</string>
 </resources>

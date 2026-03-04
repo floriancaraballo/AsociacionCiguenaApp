@@ -2,33 +2,25 @@ package com.asociacionciguena.app.data.datasource.local
 
 import kotlinx.coroutines.flow.Flow
 
-/**
- * DataSource para preferencias locales (DataStore)
- */
 interface PreferencesDataSource {
 
-    /**
-     * Guardar si el usuario está logueado
-     */
     suspend fun setLoggedIn(isLoggedIn: Boolean)
-
-    /**
-     * Obtener si el usuario está logueado
-     */
     fun isLoggedIn(): Flow<Boolean>
 
-    /**
-     * Guardar ID del usuario
-     */
     suspend fun setUserId(userId: String)
-
-    /**
-     * Obtener ID del usuario
-     */
     fun getUserId(): Flow<String?>
 
-    /**
-     * Limpiar todas las preferencias (logout)
-     */
     suspend fun clear()
+
+    // ← AÑADIR ESTOS MÉTODOS
+
+    /**
+     * Guardar que el onboarding fue completado
+     */
+    suspend fun setOnboardingCompleted(completed: Boolean)
+
+    /**
+     * Verificar si el onboarding fue completado
+     */
+    fun isOnboardingCompleted(): Flow<Boolean>
 }

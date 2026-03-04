@@ -2,6 +2,7 @@ package com.asociacionciguena.app.presentation.screens.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.asociacionciguena.app.data.manager.FCMTokenManager
 import com.asociacionciguena.app.domain.model.Result
 import com.asociacionciguena.app.domain.usecase.auth.GetCurrentUserUseCase
 import com.asociacionciguena.app.domain.usecase.auth.LoginUseCase
@@ -13,20 +14,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * ViewModel de autenticación
- */
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val loginUseCase: LoginUseCase,
     private val logoutUseCase: LogoutUseCase,
-    private val getCurrentUserUseCase: GetCurrentUserUseCase
+    private val getCurrentUserUseCase: GetCurrentUserUseCase,
+    private val fcmTokenManager: FCMTokenManager  // ← AÑADIDO
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
-    // Estados del formulario
     private val _email = MutableStateFlow("")
     val email: StateFlow<String> = _email.asStateFlow()
 
@@ -37,14 +35,13 @@ class AuthViewModel @Inject constructor(
         checkIfUserIsLoggedIn()
     }
 
-    /**
-     * Verifica si hay un usuario logueado
-     */
     private fun checkIfUserIsLoggedIn() {
         viewModelScope.launch {
             when (val result = getCurrentUserUseCase()) {
                 is Result.Success -> {
                     result.data?.let { user ->
+                        // NUEVO: Obtener token FCM si ya está logueado
+                        refreshFCMToken()
                         _uiState.value = AuthUiState.Success(user)
                     }
                 }
@@ -58,29 +55,23 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Actualizar email
-     */
     fun onEmailChange(newEmail: String) {
         _email.value = newEmail
     }
 
-    /**
-     * Actualizar password
-     */
     fun onPasswordChange(newPassword: String) {
         _password.value = newPassword
     }
 
-    /**
-     * Realizar login
-     */
     fun login() {
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
 
             when (val result = loginUseCase(_email.value, _password.value)) {
                 is Result.Success -> {
+                    // NUEVO: Obtener token FCM después del login exitoso
+                    refreshFCMToken()
+
                     _uiState.value = AuthUiState.Success(result.data)
                 }
 
@@ -95,11 +86,15 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Cerrar sesión
-     */
     fun logout() {
         viewModelScope.launch {
+            // NUEVO: Eliminar token FCM antes de logout
+            try {
+                fcmTokenManager.deleteToken()
+            } catch (e: Exception) {
+                // Log error pero continuar con logout
+            }
+
             logoutUseCase()
             _uiState.value = AuthUiState.Idle
             _email.value = ""
@@ -107,12 +102,22 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Limpiar error
-     */
     fun clearError() {
         if (_uiState.value is AuthUiState.Error) {
             _uiState.value = AuthUiState.Idle
+        }
+    }
+
+    /**
+     * NUEVO: Obtener y guardar token FCM
+     */
+    private fun refreshFCMToken() {
+        viewModelScope.launch {
+            try {
+                fcmTokenManager.refreshToken()
+            } catch (e: Exception) {
+                // Log error pero no bloquear el login
+            }
         }
     }
 }

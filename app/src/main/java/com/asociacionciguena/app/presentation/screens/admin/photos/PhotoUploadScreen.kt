@@ -23,6 +23,11 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -34,7 +39,6 @@ fun PhotoUploadScreen(
     val excursions by viewModel.excursions.collectAsState()
     val users by viewModel.users.collectAsState()
 
-    // Permission state
     val permissionState = rememberPermissionState(
         permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_IMAGES
@@ -43,14 +47,24 @@ fun PhotoUploadScreen(
         }
     )
 
-    // Image picker launcher
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { viewModel.onPhotoSelected(it) }
+    // NUEVO: Selector múltiple de fotos
+    val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
+        contract = PickMultipleVisualMedia(maxItems = 20)
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            viewModel.onPhotosSelected(uris)
+        }
     }
 
-    // Handle success
+    // NUEVO: Selector para añadir más fotos
+    val addMorePhotosLauncher = rememberLauncherForActivityResult(
+        contract = PickMultipleVisualMedia(maxItems = 20)
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            viewModel.addMorePhotos(uris)
+        }
+    }
+
     LaunchedEffect(uiState) {
         if (uiState is PhotoUploadUiState.Success) {
             kotlinx.coroutines.delay(2000)
@@ -61,7 +75,7 @@ fun PhotoUploadScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Subir Foto") },
+                title = { Text("Subir Fotos") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, "Volver")
@@ -82,10 +96,22 @@ fun PhotoUploadScreen(
             permissionGranted = permissionState.status.isGranted,
             shouldShowRationale = permissionState.status.shouldShowRationale,
             onRequestPermission = { permissionState.launchPermissionRequest() },
-            onSelectPhoto = { imagePickerLauncher.launch("image/*") },
+            onSelectPhotos = {
+                multiplePhotoPickerLauncher.launch(
+                    PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            onAddMorePhotos = {
+                addMorePhotosLauncher.launch(
+                    PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            onRemovePhoto = viewModel::removePhoto,
             onExcursionSelected = viewModel::onExcursionSelected,
             onUserToggled = viewModel::onUserToggled,
-            onUploadClick = { uri -> viewModel.uploadPhoto(uri) {} },
+            onSelectAll = viewModel::selectAllUsers,
+            onDeselectAll = viewModel::deselectAllUsers,
+            onUploadClick = { viewModel.uploadPhotos {} },
             onClearError = viewModel::clearError,
             modifier = Modifier.padding(paddingValues)
         )
@@ -100,10 +126,14 @@ private fun PhotoUploadContent(
     permissionGranted: Boolean,
     shouldShowRationale: Boolean,
     onRequestPermission: () -> Unit,
-    onSelectPhoto: () -> Unit,
+    onSelectPhotos: () -> Unit,  // ← Cambio: plural
+    onAddMorePhotos: () -> Unit,  // ← NUEVO
+    onRemovePhoto: (Uri) -> Unit,  // ← NUEVO
     onExcursionSelected: (String) -> Unit,
     onUserToggled: (String) -> Unit,
-    onUploadClick: (Uri) -> Unit,
+    onSelectAll: () -> Unit,
+    onDeselectAll: () -> Unit,
+    onUploadClick: () -> Unit,
     onClearError: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -114,7 +144,7 @@ private fun PhotoUploadContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Error message
+        // Error y Success (sin cambios)
         if (uiState is PhotoUploadUiState.Error) {
             Card(
                 colors = CardDefaults.cardColors(
@@ -141,7 +171,6 @@ private fun PhotoUploadContent(
             }
         }
 
-        // Success message
         if (uiState is PhotoUploadUiState.Success) {
             Card(
                 colors = CardDefaults.cardColors(
@@ -159,14 +188,13 @@ private fun PhotoUploadContent(
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Foto subida correctamente",
+                        text = "Fotos subidas correctamente",
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
         }
 
-        // Permission request
         if (!permissionGranted) {
             PermissionRequestCard(
                 shouldShowRationale = shouldShowRationale,
@@ -175,10 +203,10 @@ private fun PhotoUploadContent(
             return
         }
 
-        // Select photo button
+        // Select photos button
         if (uiState is PhotoUploadUiState.Idle) {
             OutlinedCard(
-                onClick = onSelectPhoto,
+                onClick = onSelectPhotos,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
@@ -196,31 +224,43 @@ private fun PhotoUploadContent(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Seleccionar Foto",
+                        text = "Seleccionar Fotos",
                         style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = "Hasta 20 fotos",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
         }
 
-        // Photo selected
-        if (uiState is PhotoUploadUiState.PhotoSelected) {
-            PhotoSelectedContent(
-                uri = uiState.uri,
+        // Photos selected
+        if (uiState is PhotoUploadUiState.PhotosSelected) {
+            PhotosSelectedContent(
+                uris = uiState.uris,
                 excursions = excursions,
                 users = users,
                 selectedExcursionId = uiState.selectedExcursionId,
                 selectedUsers = uiState.selectedUsers,
                 onExcursionSelected = onExcursionSelected,
                 onUserToggled = onUserToggled,
-                onUploadClick = { onUploadClick(uiState.uri) },
-                onChangePhoto = onSelectPhoto
+                onSelectAll = onSelectAll,
+                onDeselectAll = onDeselectAll,
+                onUploadClick = onUploadClick,
+                onAddMore = onAddMorePhotos,
+                onRemove = onRemovePhoto
             )
         }
 
         // Uploading
         if (uiState is PhotoUploadUiState.Uploading) {
-            UploadingContent(progress = uiState.progress)
+            UploadingContent(
+                progress = uiState.progress,
+                currentPhoto = uiState.currentPhotoIndex,
+                totalPhotos = uiState.totalPhotos
+            )
         }
     }
 }
@@ -271,54 +311,79 @@ private fun PermissionRequestCard(
 }
 
 @Composable
-private fun PhotoSelectedContent(
-    uri: Uri,
+private fun PhotosSelectedContent(
+    uris: List<Uri>,
     excursions: List<ExcursionOption>,
     users: List<UserOption>,
     selectedExcursionId: String?,
     selectedUsers: List<String>,
     onExcursionSelected: (String) -> Unit,
     onUserToggled: (String) -> Unit,
+    onSelectAll: () -> Unit,
+    onDeselectAll: () -> Unit,
     onUploadClick: () -> Unit,
-    onChangePhoto: () -> Unit
+    onAddMore: () -> Unit,
+    onRemove: (Uri) -> Unit
 ) {
-    // Preview
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(200.dp)
-    ) {
-        Box {
-            SubcomposeAsyncImage(
-                model = uri,
-                contentDescription = "Preview",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                loading = {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
+    // Header con contador
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${uris.size} foto${if (uris.size != 1) "s" else ""} seleccionada${if (uris.size != 1) "s" else ""}",
+                style = MaterialTheme.typography.titleMedium
             )
 
-            IconButton(
-                onClick = onChangePhoto,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-            ) {
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
-                ) {
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = "Cambiar foto",
-                        modifier = Modifier.padding(8.dp)
+            TextButton(onClick = onAddMore) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Añadir más")
+            }
+        }
+    }
+
+    // Grid de fotos
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.height(300.dp)
+    ) {
+        items(
+            items = uris,
+            key = { it.toString() }
+        ) { uri ->
+            Box {
+                Card(modifier = Modifier.aspectRatio(1f)) {
+                    SubcomposeAsyncImage(
+                        model = uri,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
                     )
+                }
+
+                // Botón eliminar
+                IconButton(
+                    onClick = { onRemove(uri) },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(32.dp)
+                ) {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.errorContainer
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Eliminar",
+                            modifier = Modifier.padding(4.dp),
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
                 }
             }
         }
@@ -335,7 +400,9 @@ private fun PhotoSelectedContent(
     UserSelector(
         users = users,
         selectedUsers = selectedUsers,
-        onUserToggled = onUserToggled
+        onUserToggled = onUserToggled,
+        onSelectAll = onSelectAll,
+        onDeselectAll = onDeselectAll
     )
 
     // Upload button
@@ -348,12 +415,16 @@ private fun PhotoSelectedContent(
     ) {
         Icon(Icons.Default.CloudUpload, contentDescription = null)
         Spacer(modifier = Modifier.width(8.dp))
-        Text("Subir Foto")
+        Text("Subir ${uris.size} foto${if (uris.size != 1) "s" else ""}")
     }
 }
 
 @Composable
-private fun UploadingContent(progress: Float) {
+private fun UploadingContent(
+    progress: Float,
+    currentPhoto: Int,
+    totalPhotos: Int
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -366,12 +437,12 @@ private fun UploadingContent(progress: Float) {
             )
 
             Text(
-                text = "Subiendo foto...",
+                text = "Subiendo fotos...",
                 style = MaterialTheme.typography.titleMedium
             )
 
             Text(
-                text = "${(progress * 100).toInt()}%",
+                text = "Foto $currentPhoto de $totalPhotos",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -436,20 +507,36 @@ private fun ExcursionSelector(
         }
     }
 }
-
 @Composable
 private fun UserSelector(
     users: List<UserOption>,
     selectedUsers: List<String>,
-    onUserToggled: (String) -> Unit
+    onUserToggled: (String) -> Unit,
+    onSelectAll: () -> Unit,  // NUEVO
+    onDeselectAll: () -> Unit  // NUEVO
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Usuarios autorizados * (${selectedUsers.size})",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Usuarios autorizados * (${selectedUsers.size})",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = onSelectAll) {
+                        Text("Todos", style = MaterialTheme.typography.labelSmall)
+                    }
+                    TextButton(onClick = onDeselectAll) {
+                        Text("Ninguno", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 

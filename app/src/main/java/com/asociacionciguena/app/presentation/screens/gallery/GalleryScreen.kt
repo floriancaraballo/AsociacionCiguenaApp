@@ -1,44 +1,38 @@
 package com.asociacionciguena.app.presentation.screens.gallery
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.pullrefresh.PullRefreshIndicator
-import androidx.compose.material.pullrefresh.pullRefresh
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.asociacionciguena.app.domain.model.Photo
-import com.asociacionciguena.app.presentation.components.EmptyState
+import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.ErrorMessage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
-import com.asociacionciguena.app.presentation.screens.gallery.components.ExcursionPhotoSection
+import kotlinx.datetime.LocalDateTime
 
-/**
- * Pantalla de Galería de Fotos
- */
-@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun GalleryScreen(
     viewModel: GalleryViewModel = hiltViewModel(),
-    onNavigateToLogin: () -> Unit
+    onNavigateToExcursionDetail: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Galería de Fotos") },
+                title = { Text("Galería") },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
         }
@@ -49,10 +43,9 @@ fun GalleryScreen(
             }
 
             is GalleryUiState.Success -> {
-                GallerySuccessContent(
-                    photosByExcursion = state.photosByExcursion,
-                    isRefreshing = state.isRefreshing,
-                    onRefresh = { viewModel.refresh() },
+                GalleryContent(
+                    excursions = state.excursions,
+                    onExcursionClick = onNavigateToExcursionDetail,
                     modifier = Modifier.padding(paddingValues)
                 )
             }
@@ -64,111 +57,77 @@ fun GalleryScreen(
                     modifier = Modifier.padding(paddingValues)
                 )
             }
+        }
+    }
+}
 
-            is GalleryUiState.NotAuthenticated -> {
-                NotAuthenticatedMessage(
-                    onNavigateToLogin = onNavigateToLogin,
-                    modifier = Modifier.padding(paddingValues)
+@Composable
+private fun GalleryContent(
+    excursions: List<ExcursionWithPhotos>,
+    onExcursionClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (excursions.isEmpty()) {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PhotoLibrary,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "No hay excursiones pasadas",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            items(items = excursions, key = { it.excursion.id }) { item ->
+                ExcursionCard(
+                    excursionWithPhotos = item,
+                    onClick = { onExcursionClick(item.excursion.id) }
                 )
             }
         }
     }
 }
 
-/**
- * Contenido cuando hay fotos cargadas
- */
-@OptIn(ExperimentalMaterialApi::class)
 @Composable
-private fun GallerySuccessContent(
-    photosByExcursion: Map<String, List<Photo>>,
-    isRefreshing: Boolean,
-    onRefresh: () -> Unit,
-    modifier: Modifier = Modifier
+private fun ExcursionCard(
+    excursionWithPhotos: ExcursionWithPhotos,
+    onClick: () -> Unit
 ) {
-    val pullRefreshState = rememberPullRefreshState(
-        refreshing = isRefreshing,
-        onRefresh = onRefresh
-    )
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .pullRefresh(pullRefreshState)
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
     ) {
-        if (photosByExcursion.isEmpty()) {
-            EmptyState(
-                message = "No tienes fotos autorizadas\n\nContacta con un administrador para obtener acceso a las fotos",
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            LazyColumn(
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(
-                    items = photosByExcursion.entries.toList(),
-                    key = { it.key }
-                ) { (excursionId, photos) ->
-                    ExcursionPhotoSection(
-                        excursionId = excursionId,
-                        photos = photos,
-                        onPhotoClick = { photo ->
-                            // TODO: Abrir foto en pantalla completa
-                        }
+        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (excursionWithPhotos.firstPhotoUrl != null) {
+                Card(modifier = Modifier.size(80.dp)) {
+                    SubcomposeAsyncImage(
+                        model = excursionWithPhotos.firstPhotoUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
                     )
                 }
             }
-        }
-
-        PullRefreshIndicator(
-            refreshing = isRefreshing,
-            state = pullRefreshState,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
-    }
-}
-
-/**
- * Mensaje cuando el usuario no está autenticado
- */
-@Composable
-private fun NotAuthenticatedMessage(
-    onNavigateToLogin: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(32.dp)
-        ) {
-            Text(
-                text = "🔒",
-                style = MaterialTheme.typography.displayLarge
-            )
-
-            Text(
-                text = "Debes iniciar sesión",
-                style = MaterialTheme.typography.titleLarge
-            )
-
-            Text(
-                text = "Para acceder a la galería de fotos necesitas estar autenticado",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(onClick = onNavigateToLogin) {
-                Text("Iniciar Sesión")
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = excursionWithPhotos.excursion.title, style = MaterialTheme.typography.titleMedium)
+                Text(text = "${excursionWithPhotos.photoCount} fotos", style = MaterialTheme.typography.bodySmall)
             }
+            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null)
         }
     }
 }

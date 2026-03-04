@@ -65,4 +65,6 @@
     <!-- Transparencias -->
     <color name="scrim">#80000000</color>
     <color name="overlay">#33000000</color>
+
+    <color name="notification_color">#1976D2</color>
 </resources>

@@ -14,13 +14,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
+import androidx.lifecycle.SavedStateHandle
 
 @HiltViewModel
 class PhotoUploadViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage
 ) : ViewModel() {
 
+    private val preselectedExcursionId: String? = savedStateHandle["excursionId"]
     private val _uiState = MutableStateFlow<PhotoUploadUiState>(PhotoUploadUiState.Idle)
     val uiState: StateFlow<PhotoUploadUiState> = _uiState.asStateFlow()
 
@@ -33,6 +36,12 @@ class PhotoUploadViewModel @Inject constructor(
     init {
         loadExcursions()
         loadUsers()
+
+        // Pre-seleccionar excursión si viene por parámetro
+        preselectedExcursionId?.let { excId ->
+            // Esperamos a que se seleccione una foto
+            // El estado se actualizará en onPhotoSelected
+        }
     }
 
     /**
@@ -93,8 +102,51 @@ class PhotoUploadViewModel @Inject constructor(
     /**
      * Usuario selecciona una foto
      */
+    /**
+     * Usuario selecciona UNA foto
+     */
     fun onPhotoSelected(uri: Uri) {
-        _uiState.value = PhotoUploadUiState.PhotoSelected(uri = uri)
+        _uiState.value = PhotoUploadUiState.PhotosSelected(
+            uris = listOf(uri),
+            selectedExcursionId = preselectedExcursionId
+        )
+    }
+
+    /**
+     * Usuario selecciona MÚLTIPLES fotos
+     */
+    fun onPhotosSelected(uris: List<Uri>) {
+        _uiState.value = PhotoUploadUiState.PhotosSelected(
+            uris = uris,
+            selectedExcursionId = preselectedExcursionId
+        )
+    }
+
+    /**
+     * Añadir más fotos a la selección actual
+     */
+    fun addMorePhotos(newUris: List<Uri>) {
+        val currentState = _uiState.value
+        if (currentState is PhotoUploadUiState.PhotosSelected) {
+            _uiState.value = currentState.copy(
+                uris = currentState.uris + newUris
+            )
+        }
+    }
+
+    /**
+     * Eliminar una foto de la selección
+     */
+    fun removePhoto(uri: Uri) {
+        val currentState = _uiState.value
+        if (currentState is PhotoUploadUiState.PhotosSelected) {
+            val updatedUris = currentState.uris.filter { it != uri }
+            if (updatedUris.isEmpty()) {
+                _uiState.value = PhotoUploadUiState.Idle
+            } else {
+                _uiState.value = currentState.copy(uris = updatedUris)
+            }
+        }
     }
 
     /**
@@ -102,7 +154,7 @@ class PhotoUploadViewModel @Inject constructor(
      */
     fun onExcursionSelected(excursionId: String) {
         val currentState = _uiState.value
-        if (currentState is PhotoUploadUiState.PhotoSelected) {
+        if (currentState is PhotoUploadUiState.PhotosSelected) {  // ← Cambio
             _uiState.value = currentState.copy(selectedExcursionId = excursionId)
         }
     }
@@ -112,7 +164,7 @@ class PhotoUploadViewModel @Inject constructor(
      */
     fun onUserToggled(userId: String) {
         val currentState = _uiState.value
-        if (currentState is PhotoUploadUiState.PhotoSelected) {
+        if (currentState is PhotoUploadUiState.PhotosSelected) {  // ← Cambio
             val currentUsers = currentState.selectedUsers.toMutableList()
             if (userId in currentUsers) {
                 currentUsers.remove(userId)
@@ -126,11 +178,14 @@ class PhotoUploadViewModel @Inject constructor(
     /**
      * Subir foto a Firebase Storage
      */
-    fun uploadPhoto(uri: Uri, onSuccess: () -> Unit) {
+    /**
+     * Subir MÚLTIPLES fotos a Firebase Storage
+     */
+    fun uploadPhotos(onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
                 val currentState = _uiState.value
-                if (currentState !is PhotoUploadUiState.PhotoSelected) {
+                if (currentState !is PhotoUploadUiState.PhotosSelected) {
                     _uiState.value = PhotoUploadUiState.Error("Estado inválido")
                     return@launch
                 }
@@ -146,44 +201,44 @@ class PhotoUploadViewModel @Inject constructor(
                     return@launch
                 }
 
-                _uiState.value = PhotoUploadUiState.Uploading(progress = 0f)
+                val totalPhotos = currentState.uris.size
 
-                // Generar nombre único para la foto
-                val photoId = UUID.randomUUID().toString()
-                val fileName = "$photoId.jpg"
-                val storagePath = "excursions/${currentState.selectedExcursionId}/$fileName"
+                // Subir cada foto
+                currentState.uris.forEachIndexed { index, uri ->
+                    _uiState.value = PhotoUploadUiState.Uploading(
+                        progress = index.toFloat() / totalPhotos,
+                        currentPhotoIndex = index + 1,
+                        totalPhotos = totalPhotos
+                    )
 
-                // Subir a Storage
-                val storageRef = storage.reference.child(storagePath)
-                val uploadTask = storageRef.putFile(uri)
+                    // Generar nombre único
+                    val photoId = UUID.randomUUID().toString()
+                    val fileName = "$photoId.jpg"
+                    val storagePath = "excursions/${currentState.selectedExcursionId}/$fileName"
 
-                // Monitorear progreso
-                uploadTask.addOnProgressListener { taskSnapshot ->
-                    val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount).toFloat()
-                    _uiState.value = PhotoUploadUiState.Uploading(progress = progress / 100f)
+                    // Subir a Storage
+                    val storageRef = storage.reference.child(storagePath)
+                    storageRef.putFile(uri).await()
+
+                    // Obtener URL
+                    val downloadUrl = storageRef.downloadUrl.await().toString()
+
+                    // Guardar en Firestore
+                    val photoData = hashMapOf(
+                        "id" to photoId,
+                        "excursionId" to currentState.selectedExcursionId,
+                        "imageUrl" to downloadUrl,
+                        "storagePath" to storagePath,
+                        "uploadedBy" to "admin",
+                        "uploadedAt" to Timestamp.now(),
+                        "authorizedUsers" to currentState.selectedUsers
+                    )
+
+                    firestore.collection("photos")
+                        .document(photoId)
+                        .set(photoData)
+                        .await()
                 }
-
-                // Esperar a que termine
-                uploadTask.await()
-
-                // Obtener URL de descarga
-                val downloadUrl = storageRef.downloadUrl.await().toString()
-
-                // Guardar metadata en Firestore
-                val photoData = hashMapOf(
-                    "id" to photoId,
-                    "excursionId" to currentState.selectedExcursionId,
-                    "imageUrl" to downloadUrl,
-                    "storagePath" to storagePath,
-                    "uploadedBy" to "admin",
-                    "uploadedAt" to Timestamp.now(),
-                    "authorizedUsers" to currentState.selectedUsers
-                )
-
-                firestore.collection("photos")
-                    .document(photoId)
-                    .set(photoData)
-                    .await()
 
                 _uiState.value = PhotoUploadUiState.Success
                 onSuccess()
@@ -195,7 +250,23 @@ class PhotoUploadViewModel @Inject constructor(
             }
         }
     }
+    /**
+     * Seleccionar todos los socios
+     */
+    fun selectAllUsers() {
+        val currentState = _uiState.value
+        if (currentState is PhotoUploadUiState.PhotosSelected) {  // ← Cambio
+            val allSocioIds = _users.value.map { it.id }
+            _uiState.value = currentState.copy(selectedUsers = allSocioIds)
+        }
+    }
 
+    fun deselectAllUsers() {
+        val currentState = _uiState.value
+        if (currentState is PhotoUploadUiState.PhotosSelected) {  // ← Cambio
+            _uiState.value = currentState.copy(selectedUsers = emptyList())
+        }
+    }
     fun clearError() {
         if (_uiState.value is PhotoUploadUiState.Error) {
             _uiState.value = PhotoUploadUiState.Idle

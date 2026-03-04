@@ -37,7 +37,7 @@ fun NewsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Noticias") },
+                title = { Text("Publicaciones") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
@@ -97,7 +97,7 @@ private fun NewsSuccessContent(
         if (news.isEmpty()) {
             // Sin noticias
             EmptyState(
-                message = "No hay noticias disponibles",
+                message = "No hay publicaciones disponibles",
                 modifier = Modifier.fillMaxSize()
             )
         } else {

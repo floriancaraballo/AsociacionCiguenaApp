@@ -42,7 +42,7 @@ fun NewsManagementScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Gestión de Noticias") },
+                title = { Text("Gestión de Publicaciones") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, "Volver")
@@ -145,7 +145,7 @@ private fun NewsListContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            placeholder = { Text("Buscar noticias...") },
+            placeholder = { Text("Buscar publicaciones...") },
             leadingIcon = {
                 Icon(Icons.Default.Search, contentDescription = null)
             },
@@ -202,7 +202,7 @@ private fun NewsListContent(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = if (news.isEmpty()) "No hay noticias" else "No se encontraron resultados",
+                        text = if (news.isEmpty()) "No hay publicaciones" else "No se encontraron resultados",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -268,11 +268,11 @@ private fun NewsManagementCard(
                     modifier = Modifier.weight(1f)
                 )
 
-                // Badge público/privado
+                // Badge público/o
                 AssistChip(
                     onClick = onToggleVisibility,
                     label = {
-                        Text(if (news.isPublic) "Público" else "Privado")
+                        Text(if (news.isPublic) "Público" else "o")
                     },
                     leadingIcon = {
                         Icon(

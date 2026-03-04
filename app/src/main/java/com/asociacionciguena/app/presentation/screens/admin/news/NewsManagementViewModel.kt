@@ -26,7 +26,7 @@ class NewsManagementViewModel @Inject constructor(
     }
 
     /**
-     * Cargar todas las noticias (públicas y privadas)
+     * Cargar todas las noticias (públicas y as)
      */
     fun loadNews() {
         viewModelScope.launch {
@@ -61,7 +61,7 @@ class NewsManagementViewModel @Inject constructor(
 
             } catch (e: Exception) {
                 _uiState.value = NewsManagementUiState.Error(
-                    message = "Error al cargar noticias: ${e.message}"
+                    message = "Error al cargar publicaciones: ${e.message}"
                 )
             }
         }
@@ -90,7 +90,7 @@ class NewsManagementViewModel @Inject constructor(
     }
 
     /**
-     * Toggle visibilidad (público/privado)
+     * Toggle visibilidad (público/o)
      */
     fun toggleVisibility(newsId: String, currentIsPublic: Boolean) {
         viewModelScope.launch {

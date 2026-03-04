@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.asociacionciguena.app.data.manager.FCMTokenManager
 
 /**
  * ViewModel de la pantalla de Perfil
@@ -18,7 +19,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val getCurrentUserUseCase: GetCurrentUserUseCase,
-    private val logoutUseCase: LogoutUseCase
+    private val logoutUseCase: LogoutUseCase,
+    private val fcmTokenManager: FCMTokenManager  // ← AÑADIR
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ProfileUiState>(ProfileUiState.Loading)
@@ -28,9 +30,6 @@ class ProfileViewModel @Inject constructor(
         loadProfile()
     }
 
-    /**
-     * Cargar información del perfil
-     */
     fun loadProfile() {
         viewModelScope.launch {
             _uiState.value = ProfileUiState.Loading
@@ -56,28 +55,27 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Cerrar sesión
-     */
     fun logout() {
         viewModelScope.launch {
-            // Marcar como "cerrando sesión"
             val currentState = _uiState.value
             if (currentState is ProfileUiState.LoggedIn) {
                 _uiState.value = currentState.copy(isLoggingOut = true)
             }
 
+            // NUEVO: Eliminar token FCM antes de logout
+            try {
+                fcmTokenManager.deleteToken()
+            } catch (e: Exception) {
+                // Log error pero continuar con logout
+            }
+
             // Ejecutar logout
             logoutUseCase()
 
-            // Actualizar estado
             _uiState.value = ProfileUiState.NotLoggedIn
         }
     }
 
-    /**
-     * Reintentar después de error
-     */
     fun retry() {
         loadProfile()
     }

@@ -17,7 +17,7 @@ sealed class BottomNavItem(
 ) {
     object News : BottomNavItem(
         route = Screen.News.route,
-        title = "Noticias",
+        title = "Publicaciones",
         icon = Icons.Default.Article
     )
 
@@ -29,7 +29,7 @@ sealed class BottomNavItem(
 
     object MembersArea : BottomNavItem(
         route = Screen.Login.route,
-        title = "Área Privada",
+        title = "Galería",
         icon = Icons.Default.Lock
     )
 

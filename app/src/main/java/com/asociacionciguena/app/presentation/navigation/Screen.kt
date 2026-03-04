@@ -18,10 +18,23 @@ sealed class Screen(val route: String) {
     object ExcursionForm : Screen("admin_excursion_form/{excursionId}") {
         fun createRoute(excursionId: String = "new") = "admin_excursion_form/$excursionId"
     }
-    object PhotoUpload : Screen("admin_photo_upload")
+    object PhotoUpload : Screen("admin_photo_upload?excursionId={excursionId}") {
+        fun createRoute(excursionId: String? = null): String {
+            return if (excursionId != null) {
+                "admin_photo_upload?excursionId=$excursionId"
+            } else {
+                "admin_photo_upload"
+            }
+        }
+    }
 
     object NewsDetail : Screen("news_detail/{newsId}") {
         fun createRoute(newsId: String) = "news_detail/$newsId"
     }
     object UserManagement : Screen("user_management")
+
+    object ExcursionDetail : Screen("excursion_detail/{excursionId}") {
+        fun createRoute(excursionId: String) = "excursion_detail/$excursionId"
+    }
+    object Onboarding : Screen("onboarding")
 }

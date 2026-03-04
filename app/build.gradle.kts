@@ -201,5 +201,11 @@ dependencies {
     // Accompanist Permissions - AÑADIR
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
     implementation("com.google.accompanist:accompanist-swiperefresh:0.32.0")
+    // Firebase Cloud Messaging
+    implementation("com.google.firebase:firebase-messaging-ktx:23.4.1")
+
+    // Para notificaciones locales (opcional)
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+
 }
 

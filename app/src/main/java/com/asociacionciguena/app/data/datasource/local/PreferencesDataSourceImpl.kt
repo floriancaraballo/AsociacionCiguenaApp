@@ -17,6 +17,7 @@ class PreferencesDataSourceImpl @Inject constructor(
     companion object {
         val KEY_IS_LOGGED_IN = booleanPreferencesKey(Constants.PREF_IS_LOGGED_IN)
         val KEY_USER_ID = stringPreferencesKey(Constants.PREF_USER_ID)
+        val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")  // ← NUEVO
     }
 
     override suspend fun setLoggedIn(isLoggedIn: Boolean) {
@@ -45,5 +46,19 @@ class PreferencesDataSourceImpl @Inject constructor(
 
     override suspend fun clear() {
         dataStore.edit { it.clear() }
+    }
+
+    // ← NUEVOS MÉTODOS
+
+    override suspend fun setOnboardingCompleted(completed: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[KEY_ONBOARDING_COMPLETED] = completed
+        }
+    }
+
+    override fun isOnboardingCompleted(): Flow<Boolean> {
+        return dataStore.data.map { preferences ->
+            preferences[KEY_ONBOARDING_COMPLETED] ?: false
+        }
     }
 }

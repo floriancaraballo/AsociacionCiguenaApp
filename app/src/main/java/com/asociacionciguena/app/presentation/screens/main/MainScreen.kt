@@ -3,9 +3,9 @@ package com.asociacionciguena.app.presentation.screens.main
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -13,7 +13,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.asociacionciguena.app.presentation.navigation.BottomNavItem
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import com.asociacionciguena.app.presentation.navigation.Screen
 import com.asociacionciguena.app.presentation.navigation.bottomNavItems
 import com.asociacionciguena.app.presentation.screens.news.NewsScreen
@@ -22,33 +23,58 @@ import com.asociacionciguena.app.presentation.screens.auth.LoginScreen
 import com.asociacionciguena.app.presentation.screens.gallery.GalleryScreen
 import com.asociacionciguena.app.presentation.screens.profile.ProfileScreen
 import com.asociacionciguena.app.presentation.screens.admin.dashboard.AdminDashboardScreen
-import androidx.navigation.NavType
-import androidx.navigation.navArgument
 import com.asociacionciguena.app.presentation.screens.admin.news.NewsFormScreen
 import com.asociacionciguena.app.presentation.screens.admin.news.NewsManagementScreen
 import com.asociacionciguena.app.presentation.screens.admin.excursions.ExcursionFormScreen
 import com.asociacionciguena.app.presentation.screens.admin.excursions.ExcursionManagementScreen
 import com.asociacionciguena.app.presentation.screens.admin.photos.PhotoUploadScreen
 import com.asociacionciguena.app.presentation.screens.admin.users.UserManagementScreen
+import com.asociacionciguena.app.presentation.screens.gallery.detail.ExcursionDetailScreen
+import com.asociacionciguena.app.presentation.screens.onboarding.OnboardingScreen
 
-/**
- * Pantalla principal con Bottom Navigation Bar
- */
 @Composable
 fun MainScreen(
-    onNavigateToNewsDetail: (String) -> Unit = {}) {
+    viewModel: MainViewModel = hiltViewModel(),
+    onNavigateToNewsDetail: (String) -> Unit = {}
+) {
     val navController = rememberNavController()
+    val isOnboardingCompleted by viewModel.isOnboardingCompleted.collectAsState(initial = false)
+
+    // Determinar pantalla inicial
+    val startDestination = if (isOnboardingCompleted) {
+        Screen.News.route
+    } else {
+        Screen.Onboarding.route
+    }
 
     Scaffold(
         bottomBar = {
-            BottomNavigationBar(navController = navController)
+            // Solo mostrar bottom bar si NO estamos en onboarding
+            val navBackStackEntry by navController.currentBackStackEntryAsState()
+            val currentRoute = navBackStackEntry?.destination?.route
+
+            if (currentRoute != Screen.Onboarding.route) {
+                BottomNavigationBar(navController = navController)
+            }
         }
     ) { paddingValues ->
         NavHost(
             navController = navController,
-            startDestination = Screen.News.route,
+            startDestination = startDestination,
             modifier = Modifier.padding(paddingValues)
         ) {
+            // NUEVO: Onboarding
+            composable(Screen.Onboarding.route) {
+                OnboardingScreen(
+                    onComplete = {
+                        // Navegar a pantalla principal después del onboarding
+                        navController.navigate(Screen.News.route) {
+                            popUpTo(Screen.Onboarding.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
             // Noticias
             composable(Screen.News.route) {
                 NewsScreen(
@@ -56,16 +82,15 @@ fun MainScreen(
                 )
             }
 
-            // Calendario (ACTUALIZADO)
+            // Calendario
             composable(Screen.Calendar.route) {
-                CalendarScreen()  // ← Cambia de PlaceholderScreen a CalendarScreen
+                CalendarScreen()
             }
 
-            // Área Privada / Login (temporal - placeholder)
+            // Login
             composable(Screen.Login.route) {
                 LoginScreen(
                     onLoginSuccess = {
-                        // Navegar a galería cuando login exitoso
                         navController.navigate(Screen.Gallery.route) {
                             popUpTo(Screen.Login.route) { inclusive = true }
                         }
@@ -73,7 +98,7 @@ fun MainScreen(
                 )
             }
 
-            // Perfil (ACTUALIZADO con navegación admin)
+            // Perfil
             composable(Screen.Profile.route) {
                 ProfileScreen(
                     onNavigateToLogin = {
@@ -86,7 +111,8 @@ fun MainScreen(
                     }
                 )
             }
-            // Admin Dashboard (NUEVO)
+
+            // Admin Dashboard
             composable(Screen.AdminDashboard.route) {
                 AdminDashboardScreen(
                     onNavigateToNews = {
@@ -104,9 +130,9 @@ fun MainScreen(
                     onNavigateBack = {
                         navController.popBackStack()
                     }
-
                 )
             }
+
             composable(Screen.NewsManagement.route) {
                 NewsManagementScreen(
                     onNavigateToForm = { newsId ->
@@ -118,7 +144,6 @@ fun MainScreen(
                 )
             }
 
-            // Admin News Form
             composable(
                 route = Screen.NewsForm.route,
                 arguments = listOf(
@@ -132,7 +157,6 @@ fun MainScreen(
                 )
             }
 
-            // Admin Excursion Management
             composable(Screen.ExcursionManagement.route) {
                 ExcursionManagementScreen(
                     onNavigateToForm = { excursionId ->
@@ -144,7 +168,6 @@ fun MainScreen(
                 )
             }
 
-// Admin Excursion Form
             composable(
                 route = Screen.ExcursionForm.route,
                 arguments = listOf(
@@ -158,12 +181,18 @@ fun MainScreen(
                 )
             }
 
-            // Admin Photo Upload
-            composable(Screen.PhotoUpload.route) {
-                PhotoUploadScreen(
-                    onNavigateBack = {
-                        navController.popBackStack()
+            composable(
+                route = Screen.PhotoUpload.route,
+                arguments = listOf(
+                    navArgument("excursionId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
                     }
+                )
+            ) {
+                PhotoUploadScreen(
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
 
@@ -174,13 +203,25 @@ fun MainScreen(
                     }
                 )
             }
-            // Gallery (ACTUALIZADO)
+
             composable(Screen.Gallery.route) {
                 GalleryScreen(
-                    onNavigateToLogin = {
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(Screen.Gallery.route) { inclusive = true }
-                        }
+                    onNavigateToExcursionDetail = { excursionId ->
+                        navController.navigate(Screen.ExcursionDetail.createRoute(excursionId))
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.ExcursionDetail.route,
+                arguments = listOf(
+                    navArgument("excursionId") { type = NavType.StringType }
+                )
+            ) {
+                ExcursionDetailScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToUpload = { excursionId ->
+                        navController.navigate(Screen.PhotoUpload.createRoute(excursionId))
                     }
                 )
             }
@@ -188,9 +229,6 @@ fun MainScreen(
     }
 }
 
-/**
- * Barra de navegación inferior
- */
 @Composable
 private fun BottomNavigationBar(
     navController: NavHostController
@@ -208,13 +246,10 @@ private fun BottomNavigationBar(
                 selected = selected,
                 onClick = {
                     navController.navigate(item.route) {
-                        // Pop hasta el start destination
                         popUpTo(navController.graph.findStartDestination().id) {
                             saveState = true
                         }
-                        // Evitar múltiples copias de la misma pantalla
                         launchSingleTop = true
-                        // Restaurar estado al volver
                         restoreState = true
                     }
                 },
@@ -227,37 +262,6 @@ private fun BottomNavigationBar(
                 label = {
                     Text(text = item.title)
                 }
-            )
-        }
-    }
-}
-
-/**
- * Pantalla placeholder temporal
- */
-@Composable
-private fun PlaceholderScreen(title: String) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
-        }
-    ) { paddingValues ->
-        androidx.compose.foundation.layout.Box(
-            modifier = Modifier
-                .padding(paddingValues)
-                .fillMaxSize(),
-            contentAlignment = androidx.compose.ui.Alignment.Center
-        ) {
-            Text(
-                text = "Pantalla de $title\n(Próximamente)",
-                style = MaterialTheme.typography.titleLarge,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
     }

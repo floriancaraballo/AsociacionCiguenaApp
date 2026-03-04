@@ -1,34 +1,21 @@
 package com.asociacionciguena.app.presentation.screens.gallery
 
-import com.asociacionciguena.app.domain.model.Photo
+import com.asociacionciguena.app.domain.model.Excursion
 
 /**
- * Estados posibles de la pantalla de Galería
+ * Estados de UI para la pantalla de Galería
  */
 sealed class GalleryUiState {
-
-    /**
-     * Estado inicial: Cargando
-     */
     object Loading : GalleryUiState()
-
-    /**
-     * Fotos cargadas exitosamente
-     */
-    data class Success(
-        val photosByExcursion: Map<String, List<Photo>>,
-        val isRefreshing: Boolean = false
-    ) : GalleryUiState()
-
-    /**
-     * Error al cargar fotos
-     */
-    data class Error(
-        val message: String
-    ) : GalleryUiState()
-
-    /**
-     * Usuario no autenticado
-     */
-    object NotAuthenticated : GalleryUiState()
+    data class Success(val excursions: List<ExcursionWithPhotos>) : GalleryUiState()
+    data class Error(val message: String) : GalleryUiState()
 }
+
+/**
+ * Modelo que combina excursión con sus fotos para la galería
+ */
+data class ExcursionWithPhotos(
+    val excursion: Excursion,
+    val photoCount: Int,
+    val firstPhotoUrl: String?
+)

@@ -238,3 +238,299 @@ export const resendInvitation = onCall({
 
   return {success: true, message: "Invitación reenviada"};
 });
+
+/**
+ * ========================================
+ * NOTIFICACIONES PUSH
+ * ========================================
+ */
+
+/**
+ * Enviar notificación cuando se crea una noticia
+ */
+export const onNewsCreated = onDocumentCreated({
+  document: "news/{newsId}",
+  region: "europe-west1",
+}, async (event) => {
+  const snapshot = event.data;
+  if (!snapshot) {
+    console.log("No data associated with the event");
+    return;
+  }
+
+  const newsId = event.params.newsId;
+  const newsData = snapshot.data();
+
+  try {
+    const title = newsData.title || "Nueva publicación";
+    const isPublic = newsData.isPublic || false;
+
+    // Obtener tokens de usuarios
+    let usersSnapshot;
+    if (isPublic) {
+      // Noticia pública: notificar a TODOS los usuarios
+      usersSnapshot = await admin.firestore()
+        .collection("users")
+        .where("fcmToken", "!=", null)
+        .get();
+    } else {
+      // Noticia privada: solo notificar a usuarios autenticados (socios, admins)
+      usersSnapshot = await admin.firestore()
+        .collection("users")
+        .where("fcmToken", "!=", null)
+        .get();
+    }
+
+    const tokens: string[] = [];
+    usersSnapshot.docs.forEach((doc) => {
+      const token = doc.data().fcmToken;
+      if (token) {
+        tokens.push(token);
+      }
+    });
+
+    if (tokens.length === 0) {
+      console.log("No hay tokens para notificar");
+      return;
+    }
+
+    // Crear mensaje de notificación
+    const message = {
+      notification: {
+        title: "📰 Nueva noticia",
+        body: title,
+      },
+      data: {
+        type: "news",
+        itemId: newsId,
+      },
+      tokens: tokens,
+    };
+
+    // Enviar notificación
+    const response = await admin.messaging().sendEachForMulticast(message);
+    console.log(`Notificaciones enviadas: ${response.successCount} exitosas, ${response.failureCount} fallidas`);
+
+    // Limpiar tokens inválidos
+    if (response.failureCount > 0) {
+      const tokensToRemove: string[] = [];
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          tokensToRemove.push(tokens[idx]);
+        }
+      });
+
+      // Eliminar tokens inválidos de Firestore
+      const batch = admin.firestore().batch();
+      for (const token of tokensToRemove) {
+        const userQuery = await admin.firestore()
+          .collection("users")
+          .where("fcmToken", "==", token)
+          .limit(1)
+          .get();
+
+        if (!userQuery.empty) {
+          batch.update(userQuery.docs[0].ref, {fcmToken: admin.firestore.FieldValue.delete()});
+        }
+      }
+      await batch.commit();
+    }
+  } catch (error) {
+    console.error("Error al enviar notificaciones:", error);
+  }
+});
+
+/**
+ * Enviar notificación cuando se crea una excursión
+ */
+export const onExcursionCreated = onDocumentCreated({
+  document: "excursions/{excursionId}",
+  region: "europe-west1",
+}, async (event) => {
+  const snapshot = event.data;
+  if (!snapshot) {
+    console.log("No data associated with the event");
+    return;
+  }
+
+  const excursionId = event.params.excursionId;
+  const excursionData = snapshot.data();
+
+  try {
+    const title = excursionData.title || "Nueva excursión";
+    const date = excursionData.date;
+
+    // Formatear fecha
+    let dateStr = "";
+    if (date) {
+      const d = date.toDate();
+      dateStr = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+    }
+
+    // Obtener tokens de TODOS los usuarios autenticados
+    const usersSnapshot = await admin.firestore()
+      .collection("users")
+      .where("fcmToken", "!=", null)
+      .get();
+
+    const tokens: string[] = [];
+    usersSnapshot.docs.forEach((doc) => {
+      const token = doc.data().fcmToken;
+      if (token) {
+        tokens.push(token);
+      }
+    });
+
+    if (tokens.length === 0) {
+      console.log("No hay tokens para notificar");
+      return;
+    }
+
+    // Crear mensaje
+    const message = {
+      notification: {
+        title: "📅 Nueva excursión",
+        body: dateStr ? `${title} - ${dateStr}` : title,
+      },
+      data: {
+        type: "excursion",
+        itemId: excursionId,
+      },
+      tokens: tokens,
+    };
+
+    // Enviar notificación
+    const response = await admin.messaging().sendEachForMulticast(message);
+    console.log(`Notificaciones enviadas: ${response.successCount} exitosas`);
+
+    // Limpiar tokens inválidos (mismo código que antes)
+    if (response.failureCount > 0) {
+      const tokensToRemove: string[] = [];
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          tokensToRemove.push(tokens[idx]);
+        }
+      });
+
+      const batch = admin.firestore().batch();
+      for (const token of tokensToRemove) {
+        const userQuery = await admin.firestore()
+          .collection("users")
+          .where("fcmToken", "==", token)
+          .limit(1)
+          .get();
+
+        if (!userQuery.empty) {
+          batch.update(userQuery.docs[0].ref, {fcmToken: admin.firestore.FieldValue.delete()});
+        }
+      }
+      await batch.commit();
+    }
+  } catch (error) {
+    console.error("Error al enviar notificaciones:", error);
+  }
+});
+
+/**
+ * Enviar notificación cuando se suben fotos
+ */
+export const onPhotoUploaded = onDocumentCreated({
+  document: "photos/{photoId}",
+  region: "europe-west1",
+}, async (event) => {
+  const snapshot = event.data;
+  if (!snapshot) {
+    console.log("No data associated with the event");
+    return;
+  }
+
+  const photoData = snapshot.data();
+
+  try {
+    const excursionId = photoData.excursionId;
+    const authorizedUsers = photoData.authorizedUsers || [];
+
+    if (!excursionId || authorizedUsers.length === 0) {
+      console.log("No hay excursión o usuarios autorizados");
+      return;
+    }
+
+    // Obtener información de la excursión
+    const excursionDoc = await admin.firestore()
+      .collection("excursions")
+      .doc(excursionId)
+      .get();
+
+    if (!excursionDoc.exists) {
+      console.log("Excursión no encontrada");
+      return;
+    }
+
+    const excursionTitle = excursionDoc.data()?.title || "una excursión";
+
+    // Obtener tokens de usuarios autorizados
+    const usersSnapshot = await admin.firestore()
+      .collection("users")
+      .where("fcmToken", "!=", null)
+      .get();
+
+    const tokens: string[] = [];
+    usersSnapshot.docs.forEach((doc) => {
+      const userId = doc.id;
+      const token = doc.data().fcmToken;
+
+      // Solo notificar a usuarios autorizados
+      if (token && authorizedUsers.includes(userId)) {
+        tokens.push(token);
+      }
+    });
+
+    if (tokens.length === 0) {
+      console.log("No hay tokens de usuarios autorizados");
+      return;
+    }
+
+    // Crear mensaje
+    const message = {
+      notification: {
+        title: "📸 Nuevas fotos",
+        body: `Se han subido fotos de ${excursionTitle}`,
+      },
+      data: {
+        type: "photo",
+        itemId: excursionId, // Navegar a la excursión
+      },
+      tokens: tokens,
+    };
+
+    // Enviar notificación
+    const response = await admin.messaging().sendEachForMulticast(message);
+    console.log(`Notificaciones enviadas: ${response.successCount} exitosas`);
+
+    // Limpiar tokens inválidos
+    if (response.failureCount > 0) {
+      const tokensToRemove: string[] = [];
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          tokensToRemove.push(tokens[idx]);
+        }
+      });
+
+      const batch = admin.firestore().batch();
+      for (const token of tokensToRemove) {
+        const userQuery = await admin.firestore()
+          .collection("users")
+          .where("fcmToken", "==", token)
+          .limit(1)
+          .get();
+
+        if (!userQuery.empty) {
+          batch.update(userQuery.docs[0].ref, {fcmToken: admin.firestore.FieldValue.delete()});
+        }
+      }
+      await batch.commit();
+    }
+  } catch (error) {
+    console.error("Error al enviar notificaciones:", error);
+  }
+});

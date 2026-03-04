@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
+import androidx.compose.ui.text.style.TextAlign
 
 @Composable
 fun AdminDashboardScreen(
@@ -74,7 +75,7 @@ fun AdminDashboardScreen(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     AdminOptionCard(
-                        title = "Gestionar Noticias",
+                        title = "Gestionar Publicaciones",
                         icon = Icons.Default.Article,
                         onClick = onNavigateToNews,
                         modifier = Modifier.weight(1f)
@@ -151,9 +152,9 @@ private fun StatsOverviewCard(
 
             StatRow(
                 icon = Icons.Default.Article,
-                label = "Noticias",
+                label = "Publicaciones",
                 value = "${stats.totalNews}",
-                detail = "${stats.publicNews} públicas • ${stats.privateNews} privadas"
+                detail = "${stats.publicNews} públicas • ${stats.privateNews} as"
             )
 
             StatRow(
@@ -260,6 +261,7 @@ private fun AdminOptionCard(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,  // ← AÑADIDO
                 color = if (enabled)
                     MaterialTheme.colorScheme.onSurface
                 else

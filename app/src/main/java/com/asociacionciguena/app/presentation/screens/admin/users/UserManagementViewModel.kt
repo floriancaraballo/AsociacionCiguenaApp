@@ -30,27 +30,27 @@ class UserManagementViewModel @Inject constructor(
     val currentUserId: StateFlow<String?> = _currentUserId.asStateFlow()
 
     init {
-        checkSuperAdminStatus()
-        loadUsers()
+        viewModelScope.launch {
+            checkSuperAdminStatus()  // Primero determina el rol
+            loadUsers()               // Luego carga usuarios con el filtro correcto
+        }
     }
 
-    private fun checkSuperAdminStatus() {
-        viewModelScope.launch {
-            try {
-                val currentUser = auth.currentUser
-                if (currentUser != null) {
-                    _currentUserId.value = currentUser.uid
+    private suspend fun checkSuperAdminStatus() {
+        try {
+            val currentUser = auth.currentUser
+            if (currentUser != null) {
+                _currentUserId.value = currentUser.uid
 
-                    val userDoc = firestore.collection("users")
-                        .document(currentUser.uid)
-                        .get()
-                        .await()
+                val userDoc = firestore.collection("users")
+                    .document(currentUser.uid)
+                    .get()
+                    .await()
 
-                    _isSuperAdmin.value = userDoc.getString("role") == "superadmin"
-                }
-            } catch (e: Exception) {
-                _isSuperAdmin.value = false
+                _isSuperAdmin.value = userDoc.getString("role") == "superadmin"
             }
+        } catch (e: Exception) {
+            _isSuperAdmin.value = false
         }
     }
 

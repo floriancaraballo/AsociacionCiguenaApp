@@ -21,7 +21,7 @@ class NewsRepositoryImpl @Inject constructor(
             }
         } catch (e: Exception) {
             emit(Result.Error(
-                message = e.message ?: "Error al cargar noticias",
+                message = e.message ?: "Error al cargar publicaciones",
                 exception = e
             ))
         }
