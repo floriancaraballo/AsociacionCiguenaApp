@@ -31,6 +31,8 @@ import com.asociacionciguena.app.presentation.screens.admin.photos.PhotoUploadSc
 import com.asociacionciguena.app.presentation.screens.admin.users.UserManagementScreen
 import com.asociacionciguena.app.presentation.screens.gallery.detail.ExcursionDetailScreen
 import com.asociacionciguena.app.presentation.screens.onboarding.OnboardingScreen
+import com.asociacionciguena.app.presentation.screens.splash.SplashScreen
+import androidx.compose.runtime.LaunchedEffect
 
 @Composable
 fun MainScreen(
@@ -38,192 +40,234 @@ fun MainScreen(
     onNavigateToNewsDetail: (String) -> Unit = {}
 ) {
     val navController = rememberNavController()
-    val isOnboardingCompleted by viewModel.isOnboardingCompleted.collectAsState(initial = false)
+    val initState by viewModel.initState.collectAsState()
 
-    // Determinar pantalla inicial
-    val startDestination = if (isOnboardingCompleted) {
-        Screen.News.route
-    } else {
-        Screen.Onboarding.route
-    }
-
-    Scaffold(
-        bottomBar = {
-            // Solo mostrar bottom bar si NO estamos en onboarding
-            val navBackStackEntry by navController.currentBackStackEntryAsState()
-            val currentRoute = navBackStackEntry?.destination?.route
-
-            if (currentRoute != Screen.Onboarding.route) {
-                BottomNavigationBar(navController = navController)
-            }
+    // Mostrar splash mientras carga
+    when (val state = initState) {
+        is AppInitState.Loading -> {
+            SplashScreen(onNavigateToMain = {})
         }
-    ) { paddingValues ->
-        NavHost(
-            navController = navController,
-            startDestination = startDestination,
-            modifier = Modifier.padding(paddingValues)
-        ) {
-            // NUEVO: Onboarding
-            composable(Screen.Onboarding.route) {
-                OnboardingScreen(
-                    onComplete = {
-                        // Navegar a pantalla principal después del onboarding
-                        navController.navigate(Screen.News.route) {
-                            popUpTo(Screen.Onboarding.route) { inclusive = true }
+
+        is AppInitState.Ready -> {
+            val startDestination = if (state.isOnboardingCompleted) {
+                Screen.News.route
+            } else {
+                Screen.Onboarding.route
+            }
+
+            Scaffold(
+                bottomBar = {
+                    val navBackStackEntry by navController.currentBackStackEntryAsState()
+                    val currentRoute = navBackStackEntry?.destination?.route
+
+                    if (currentRoute != Screen.Onboarding.route) {
+                        BottomNavigationBar(
+                            navController = navController,
+                            isUserLoggedIn = state.isUserLoggedIn  // ← NUEVO
+                        )
+                    }
+                }
+            ) { paddingValues ->
+                NavHost(
+                    navController = navController,
+                    startDestination = startDestination,
+                    modifier = Modifier.padding(paddingValues)
+                ) {
+                    // NUEVO: Onboarding
+                    composable(Screen.Onboarding.route) {
+                        OnboardingScreen(
+                            onComplete = {
+                                // Navegar a pantalla principal después del onboarding
+                                navController.navigate(Screen.News.route) {
+                                    popUpTo(Screen.Onboarding.route) { inclusive = true }
+                                }
+                            }
+                        )
+                    }
+
+                    composable(
+                        route = Screen.Login.route,
+                        arguments = listOf(
+                            navArgument("returnTo") {
+                                type = NavType.StringType
+                                defaultValue = "profile"
+                            }
+                        )
+                    ) { backStackEntry ->
+                        val returnTo = backStackEntry.arguments?.getString("returnTo") ?: "profile"
+
+                        LoginScreen(
+                            onLoginSuccess = {
+                                // Navegar según de dónde vino
+                                val destination = when (returnTo) {
+                                    "gallery" -> Screen.Gallery.route
+                                    else -> Screen.Profile.route
+                                }
+
+                                navController.navigate(destination) {
+                                    popUpTo(Screen.Login.route) { inclusive = true }
+                                }
+                            }
+                        )
+                    }
+                    // Noticias
+                    composable(Screen.News.route) {
+                        NewsScreen(
+                            onNavigateToDetail = onNavigateToNewsDetail
+                        )
+                    }
+
+                    // Calendario
+                    composable(Screen.Calendar.route) {
+                        CalendarScreen()
+                    }
+
+                    // Login
+                    composable(Screen.Gallery.route) {
+                        if (state.isUserLoggedIn) {
+                            GalleryScreen(
+                                onNavigateToExcursionDetail = { excursionId ->
+                                    navController.navigate(Screen.ExcursionDetail.createRoute(excursionId))
+                                }
+                            )
+                        } else {
+                            LaunchedEffect(Unit) {
+                                navController.navigate(Screen.Login.createRoute(returnTo = "gallery")) {
+                                    popUpTo(Screen.Gallery.route) { inclusive = true }
+                                }
+                            }
                         }
                     }
-                )
-            }
 
-            // Noticias
-            composable(Screen.News.route) {
-                NewsScreen(
-                    onNavigateToDetail = onNavigateToNewsDetail
-                )
-            }
+                    // Perfil
+                    composable(Screen.Profile.route) {
+                        ProfileScreen(
+                            onNavigateToLogin = {
+                                navController.navigate(Screen.Login.createRoute(returnTo = "profile")) {
+                                    popUpTo(Screen.Profile.route) { inclusive = true }
+                                }
+                            },
+                            onNavigateToAdminPanel = {
+                                navController.navigate(Screen.AdminDashboard.route)
+                            }
+                        )
+                    }
 
-            // Calendario
-            composable(Screen.Calendar.route) {
-                CalendarScreen()
-            }
+                    // Admin Dashboard
+                    composable(Screen.AdminDashboard.route) {
+                        AdminDashboardScreen(
+                            onNavigateToNews = {
+                                navController.navigate(Screen.NewsManagement.route)
+                            },
+                            onNavigateToExcursions = {
+                                navController.navigate(Screen.ExcursionManagement.route)
+                            },
+                            onNavigateToPhotos = {
+                                navController.navigate(Screen.PhotoUpload.route)
+                            },
+                            onNavigateToUsers = {
+                                navController.navigate(Screen.UserManagement.route)
+                            },
+                            onNavigateBack = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
 
-            // Login
-            composable(Screen.Login.route) {
-                LoginScreen(
-                    onLoginSuccess = {
-                        navController.navigate(Screen.Gallery.route) {
-                            popUpTo(Screen.Login.route) { inclusive = true }
+                    composable(Screen.NewsManagement.route) {
+                        NewsManagementScreen(
+                            onNavigateToForm = { newsId ->
+                                navController.navigate(Screen.NewsForm.createRoute(newsId))
+                            },
+                            onNavigateBack = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+
+                    composable(
+                        route = Screen.NewsForm.route,
+                        arguments = listOf(
+                            navArgument("newsId") { type = NavType.StringType }
+                        )
+                    ) {
+                        NewsFormScreen(
+                            onNavigateBack = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+
+                    composable(Screen.ExcursionManagement.route) {
+                        ExcursionManagementScreen(
+                            onNavigateToForm = { excursionId ->
+                                navController.navigate(Screen.ExcursionForm.createRoute(excursionId))
+                            },
+                            onNavigateBack = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+
+                    composable(
+                        route = Screen.ExcursionForm.route,
+                        arguments = listOf(
+                            navArgument("excursionId") { type = NavType.StringType }
+                        )
+                    ) {
+                        ExcursionFormScreen(
+                            onNavigateBack = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+
+                    composable(
+                        route = Screen.PhotoUpload.route,
+                        arguments = listOf(
+                            navArgument("excursionId") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            }
+                        )
+                    ) {
+                        PhotoUploadScreen(
+                            onNavigateBack = { navController.popBackStack() }
+                        )
+                    }
+
+                    composable(Screen.UserManagement.route) {
+                        UserManagementScreen(
+                            onNavigateBack = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+
+                    composable(
+                        route = Screen.ExcursionDetail.route,
+                        arguments = listOf(
+                            navArgument("excursionId") { type = NavType.StringType }
+                        )
+                    ) {
+                        // Proteger detalle de excursión también
+                        if (state.isUserLoggedIn) {
+                            ExcursionDetailScreen(
+                                onNavigateBack = { navController.popBackStack() },
+                                onNavigateToUpload = { excursionId ->
+                                    navController.navigate(Screen.PhotoUpload.createRoute(excursionId))
+                                }
+                            )
+                        } else {
+                            LaunchedEffect(Unit) {
+                                navController.navigate(Screen.Login.route) {
+                                    popUpTo(Screen.ExcursionDetail.route) { inclusive = true }
+                                }
+                            }
                         }
                     }
-                )
-            }
-
-            // Perfil
-            composable(Screen.Profile.route) {
-                ProfileScreen(
-                    onNavigateToLogin = {
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(Screen.Profile.route) { inclusive = true }
-                        }
-                    },
-                    onNavigateToAdminPanel = {
-                        navController.navigate(Screen.AdminDashboard.route)
-                    }
-                )
-            }
-
-            // Admin Dashboard
-            composable(Screen.AdminDashboard.route) {
-                AdminDashboardScreen(
-                    onNavigateToNews = {
-                        navController.navigate(Screen.NewsManagement.route)
-                    },
-                    onNavigateToExcursions = {
-                        navController.navigate(Screen.ExcursionManagement.route)
-                    },
-                    onNavigateToPhotos = {
-                        navController.navigate(Screen.PhotoUpload.route)
-                    },
-                    onNavigateToUsers = {
-                        navController.navigate(Screen.UserManagement.route)
-                    },
-                    onNavigateBack = {
-                        navController.popBackStack()
-                    }
-                )
-            }
-
-            composable(Screen.NewsManagement.route) {
-                NewsManagementScreen(
-                    onNavigateToForm = { newsId ->
-                        navController.navigate(Screen.NewsForm.createRoute(newsId))
-                    },
-                    onNavigateBack = {
-                        navController.popBackStack()
-                    }
-                )
-            }
-
-            composable(
-                route = Screen.NewsForm.route,
-                arguments = listOf(
-                    navArgument("newsId") { type = NavType.StringType }
-                )
-            ) {
-                NewsFormScreen(
-                    onNavigateBack = {
-                        navController.popBackStack()
-                    }
-                )
-            }
-
-            composable(Screen.ExcursionManagement.route) {
-                ExcursionManagementScreen(
-                    onNavigateToForm = { excursionId ->
-                        navController.navigate(Screen.ExcursionForm.createRoute(excursionId))
-                    },
-                    onNavigateBack = {
-                        navController.popBackStack()
-                    }
-                )
-            }
-
-            composable(
-                route = Screen.ExcursionForm.route,
-                arguments = listOf(
-                    navArgument("excursionId") { type = NavType.StringType }
-                )
-            ) {
-                ExcursionFormScreen(
-                    onNavigateBack = {
-                        navController.popBackStack()
-                    }
-                )
-            }
-
-            composable(
-                route = Screen.PhotoUpload.route,
-                arguments = listOf(
-                    navArgument("excursionId") {
-                        type = NavType.StringType
-                        nullable = true
-                        defaultValue = null
-                    }
-                )
-            ) {
-                PhotoUploadScreen(
-                    onNavigateBack = { navController.popBackStack() }
-                )
-            }
-
-            composable(Screen.UserManagement.route) {
-                UserManagementScreen(
-                    onNavigateBack = {
-                        navController.popBackStack()
-                    }
-                )
-            }
-
-            composable(Screen.Gallery.route) {
-                GalleryScreen(
-                    onNavigateToExcursionDetail = { excursionId ->
-                        navController.navigate(Screen.ExcursionDetail.createRoute(excursionId))
-                    }
-                )
-            }
-
-            composable(
-                route = Screen.ExcursionDetail.route,
-                arguments = listOf(
-                    navArgument("excursionId") { type = NavType.StringType }
-                )
-            ) {
-                ExcursionDetailScreen(
-                    onNavigateBack = { navController.popBackStack() },
-                    onNavigateToUpload = { excursionId ->
-                        navController.navigate(Screen.PhotoUpload.createRoute(excursionId))
-                    }
-                )
+                }
             }
         }
     }
@@ -231,21 +275,30 @@ fun MainScreen(
 
 @Composable
 private fun BottomNavigationBar(
-    navController: NavHostController
+    navController: NavHostController,
+    isUserLoggedIn: Boolean  // ← NUEVO PARÁMETRO
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
     NavigationBar {
         bottomNavItems.forEach { item ->
+            // Determinar ruta real según autenticación
+            val actualRoute = if (item.route == Screen.Gallery.route && !isUserLoggedIn) {
+                Screen.Login.createRoute(returnTo = "gallery")  // Pasar parámetro
+            } else {
+                item.route
+            }
+
             val selected = currentDestination?.hierarchy?.any {
-                it.route == item.route
+                it.route == item.route ||
+                        (item.route == Screen.Gallery.route && it.route == Screen.Login.route)
             } == true
 
             NavigationBarItem(
                 selected = selected,
                 onClick = {
-                    navController.navigate(item.route) {
+                    navController.navigate(actualRoute) {
                         popUpTo(navController.graph.findStartDestination().id) {
                             saveState = true
                         }

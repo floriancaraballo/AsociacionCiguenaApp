@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 @Composable
 fun OnboardingScreen(
@@ -50,6 +51,7 @@ fun OnboardingScreen(
     }
 
     val pagerState = rememberPagerState(pageCount = { 3 })
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold { paddingValues ->
         Column(
@@ -133,7 +135,7 @@ fun OnboardingScreen(
                     onClick = {
                         if (pagerState.currentPage < 2) {
                             // Ir a siguiente página
-                            kotlinx.coroutines.MainScope().launch {
+                            coroutineScope.launch {  // ← CORREGIDO
                                 pagerState.animateScrollToPage(pagerState.currentPage + 1)
                             }
                         }

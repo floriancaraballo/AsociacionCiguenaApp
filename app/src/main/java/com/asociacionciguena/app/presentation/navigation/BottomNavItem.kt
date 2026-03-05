@@ -3,13 +3,10 @@ package com.asociacionciguena.app.presentation.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.graphics.vector.ImageVector
 
-/**
- * Items de la barra de navegación inferior
- */
 sealed class BottomNavItem(
     val route: String,
     val title: String,
@@ -27,10 +24,11 @@ sealed class BottomNavItem(
         icon = Icons.Default.CalendarMonth
     )
 
-    object MembersArea : BottomNavItem(
-        route = Screen.Login.route,
+    // ACTUALIZADO: Ahora apunta a Gallery en lugar de Login
+    object Gallery : BottomNavItem(
+        route = Screen.Gallery.route,
         title = "Galería",
-        icon = Icons.Default.Lock
+        icon = Icons.Default.PhotoLibrary  // Icono cambiado
     )
 
     object Profile : BottomNavItem(
@@ -40,12 +38,9 @@ sealed class BottomNavItem(
     )
 }
 
-/**
- * Lista de items de navegación
- */
 val bottomNavItems = listOf(
     BottomNavItem.News,
     BottomNavItem.Calendar,
-    BottomNavItem.MembersArea,
+    BottomNavItem.Gallery,  // Actualizado
     BottomNavItem.Profile
 )

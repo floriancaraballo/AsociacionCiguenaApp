@@ -4,7 +4,9 @@ sealed class Screen(val route: String) {
     object Splash : Screen("splash")
     object News : Screen("news")
     object Calendar : Screen("calendar")
-    object Login : Screen("login")
+    object Login : Screen("login?returnTo={returnTo}") {
+        fun createRoute(returnTo: String = "profile") = "login?returnTo=$returnTo"
+    }
     object Gallery : Screen("gallery")
     object Profile : Screen("profile")
 
