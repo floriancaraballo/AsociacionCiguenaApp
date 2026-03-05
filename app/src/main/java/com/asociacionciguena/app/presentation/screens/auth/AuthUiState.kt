@@ -27,3 +27,10 @@ sealed class AuthUiState {
      */
     data class Error(val message: String) : AuthUiState()
 }
+
+sealed class ResetPasswordState {
+    object Idle : ResetPasswordState()
+    object Loading : ResetPasswordState()
+    object Success : ResetPasswordState()
+    data class Error(val message: String) : ResetPasswordState()
+}

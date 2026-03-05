@@ -22,9 +22,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
-/**
- * Pantalla de Login
- */
 @Composable
 fun LoginScreen(
     viewModel: AuthViewModel = hiltViewModel(),
@@ -33,6 +30,10 @@ fun LoginScreen(
     val uiState by viewModel.uiState.collectAsState()
     val email by viewModel.email.collectAsState()
     val password by viewModel.password.collectAsState()
+    val resetPasswordState by viewModel.resetPasswordState.collectAsState()
+
+    var showResetPasswordDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Navegar si el login es exitoso
     LaunchedEffect(uiState) {
@@ -41,16 +42,38 @@ fun LoginScreen(
         }
     }
 
+    // Mostrar mensaje cuando se envía el email de recuperación
+    LaunchedEffect(resetPasswordState) {
+        when (resetPasswordState) {
+            is ResetPasswordState.Success -> {
+                snackbarHostState.showSnackbar(
+                    message = "Email de recuperación enviado. Revisa tu bandeja de entrada.",
+                    duration = SnackbarDuration.Long
+                )
+                showResetPasswordDialog = false
+                viewModel.clearResetPasswordState()
+            }
+            is ResetPasswordState.Error -> {
+                snackbarHostState.showSnackbar(
+                    message = (resetPasswordState as ResetPasswordState.Error).message,
+                    duration = SnackbarDuration.Long
+                )
+            }
+            else -> {}
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Área a") },
+                title = { Text("Área Privada") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         LoginContent(
             email = email,
@@ -60,14 +83,27 @@ fun LoginScreen(
             onPasswordChange = viewModel::onPasswordChange,
             onLoginClick = viewModel::login,
             onClearError = viewModel::clearError,
+            onForgotPasswordClick = { showResetPasswordDialog = true },
             modifier = Modifier.padding(paddingValues)
         )
+
+        // Dialog de recuperación de contraseña
+        if (showResetPasswordDialog) {
+            ForgotPasswordDialog(
+                currentEmail = email,
+                resetPasswordState = resetPasswordState,
+                onDismiss = {
+                    showResetPasswordDialog = false
+                    viewModel.clearResetPasswordState()
+                },
+                onSendResetEmail = { resetEmail ->
+                    viewModel.sendPasswordResetEmail(resetEmail)
+                }
+            )
+        }
     }
 }
 
-/**
- * Contenido del formulario de login
- */
 @Composable
 private fun LoginContent(
     email: String,
@@ -77,6 +113,7 @@ private fun LoginContent(
     onPasswordChange: (String) -> Unit,
     onLoginClick: () -> Unit,
     onClearError: () -> Unit,
+    onForgotPasswordClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val focusManager = LocalFocusManager.current
@@ -191,7 +228,19 @@ private fun LoginContent(
             enabled = uiState !is AuthUiState.Loading
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        // NUEVO: Botón "¿Olvidaste tu contraseña?"
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.End
+        ) {
+            TextButton(onClick = onForgotPasswordClick) {
+                Text("¿Olvidaste tu contraseña?")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Botón Login
         Button(
@@ -232,4 +281,82 @@ private fun LoginContent(
             }
         }
     }
+}
+
+@Composable
+private fun ForgotPasswordDialog(
+    currentEmail: String,
+    resetPasswordState: ResetPasswordState,
+    onDismiss: () -> Unit,
+    onSendResetEmail: (String) -> Unit
+) {
+    var resetEmail by remember { mutableStateOf(currentEmail) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Email,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        },
+        title = {
+            Text("Recuperar Contraseña")
+        },
+        text = {
+            Column {
+                Text(
+                    text = "Introduce tu email y te enviaremos un enlace para restablecer tu contraseña.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = resetEmail,
+                    onValueChange = { resetEmail = it },
+                    label = { Text("Email") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Email,
+                            contentDescription = null
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Done
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = resetPasswordState !is ResetPasswordState.Loading
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSendResetEmail(resetEmail) },
+                enabled = resetEmail.isNotBlank() &&
+                        resetPasswordState !is ResetPasswordState.Loading
+            ) {
+                if (resetPasswordState is ResetPasswordState.Loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("Enviar")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = resetPasswordState !is ResetPasswordState.Loading
+            ) {
+                Text("Cancelar")
+            }
+        }
+    )
 }

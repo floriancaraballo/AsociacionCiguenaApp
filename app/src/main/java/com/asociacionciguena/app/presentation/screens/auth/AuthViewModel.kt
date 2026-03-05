@@ -13,13 +13,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlinx.coroutines.tasks.await
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.tasks.await
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val loginUseCase: LoginUseCase,
     private val logoutUseCase: LogoutUseCase,
     private val getCurrentUserUseCase: GetCurrentUserUseCase,
-    private val fcmTokenManager: FCMTokenManager  // ← AÑADIDO
+    private val fcmTokenManager: FCMTokenManager,
+    private val auth: FirebaseAuth  // ← AÑADIDO
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
@@ -119,5 +123,49 @@ class AuthViewModel @Inject constructor(
                 // Log error pero no bloquear el login
             }
         }
+    }
+    /**
+     * Estado del password reset
+     */
+    private val _resetPasswordState = MutableStateFlow<ResetPasswordState>(ResetPasswordState.Idle)
+    val resetPasswordState: StateFlow<ResetPasswordState> = _resetPasswordState.asStateFlow()
+
+    /**
+     * Enviar email de recuperación de contraseña
+     */
+    fun sendPasswordResetEmail(email: String) {
+        viewModelScope.launch {
+            _resetPasswordState.value = ResetPasswordState.Loading
+
+            if (email.isBlank()) {
+                _resetPasswordState.value = ResetPasswordState.Error("Introduce tu email")
+                return@launch
+            }
+
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                _resetPasswordState.value = ResetPasswordState.Error("Email inválido")
+                return@launch
+            }
+
+            try {
+                auth.sendPasswordResetEmail(email).await()
+                _resetPasswordState.value = ResetPasswordState.Success
+            } catch (e: Exception) {
+                _resetPasswordState.value = ResetPasswordState.Error(
+                    when {
+                        e.message?.contains("user-not-found") == true -> "No existe una cuenta con este email"
+                        e.message?.contains("invalid-email") == true -> "Email inválido"
+                        else -> "Error al enviar email: ${e.message}"
+                    }
+                )
+            }
+        }
+    }
+
+    /**
+     * Limpiar estado de password reset
+     */
+    fun clearResetPasswordState() {
+        _resetPasswordState.value = ResetPasswordState.Idle
     }
 }
