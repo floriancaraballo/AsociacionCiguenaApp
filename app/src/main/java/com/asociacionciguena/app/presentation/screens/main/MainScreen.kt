@@ -33,11 +33,16 @@ import com.asociacionciguena.app.presentation.screens.gallery.detail.ExcursionDe
 import com.asociacionciguena.app.presentation.screens.onboarding.OnboardingScreen
 import com.asociacionciguena.app.presentation.screens.splash.SplashScreen
 import androidx.compose.runtime.LaunchedEffect
+import com.asociacionciguena.app.presentation.screens.calendar.detail.CalendarExcursionDetailScreen
+import androidx.compose.runtime.LaunchedEffect
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.asociacionciguena.app.presentation.theme.ThemeViewModel
 
 @Composable
 fun MainScreen(
     viewModel: MainViewModel = hiltViewModel(),
-    onNavigateToNewsDetail: (String) -> Unit = {}
+    onNavigateToNewsDetail: (String) -> Unit = {},
+    themeViewModel: ThemeViewModel  // ← NUEVO
 ) {
     val navController = rememberNavController()
     val initState by viewModel.initState.collectAsState()
@@ -119,13 +124,42 @@ fun MainScreen(
 
                     // Calendario
                     composable(Screen.Calendar.route) {
-                        CalendarScreen()
+                        CalendarScreen(
+                            onNavigateToExcursionDetail = { excursionId ->
+                                navController.navigate(Screen.CalendarExcursionDetail.createRoute(excursionId))
+                            }
+                        )
+                    }
+
+                    // Detalle de excursión desde calendario (PÚBLICO)
+                    composable(
+                        route = Screen.CalendarExcursionDetail.route,
+                        arguments = listOf(
+                            navArgument("excursionId") { type = NavType.StringType }
+                        )
+                    ) {
+                        CalendarExcursionDetailScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onNavigateToEditExcursion = { excursionId ->
+                                navController.navigate(Screen.ExcursionForm.createRoute(excursionId))
+                            }
+                        )
                     }
 
                     // Login
-                    composable(Screen.Gallery.route) {
+                    composable(
+                        route = Screen.Gallery.route
+                    ) { backStackEntry ->
                         if (state.isUserLoggedIn) {
+                            // Forzar recarga cuando se vuelve a la pantalla
+                            val viewModel: com.asociacionciguena.app.presentation.screens.gallery.GalleryViewModel = hiltViewModel()
+
+                            LaunchedEffect(backStackEntry) {
+                                viewModel.retry()
+                            }
+
                             GalleryScreen(
+                                viewModel = viewModel,
                                 onNavigateToExcursionDetail = { excursionId ->
                                     navController.navigate(Screen.ExcursionDetail.createRoute(excursionId))
                                 }
@@ -142,6 +176,7 @@ fun MainScreen(
                     // Perfil
                     composable(Screen.Profile.route) {
                         ProfileScreen(
+                            themeViewModel = themeViewModel,
                             onNavigateToLogin = {
                                 navController.navigate(Screen.Login.createRoute(returnTo = "profile")) {
                                     popUpTo(Screen.Profile.route) { inclusive = true }

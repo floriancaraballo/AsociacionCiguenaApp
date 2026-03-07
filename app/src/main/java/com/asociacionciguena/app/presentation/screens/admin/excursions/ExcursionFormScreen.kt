@@ -1,6 +1,9 @@
 package com.asociacionciguena.app.presentation.screens.admin.excursions
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,10 +33,27 @@ fun ExcursionFormScreen(
     val description by viewModel.description.collectAsState()
     val location by viewModel.location.collectAsState()
     val imageUrl by viewModel.imageUrl.collectAsState()
+    val imageUploadState by viewModel.imageUploadState.collectAsState()
     val date by viewModel.date.collectAsState()
+    val authorizationPdfUrl by viewModel.authorizationPdfUrl.collectAsState()
+    val pdfUploadState by viewModel.pdfUploadState.collectAsState()
 
     var showExitDialog by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+
+    // Launcher para seleccionar PDF
+    val pdfPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.uploadAuthorizationPdf(it) }
+    }
+    // Launcher para seleccionar imagen
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.uploadExcursionImage(it) }
+    }
+
 
     val hasUnsavedChanges = (title.isNotBlank() ||
             description.isNotBlank() ||
@@ -91,6 +111,9 @@ fun ExcursionFormScreen(
                     location = location,
                     imageUrl = imageUrl,
                     date = date,
+                    authorizationPdfUrl = authorizationPdfUrl,
+                    pdfUploadState = pdfUploadState,
+                    imageUploadState = imageUploadState,  // ← NUEVO
                     isSaving = uiState is ExcursionFormUiState.Saving,
                     errorMessage = (uiState as? ExcursionFormUiState.Error)?.message,
                     onTitleChange = viewModel::onTitleChange,
@@ -98,6 +121,12 @@ fun ExcursionFormScreen(
                     onLocationChange = viewModel::onLocationChange,
                     onImageUrlChange = viewModel::onImageUrlChange,
                     onDatePickerClick = { showDatePicker = true },
+                    onUploadImageClick = { imagePickerLauncher.launch("image/*") },  // ← NUEVO
+                    onRemoveImageClick = viewModel::removeExcursionImage,  // ← NUEVO
+                    onClearImageError = viewModel::clearImageUploadError,  // ← NUEVO
+                    onUploadPdfClick = { pdfPickerLauncher.launch("application/pdf") },
+                    onRemovePdfClick = viewModel::removeAuthorizationPdf,
+                    onClearPdfError = viewModel::clearPdfUploadError,
                     onSaveClick = { viewModel.saveExcursion(onNavigateBack) },
                     onClearError = viewModel::clearError,
                     modifier = Modifier.padding(paddingValues)
@@ -167,6 +196,9 @@ private fun ExcursionFormContent(
     location: String,
     imageUrl: String,
     date: LocalDateTime?,
+    authorizationPdfUrl: String?,
+    pdfUploadState: PdfUploadState,
+    imageUploadState: ImageUploadState,  // ← NUEVO
     isSaving: Boolean,
     errorMessage: String?,
     onTitleChange: (String) -> Unit,
@@ -174,6 +206,12 @@ private fun ExcursionFormContent(
     onLocationChange: (String) -> Unit,
     onImageUrlChange: (String) -> Unit,
     onDatePickerClick: () -> Unit,
+    onUploadImageClick: () -> Unit,  // ← NUEVO
+    onRemoveImageClick: () -> Unit,  // ← NUEVO
+    onClearImageError: () -> Unit,  // ← NUEVO
+    onUploadPdfClick: () -> Unit,
+    onRemovePdfClick: () -> Unit,
+    onClearPdfError: () -> Unit,
     onSaveClick: () -> Unit,
     onClearError: () -> Unit,
     modifier: Modifier = Modifier
@@ -278,66 +316,295 @@ private fun ExcursionFormContent(
             }
         }
 
-        OutlinedTextField(
-            value = imageUrl,
-            onValueChange = onImageUrlChange,
-            label = { Text("URL de Imagen (opcional)") },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isSaving,
-            supportingText = {
-                Text("Ejemplo: https://picsum.photos/800/600?random=1")
-            }
+
+        Text(
+            text = "Imagen de la Excursión (opcional)",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary
         )
 
-        if (imageUrl.isNotBlank()) {
-            Text(
-                text = "Preview:",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
+// Mostrar error de subida de imagen
+        if (imageUploadState is ImageUploadState.Error) {
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                ),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                SubcomposeAsyncImage(
-                    model = imageUrl,
-                    contentDescription = "Preview",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    loading = {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = (imageUploadState as ImageUploadState.Error).message,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onClearImageError) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cerrar",
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+        }
+
+        when {
+            // Imagen subiendo
+            imageUploadState is ImageUploadState.Uploading -> {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            CircularProgressIndicator()
+                            Text(
+                                text = "Subiendo imagen...",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "${((imageUploadState as ImageUploadState.Uploading).progress * 100).toInt()}%",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
-                    },
-                    error = {
-                        Box(
+                        LinearProgressIndicator(
+                            progress = (imageUploadState as ImageUploadState.Uploading).progress,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
+            // Imagen ya subida
+            imageUrl.isNotBlank() -> {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                ) {
+                    Box {
+                        SubcomposeAsyncImage(
+                            model = imageUrl,
+                            contentDescription = "Preview",
                             modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
+                            contentScale = ContentScale.Crop,
+                            loading = {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            },
+                            error = {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.BrokenImage,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(48.dp),
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        )
+
+                        // Botón eliminar imagen
+                        IconButton(
+                            onClick = onRemoveImageClick,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp),
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.BrokenImage,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colorScheme.error
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Eliminar imagen",
+                                tint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Sin imagen
+            else -> {
+                OutlinedButton(
+                    onClick = onUploadImageClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSaving && imageUploadState !is ImageUploadState.Uploading
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Image,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Subir Imagen desde Dispositivo")
+                }
+            }
+        }
+        // ← NUEVO: Sección de PDF de Autorización
+        Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+        Text(
+            text = "Autorización PDF (opcional)",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Text(
+            text = "Sube un PDF con la autorización que los usuarios podrán descargar",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        // Mostrar error de subida de PDF
+        if (pdfUploadState is PdfUploadState.Error) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = pdfUploadState.message,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onClearPdfError) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cerrar",
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+        }
+
+        when {
+            // PDF subiendo
+            pdfUploadState is PdfUploadState.Uploading -> {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Subiendo PDF...",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "${(pdfUploadState.progress * 100).toInt()}%",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        LinearProgressIndicator(
+                            progress = pdfUploadState.progress,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
+            // PDF ya subido
+            authorizationPdfUrl != null -> {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PictureAsPdf,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "PDF Subido",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
                                 )
                                 Text(
-                                    text = "URL inválida",
+                                    text = "Autorización disponible",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
                                 )
                             }
                         }
+                        IconButton(
+                            onClick = onRemovePdfClick,
+                            enabled = !isSaving
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Eliminar PDF",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
-                )
+                }
+            }
+
+            // Sin PDF
+            else -> {
+                OutlinedButton(
+                    onClick = onUploadPdfClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSaving && pdfUploadState !is PdfUploadState.Uploading
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Upload,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Subir Autorización PDF")
+                }
             }
         }
 
@@ -352,7 +619,9 @@ private fun ExcursionFormContent(
                     title.isNotBlank() &&
                     description.isNotBlank() &&
                     location.isNotBlank() &&
-                    date != null
+                    date != null &&
+                    pdfUploadState !is PdfUploadState.Uploading &&
+                    imageUploadState !is ImageUploadState.Uploading  // ← AÑADIDO
         ) {
             if (isSaving) {
                 CircularProgressIndicator(

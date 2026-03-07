@@ -1,6 +1,7 @@
 package com.asociacionciguena.app.presentation.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -9,10 +10,12 @@ import androidx.navigation.navArgument
 import com.asociacionciguena.app.presentation.screens.main.MainScreen
 import com.asociacionciguena.app.presentation.screens.news.NewsDetailScreen
 import com.asociacionciguena.app.presentation.screens.splash.SplashScreen
+import com.asociacionciguena.app.presentation.theme.ThemeViewModel
 
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
+    val themeViewModel: ThemeViewModel = hiltViewModel()  // ← MOVER AQUÍ
 
     NavHost(
         navController = navController,
@@ -32,13 +35,14 @@ fun AppNavigation() {
         // Main Screen (con bottom navigation)
         composable(Screen.News.route) {
             MainScreen(
+                themeViewModel = themeViewModel,
                 onNavigateToNewsDetail = { newsId ->
                     navController.navigate(Screen.NewsDetail.createRoute(newsId))
                 }
             )
         }
 
-        // News Detail Screen (pantalla completa)
+
         composable(
             route = Screen.NewsDetail.route,
             arguments = listOf(
@@ -53,5 +57,15 @@ fun AppNavigation() {
                 }
             )
         }
+        /*{ backStackEntry ->
+            val newsId = backStackEntry.arguments?.getString("newsId") ?: ""
+            NewsDetailScreen(
+                newsId = newsId,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        */
     }
 }

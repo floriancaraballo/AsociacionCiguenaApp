@@ -28,6 +28,8 @@ import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVis
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.runtime.DisposableEffect
+import androidx.activity.compose.BackHandler
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -38,14 +40,20 @@ fun PhotoUploadScreen(
     val uiState by viewModel.uiState.collectAsState()
     val excursions by viewModel.excursions.collectAsState()
     val users by viewModel.users.collectAsState()
+    // Bloquear navegación mientras se sube
+    val isUploading = uiState is PhotoUploadUiState.Uploading
 
-    val permissionState = rememberPermissionState(
-        permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_IMAGES
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        }
-    )
+    BackHandler(enabled = isUploading) {
+        // No hacer nada - bloquear el botón atrás mientras se sube
+    }
+    // Android 13+ no necesita permiso para Photo Picker
+    val needsPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+
+    val permissionState = if (needsPermission) {
+        rememberPermissionState(permission = Manifest.permission.READ_EXTERNAL_STORAGE)
+    } else {
+        null
+    }
 
     // NUEVO: Selector múltiple de fotos
     val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
@@ -64,7 +72,13 @@ fun PhotoUploadScreen(
             viewModel.addMorePhotos(uris)
         }
     }
-
+    // Limpiar estado al entrar a la pantalla
+    DisposableEffect(Unit) {
+        viewModel.reset()
+        onDispose {
+            viewModel.reset()
+        }
+    }
     LaunchedEffect(uiState) {
         if (uiState is PhotoUploadUiState.Success) {
             kotlinx.coroutines.delay(2000)
@@ -77,8 +91,19 @@ fun PhotoUploadScreen(
             TopAppBar(
                 title = { Text("Subir Fotos") },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Volver")
+                    IconButton(
+                        onClick = onNavigateBack,
+                        enabled = !isUploading  // ← Deshabilitar mientras se sube
+                    ) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Volver",
+                            tint = if (isUploading) {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                            } else {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            }
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -93,9 +118,9 @@ fun PhotoUploadScreen(
             uiState = uiState,
             excursions = excursions,
             users = users,
-            permissionGranted = permissionState.status.isGranted,
-            shouldShowRationale = permissionState.status.shouldShowRationale,
-            onRequestPermission = { permissionState.launchPermissionRequest() },
+            permissionGranted = permissionState?.status?.isGranted ?: true,  // ← Android 13+ siempre true
+            shouldShowRationale = permissionState?.status?.shouldShowRationale ?: false,
+            onRequestPermission = { permissionState?.launchPermissionRequest() },
             onSelectPhotos = {
                 multiplePhotoPickerLauncher.launch(
                     PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -440,6 +465,30 @@ private fun UploadingContent(
                 text = "Subiendo fotos...",
                 style = MaterialTheme.typography.titleMedium
             )
+            // ← NUEVO
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "No cierres esta pantalla hasta que termine la subida",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
 
             Text(
                 text = "Foto $currentPhoto de $totalPhotos",

@@ -162,7 +162,7 @@ private fun NewsDetailContent(
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = formatDate(news.publishedDate),
+                    text = formatDate(news.createdAt),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

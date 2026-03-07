@@ -31,6 +31,9 @@ class NewsFormViewModel @Inject constructor(
     private val _title = MutableStateFlow("")
     val title: StateFlow<String> = _title.asStateFlow()
 
+    private val _shortDescription = MutableStateFlow("")
+    val shortDescription: StateFlow<String> = _shortDescription.asStateFlow()
+
     private val _content = MutableStateFlow("")
     val content: StateFlow<String> = _content.asStateFlow()
 
@@ -77,6 +80,7 @@ class NewsFormViewModel @Inject constructor(
 
                 if (doc.exists()) {
                     _title.value = doc.getString("title") ?: ""
+                    _shortDescription.value = doc.getString("shortDescription") ?: ""
                     _content.value = doc.getString("content") ?: ""
                     _imageUrl.value = doc.getString("imageUrl") ?: ""
                     _isPublic.value = doc.getBoolean("isPublic") ?: true
@@ -99,6 +103,10 @@ class NewsFormViewModel @Inject constructor(
 
     fun onTitleChange(newTitle: String) {
         _title.value = newTitle
+    }
+
+    fun onShortDescriptionChange(newDescription: String) {
+        _shortDescription.value = newDescription
     }
 
     fun onContentChange(newContent: String) {
@@ -179,6 +187,11 @@ class NewsFormViewModel @Inject constructor(
                     return@launch
                 }
 
+                if (_shortDescription.value.isBlank()) {
+                    _uiState.value = NewsFormUiState.Error("La descripción corta es obligatoria")
+                    return@launch
+                }
+
                 if (_content.value.isBlank()) {
                     _uiState.value = NewsFormUiState.Error("El contenido es obligatorio")
                     return@launch
@@ -213,6 +226,7 @@ class NewsFormViewModel @Inject constructor(
 
                 val newsData = hashMapOf(
                     "title" to _title.value,
+                    "shortDescription" to _shortDescription.value,  // ← NUEVO
                     "content" to _content.value,
                     "imageUrl" to finalImageUrl.ifBlank { null },
                     "publishedDate" to Timestamp.now(),
@@ -221,11 +235,37 @@ class NewsFormViewModel @Inject constructor(
                 )
 
                 if (isEditMode && newsId != null) {
+                    // EDITAR: Solo actualizar campos editables + updatedAt
+                    // NO incluir createdAt para mantener la fecha original
+                    val updateData = hashMapOf(
+                        "title" to _title.value,
+                        "shortDescription" to _shortDescription.value,
+                        "content" to _content.value,
+                        "imageUrl" to finalImageUrl.ifBlank { null },
+                        "isPublic" to _isPublic.value,
+                        "additionalPhotos" to uploadedAdditionalPhotos,
+                        "updatedAt" to Timestamp.now()  // ← NUEVO: Marcar como actualizado
+                        // NO incluir createdAt ni publishedDate - se mantienen los originales
+                    )
+
                     firestore.collection("news")
                         .document(newsId)
-                        .update(newsData as Map<String, Any>)
+                        .update(updateData as Map<String, Any>)
                         .await()
                 } else {
+                    // CREAR: Incluir createdAt
+                    val newsData = hashMapOf(
+                        "title" to _title.value,
+                        "shortDescription" to _shortDescription.value,
+                        "content" to _content.value,
+                        "imageUrl" to finalImageUrl.ifBlank { null },
+                        "createdAt" to Timestamp.now(),  // ← Solo al crear
+                        "publishedDate" to Timestamp.now(),  // Mantener por compatibilidad con datos antiguos
+                        "updatedAt" to null,  // ← null al crear
+                        "isPublic" to _isPublic.value,
+                        "additionalPhotos" to uploadedAdditionalPhotos
+                    )
+
                     firestore.collection("news")
                         .add(newsData)
                         .await()

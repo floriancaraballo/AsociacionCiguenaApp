@@ -10,9 +10,6 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
-/**
- * Implementación de acceso a Noticias en Firebase
- */
 class FirebaseNewsDataSourceImpl @Inject constructor(
     private val firestore: FirebaseFirestore
 ) : FirebaseNewsDataSource {
@@ -20,7 +17,6 @@ class FirebaseNewsDataSourceImpl @Inject constructor(
     override fun getNews(): Flow<List<NewsDto>> = callbackFlow {
         val listener = firestore.collection(Constants.COLLECTION_NEWS)
             .whereEqualTo("isPublic", true)
-            .orderBy("publishedDate", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     close(error)
@@ -28,10 +24,31 @@ class FirebaseNewsDataSourceImpl @Inject constructor(
                 }
 
                 val news = snapshot?.documents?.mapNotNull { doc ->
-                    doc.toObject(NewsDto::class.java)?.copy(id = doc.id)
+                    try {
+                        // Mapeo manual para compatibilidad con datos antiguos
+                        NewsDto(
+                            id = doc.id,
+                            title = doc.getString("title") ?: "",
+                            shortDescription = doc.getString("shortDescription") ?: "",
+                            content = doc.getString("content") ?: "",
+                            imageUrl = doc.getString("imageUrl"),
+                            // COMPATIBILIDAD: Usar createdAt si existe, sino publishedDate
+                            createdAt = doc.getTimestamp("createdAt")
+                                ?: doc.getTimestamp("publishedDate"),
+                            updatedAt = doc.getTimestamp("updatedAt"),
+                            isPublic = doc.getBoolean("isPublic") ?: true,
+                            additionalPhotos = (doc.get("additionalPhotos") as? List<*>)
+                                ?.filterIsInstance<String>() ?: emptyList()
+                        )
+                    } catch (e: Exception) {
+                        null
+                    }
                 } ?: emptyList()
 
-                trySend(news)
+                // Ordenar por createdAt (más recientes primero)
+                val sortedNews = news.sortedByDescending { it.createdAt }
+
+                trySend(sortedNews)
             }
 
         awaitClose { listener.remove() }
@@ -44,7 +61,21 @@ class FirebaseNewsDataSourceImpl @Inject constructor(
                 .get()
                 .await()
 
-            doc.toObject(NewsDto::class.java)?.copy(id = doc.id)
+            // Mapeo manual para compatibilidad
+            NewsDto(
+                id = doc.id,
+                title = doc.getString("title") ?: "",
+                shortDescription = doc.getString("shortDescription") ?: "",
+                content = doc.getString("content") ?: "",
+                imageUrl = doc.getString("imageUrl"),
+                // COMPATIBILIDAD: Usar createdAt si existe, sino publishedDate
+                createdAt = doc.getTimestamp("createdAt")
+                    ?: doc.getTimestamp("publishedDate"),
+                updatedAt = doc.getTimestamp("updatedAt"),
+                isPublic = doc.getBoolean("isPublic") ?: true,
+                additionalPhotos = (doc.get("additionalPhotos") as? List<*>)
+                    ?.filterIsInstance<String>() ?: emptyList()
+            )
         } catch (e: Exception) {
             null
         }

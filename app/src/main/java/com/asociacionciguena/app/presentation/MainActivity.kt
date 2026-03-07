@@ -10,8 +10,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.asociacionciguena.app.presentation.navigation.AppNavigation
-import com.asociacionciguena.app.presentation.theme.AsociacionCigueñaTheme
+import com.asociacionciguena.app.presentation.theme.AsociacionCiguenaTheme
 import dagger.hilt.android.AndroidEntryPoint
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.asociacionciguena.app.presentation.screens.main.MainScreen
+import com.asociacionciguena.app.presentation.theme.ThemeViewModel
 
 /**
  * Activity principal de la aplicación
@@ -30,12 +35,17 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            AsociacionCigueñaTheme {
+            val themeViewModel: ThemeViewModel = hiltViewModel()
+            val isDarkMode by themeViewModel.isDarkMode.collectAsState()
+
+            AsociacionCiguenaTheme(
+                darkTheme = isDarkMode  // ← Aplicar tema
+            ) {
                 Surface(
-                    modifier = Modifier.Companion.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppNavigation()
+                    AppNavigation()  // ← IMPORTANTE: Ir a AppNavigation, NO a MainScreen
                 }
             }
         }

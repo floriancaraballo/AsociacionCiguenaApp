@@ -8,5 +8,6 @@ data class Excursion(
     val description: String,
     val date: LocalDateTime,
     val location: String,
-    val imageUrl: String?
+    val imageUrl: String?,
+    val authorizationPdfUrl: String? = null
 )

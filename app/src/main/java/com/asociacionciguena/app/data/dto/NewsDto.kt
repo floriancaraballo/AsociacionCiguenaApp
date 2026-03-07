@@ -16,9 +16,11 @@ import com.google.firebase.Timestamp
 data class NewsDto(
     val id: String = "",
     val title: String = "",
+    val shortDescription: String = "",
     val content: String = "",
     val imageUrl: String? = null,
-    val publishedDate: Timestamp? = null,
+    val createdAt: Timestamp? = null,
+    val updatedAt: Timestamp? = null,
     val isPublic: Boolean = true,
     val additionalPhotos: List<String> = emptyList()
 ) {
@@ -28,9 +30,11 @@ data class NewsDto(
     constructor() : this(
         id = "",
         title = "",
+        shortDescription = "",  // ← NUEVO
         content = "",
         imageUrl = null,
-        publishedDate = null,
+        createdAt = null,
+        updatedAt = null,
         isPublic = true,
         additionalPhotos = emptyList()
     )

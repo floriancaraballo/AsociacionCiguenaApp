@@ -46,6 +46,8 @@ class NewsViewModel @Inject constructor(
                 // Actualizar el estado según el resultado
                 _uiState.value = when (result) {
                     is Result.Success -> {
+                        _allNews.value = result.data  // ← NUEVO: Guardar todas
+                        filterNews(_searchQuery.value)  // ← NUEVO: Aplicar filtro actual
                         NewsUiState.Success(news = result.data)
                     }
 
@@ -76,6 +78,8 @@ class NewsViewModel @Inject constructor(
             getNewsUseCase().collect { result ->
                 _uiState.value = when (result) {
                     is Result.Success -> {
+                        _allNews.value = result.data  // ← AÑADIR
+                        filterNews(_searchQuery.value)  // ← AÑADIR
                         NewsUiState.Success(
                             news = result.data,
                             isRefreshing = false
@@ -95,6 +99,41 @@ class NewsViewModel @Inject constructor(
                     }
                 }
             }
+        }
+    }
+
+    // ← NUEVO: Estado de búsqueda
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _allNews = MutableStateFlow<List<com.asociacionciguena.app.domain.model.News>>(emptyList())
+
+    // ← NUEVO: Actualizar query de búsqueda
+    fun onSearchQueryChange(query: String) {
+        _searchQuery.value = query
+        filterNews(query)
+    }
+
+    // ← NUEVO: Limpiar búsqueda
+    fun clearSearch() {
+        _searchQuery.value = ""
+        filterNews("")
+    }
+
+    // ← NUEVO: Filtrar noticias
+    private fun filterNews(query: String) {
+        val currentNews = _allNews.value
+
+        if (query.isBlank()) {
+            // Mostrar todas
+            _uiState.value = NewsUiState.Success(news = currentNews)
+        } else {
+            // Filtrar por título o descripción
+            val filtered = currentNews.filter { news ->
+                news.title.contains(query, ignoreCase = true) ||
+                        news.shortDescription.contains(query, ignoreCase = true)
+            }
+            _uiState.value = NewsUiState.Success(news = filtered)
         }
     }
 

@@ -18,6 +18,8 @@ import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.ErrorMessage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import kotlinx.datetime.LocalDateTime
+import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.CalendarToday
 
 @Composable
 fun GalleryScreen(
@@ -110,24 +112,134 @@ private fun ExcursionCard(
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
     ) {
-        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (excursionWithPhotos.firstPhotoUrl != null) {
-                Card(modifier = Modifier.size(80.dp)) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Imagen de la excursión o placeholder
+            Card(
+                modifier = Modifier.size(80.dp),
+                colors = if (excursionWithPhotos.firstPhotoUrl == null) {
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                } else {
+                    CardDefaults.cardColors()
+                }
+            ) {
+                if (excursionWithPhotos.firstPhotoUrl != null) {
                     SubcomposeAsyncImage(
                         model = excursionWithPhotos.firstPhotoUrl,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Crop,
+                        loading = {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                        }
+                    )
+                } else {
+                    // Placeholder cuando no hay fotos
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PhotoLibrary,
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Info de la excursión
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = excursionWithPhotos.excursion.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Photo,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = if (excursionWithPhotos.photoCount > 0) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                    Text(
+                        text = if (excursionWithPhotos.photoCount == 0) {
+                            "Sin fotos"
+                        } else {
+                            "${excursionWithPhotos.photoCount} foto${if (excursionWithPhotos.photoCount != 1) "s" else ""}"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (excursionWithPhotos.photoCount > 0) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+
+                // Fecha
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = formatDate(excursionWithPhotos.excursion.date),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = excursionWithPhotos.excursion.title, style = MaterialTheme.typography.titleMedium)
-                Text(text = "${excursionWithPhotos.photoCount} fotos", style = MaterialTheme.typography.bodySmall)
-            }
-            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null)
+
+            // Icono de flecha
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
+}
+
+private fun formatDate(date: LocalDateTime): String {
+    val monthNames = listOf(
+        "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+        "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
+    )
+    return "${date.dayOfMonth} ${monthNames[date.monthNumber - 1]} ${date.year}"
 }

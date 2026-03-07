@@ -60,7 +60,7 @@ fun NewsCard(
 
                 // Fecha
                 Text(
-                    text = formatDate(news.publishedDate),
+                    text = formatDate(news.createdAt),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -69,10 +69,13 @@ fun NewsCard(
 
                 // Contenido (preview)
                 Text(
-                    text = news.content,
+                    text = news.shortDescription.ifBlank {
+                        news.content.take(150)  // Mostrar primeros 150 caracteres del contenido
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

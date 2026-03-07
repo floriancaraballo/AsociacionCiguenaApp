@@ -50,3 +50,6 @@ gradle/wrapper/gradle-wrapper.jar
 
 # Optional: exclude IDE run configs
 .run/
+
+keystore.properties
+*.jks

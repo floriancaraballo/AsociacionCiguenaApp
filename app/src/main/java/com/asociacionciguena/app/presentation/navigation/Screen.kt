@@ -39,4 +39,7 @@ sealed class Screen(val route: String) {
         fun createRoute(excursionId: String) = "excursion_detail/$excursionId"
     }
     object Onboarding : Screen("onboarding")
+    object CalendarExcursionDetail : Screen("calendar_excursion_detail/{excursionId}") {
+        fun createRoute(excursionId: String) = "calendar_excursion_detail/$excursionId"
+    }
 }

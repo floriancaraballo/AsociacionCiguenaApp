@@ -1,7 +1,7 @@
 import * as admin from "firebase-admin";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
-
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 admin.initializeApp();
 
 interface PendingUserDocument {
@@ -431,106 +431,115 @@ export const onExcursionCreated = onDocumentCreated({
   }
 });
 
-/**
- * Enviar notificación cuando se suben fotos
- */
-export const onPhotoUploaded = onDocumentCreated({
-  document: "photos/{photoId}",
-  region: "europe-west1",
-}, async (event) => {
-  const snapshot = event.data;
-  if (!snapshot) {
-    console.log("No data associated with the event");
-    return;
-  }
+// ==========================================
+// NOTIFICACIÓN AL COMPLETAR BATCH DE FOTOS
+// ==========================================
 
-  const photoData = snapshot.data();
+export const onUploadBatchCompleted = onDocumentUpdated(
+    {
+        document: "uploadBatches/{batchId}",
+        region: "europe-west1"
+    },
+    async (event) => {
+        try {
+            const beforeData = event.data?.before.data();
+            const afterData = event.data?.after.data();
 
-  try {
-    const excursionId = photoData.excursionId;
-    const authorizedUsers = photoData.authorizedUsers || [];
+            if (!afterData) return;
 
-    if (!excursionId || authorizedUsers.length === 0) {
-      console.log("No hay excursión o usuarios autorizados");
-      return;
-    }
+            // Solo actuar cuando cambia de "uploading" a "completed"
+            if (beforeData?.status === "uploading" && afterData.status === "completed") {
+                const excursionId = afterData.excursionId as string;
+                const photoCount = afterData.photoCount as number;
+                const authorizedUsers = afterData.authorizedUsers as string[] || [];
 
-    // Obtener información de la excursión
-    const excursionDoc = await admin.firestore()
-      .collection("excursions")
-      .doc(excursionId)
-      .get();
+                if (!excursionId || authorizedUsers.length === 0) {
+                    console.log("No excursionId or authorizedUsers");
+                    return;
+                }
 
-    if (!excursionDoc.exists) {
-      console.log("Excursión no encontrada");
-      return;
-    }
+                console.log(`📸 Upload batch completed: ${photoCount} photos for excursion ${excursionId}`);
 
-    const excursionTitle = excursionDoc.data()?.title || "una excursión";
+                // Obtener título de la excursión
+                const excursionDoc = await admin.firestore()
+                    .collection("excursions")
+                    .doc(excursionId)
+                    .get();
 
-    // Obtener tokens de usuarios autorizados
-    const usersSnapshot = await admin.firestore()
-      .collection("users")
-      .where("fcmToken", "!=", null)
-      .get();
+                const excursionTitle = excursionDoc.data()?.title || "una excursión";
 
-    const tokens: string[] = [];
-    usersSnapshot.docs.forEach((doc) => {
-      const userId = doc.id;
-      const token = doc.data().fcmToken;
+                // Obtener tokens de usuarios autorizados (en lotes de 10)
+                const tokens: string[] = [];
 
-      // Solo notificar a usuarios autorizados
-      if (token && authorizedUsers.includes(userId)) {
-        tokens.push(token);
-      }
-    });
+                for (let i = 0; i < authorizedUsers.length; i += 10) {
+                    const batch = authorizedUsers.slice(i, i + 10);
 
-    if (tokens.length === 0) {
-      console.log("No hay tokens de usuarios autorizados");
-      return;
-    }
+                    const usersSnapshot = await admin.firestore()
+                        .collection("users")
+                        .where(admin.firestore.FieldPath.documentId(), "in", batch)
+                        .get();
 
-    // Crear mensaje
-    const message = {
-      notification: {
-        title: "📸 Nuevas fotos",
-        body: `Se han subido fotos de ${excursionTitle}`,
-      },
-      data: {
-        type: "photo",
-        itemId: excursionId, // Navegar a la excursión
-      },
-      tokens: tokens,
-    };
+                    usersSnapshot.forEach((doc) => {
+                        const userToken = doc.data().fcmToken;
+                        if (userToken) {
+                            tokens.push(userToken as string);
+                        }
+                    });
+                }
 
-    // Enviar notificación
-    const response = await admin.messaging().sendEachForMulticast(message);
-    console.log(`Notificaciones enviadas: ${response.successCount} exitosas`);
+                if (tokens.length === 0) {
+                    console.log("✅ No FCM tokens found for authorized users");
+                    return;
+                }
 
-    // Limpiar tokens inválidos
-    if (response.failureCount > 0) {
-      const tokensToRemove: string[] = [];
-      response.responses.forEach((resp, idx) => {
-        if (!resp.success) {
-          tokensToRemove.push(tokens[idx]);
+                // Mensaje según el número de fotos
+                const body = photoCount === 1
+                    ? `Nueva foto de ${excursionTitle}`
+                    : `${photoCount} nuevas fotos de ${excursionTitle}`;
+
+                // Enviar notificación
+                const response = await admin.messaging().sendEachForMulticast({
+                    tokens: tokens,
+                    notification: {
+                        title: "📸 Nuevas fotos",
+                        body: body
+                    },
+                    data: {
+                        type: "photo",
+                        itemId: excursionId
+                    }
+                });
+
+                console.log(`✅ Sent notification for ${photoCount} photos: ${response.successCount} success, ${response.failureCount} failed`);
+
+                // Limpiar tokens inválidos
+                if (response.failureCount > 0) {
+                    const invalidTokens: string[] = [];
+                    response.responses.forEach((resp, idx) => {
+                        if (!resp.success) {
+                            invalidTokens.push(tokens[idx]);
+                        }
+                    });
+
+                    if (invalidTokens.length > 0) {
+                        const batch = admin.firestore().batch();
+                        const usersToClean = await admin.firestore()
+                            .collection("users")
+                            .where("fcmToken", "in", invalidTokens.slice(0, 10))
+                            .get();
+
+                        usersToClean.forEach((doc) => {
+                            batch.update(doc.ref, { fcmToken: null });
+                        });
+
+                        await batch.commit();
+                        console.log(`🧹 Cleaned ${usersToClean.size} invalid tokens`);
+                    }
+                }
+            }
+
+        } catch (error) {
+            console.error("❌ Error in onUploadBatchCompleted:", error);
         }
-      });
-
-      const batch = admin.firestore().batch();
-      for (const token of tokensToRemove) {
-        const userQuery = await admin.firestore()
-          .collection("users")
-          .where("fcmToken", "==", token)
-          .limit(1)
-          .get();
-
-        if (!userQuery.empty) {
-          batch.update(userQuery.docs[0].ref, {fcmToken: admin.firestore.FieldValue.delete()});
-        }
-      }
-      await batch.commit();
     }
-  } catch (error) {
-    console.error("Error al enviar notificaciones:", error);
-  }
-});
+);

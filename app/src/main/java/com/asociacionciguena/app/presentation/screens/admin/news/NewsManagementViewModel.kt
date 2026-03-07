@@ -33,8 +33,9 @@ class NewsManagementViewModel @Inject constructor(
             try {
                 _uiState.value = NewsManagementUiState.Loading
 
+                // No usar orderBy para evitar necesitar índice
+// Ordenaremos en memoria después
                 val snapshot = firestore.collection("news")
-                    .orderBy("publishedDate", com.google.firebase.firestore.Query.Direction.DESCENDING)
                     .get()
                     .await()
 
@@ -43,21 +44,33 @@ class NewsManagementViewModel @Inject constructor(
                         News(
                             id = doc.id,
                             title = doc.getString("title") ?: "",
+                            shortDescription = doc.getString("shortDescription") ?: "",
                             content = doc.getString("content") ?: "",
                             imageUrl = doc.getString("imageUrl"),
-                            publishedDate = doc.getTimestamp("publishedDate")?.let {
+                            additionalPhotos = (doc.get("additionalPhotos") as? List<*>)
+                                ?.filterIsInstance<String>() ?: emptyList(),
+                            // COMPATIBILIDAD: Usar createdAt si existe, sino publishedDate
+                            createdAt = (doc.getTimestamp("createdAt")
+                                ?: doc.getTimestamp("publishedDate"))?.let {
                                 kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
                                     .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
                             } ?: kotlinx.datetime.Clock.System.now()
                                 .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()),
+                            updatedAt = doc.getTimestamp("updatedAt")?.let {
+                                kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
+                                    .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+                            },
                             isPublic = doc.getBoolean("isPublic") ?: true
                         )
                     } catch (e: Exception) {
                         null
                     }
                 }
+// Ordenar por createdAt en memoria (más recientes primero)
+                val sortedNewsList = newsList.sortedByDescending { it.createdAt }
 
-                _uiState.value = NewsManagementUiState.Success(newsList)
+                _uiState.value = NewsManagementUiState.Success(sortedNewsList)
+
 
             } catch (e: Exception) {
                 _uiState.value = NewsManagementUiState.Error(

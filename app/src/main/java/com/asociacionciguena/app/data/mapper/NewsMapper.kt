@@ -12,10 +12,13 @@ fun NewsDto.toDomain(): News {
     return News(
         id = id,
         title = title,
+        shortDescription = shortDescription,
         content = content,
         imageUrl = imageUrl,
-        publishedDate = publishedDate?.toLocalDateTime()
+        additionalPhotos = additionalPhotos,
+        createdAt = createdAt?.toLocalDateTime()
             ?: LocalDateTime(2025, 1, 1, 0, 0),
+        updatedAt = updatedAt?.toLocalDateTime(),  // ← NUEVO
         isPublic = isPublic
     )
 }
@@ -28,9 +31,12 @@ fun News.toDto(): NewsDto {
     return NewsDto(
         id = id,
         title = title,
+        shortDescription = shortDescription,
         content = content,
         imageUrl = imageUrl,
-        publishedDate = com.google.firebase.Timestamp.now(),  // Por ahora
-        isPublic = isPublic
+        createdAt = com.google.firebase.Timestamp.now(),
+        updatedAt = null,
+        isPublic = isPublic,
+        additionalPhotos = additionalPhotos
     )
 }

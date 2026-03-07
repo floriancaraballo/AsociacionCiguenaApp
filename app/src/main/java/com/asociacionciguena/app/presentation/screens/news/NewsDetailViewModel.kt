@@ -47,9 +47,10 @@ class NewsDetailViewModel @Inject constructor(
                     val news = News(
                         id = doc.id,
                         title = doc.getString("title") ?: "",
+                        shortDescription = doc.getString("shortDescription") ?: "",
                         content = doc.getString("content") ?: "",
                         imageUrl = doc.getString("imageUrl"),
-                        publishedDate = doc.getTimestamp("publishedDate")?.let {
+                        createdAt = doc.getTimestamp("publishedDate")?.let {
                             kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
                                 .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
                         } ?: kotlinx.datetime.Clock.System.now()

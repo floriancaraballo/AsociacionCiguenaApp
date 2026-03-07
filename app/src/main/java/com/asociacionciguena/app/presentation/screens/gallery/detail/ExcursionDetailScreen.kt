@@ -168,21 +168,25 @@ fun ExcursionDetailScreen(
                 )
 
                 // Dialog eliminar foto individual
+                // Dialog eliminar foto individual
                 if (showDeleteDialog && photoToDelete != null) {
+                    val photoToDeleteCopy = photoToDelete!!  // Copiar para evitar null
                     DeletePhotoDialog(
                         photoCount = 1,
                         onConfirm = {
+                            // Cerrar dialog INMEDIATAMENTE
+                            showDeleteDialog = false
+                            val photoId = photoToDeleteCopy.id
+                            val storagePath = photoToDeleteCopy.storagePath
+                            photoToDelete = null
+
+                            // Luego eliminar foto
                             viewModel.deletePhoto(
-                                photoId = photoToDelete!!.id,
-                                storagePath = photoToDelete!!.storagePath,
-                                onSuccess = {
-                                    showDeleteDialog = false
-                                    photoToDelete = null
-                                },
+                                photoId = photoId,
+                                storagePath = storagePath,
+                                onSuccess = {},
                                 onError = { error ->
                                     deleteError = error
-                                    showDeleteDialog = false
-                                    photoToDelete = null
                                 }
                             )
                         },
@@ -194,21 +198,24 @@ fun ExcursionDetailScreen(
                 }
 
                 // Dialog eliminar múltiples fotos
+                // Dialog eliminar múltiples fotos
                 if (showDeleteMultipleDialog) {
                     val photosToDelete = state.photos.filter { it.id in selectedPhotos }
                     DeletePhotoDialog(
                         photoCount = photosToDelete.size,
                         onConfirm = {
+                            // Cerrar dialog INMEDIATAMENTE
+                            showDeleteMultipleDialog = false
+
+                            // Luego eliminar fotos
                             viewModel.deleteMultiplePhotos(
                                 photos = photosToDelete,
                                 onSuccess = {
-                                    showDeleteMultipleDialog = false
                                     selectionMode = false
                                     selectedPhotos = emptySet()
                                 },
                                 onError = { error ->
                                     deleteError = error
-                                    showDeleteMultipleDialog = false
                                     selectionMode = false
                                     selectedPhotos = emptySet()
                                 }

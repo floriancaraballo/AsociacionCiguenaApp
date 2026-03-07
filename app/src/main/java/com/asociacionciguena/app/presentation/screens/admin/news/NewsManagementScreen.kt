@@ -294,7 +294,7 @@ private fun NewsManagementCard(
 
             // Fecha
             Text(
-                text = formatDate(news.publishedDate),
+                text = formatDate(news.createdAt),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

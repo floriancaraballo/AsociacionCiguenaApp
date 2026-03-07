@@ -18,6 +18,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.domain.model.User
 import com.asociacionciguena.app.presentation.components.ErrorMessage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
+import com.asociacionciguena.app.presentation.theme.ThemeViewModel
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material3.Switch
 
 /**
  * Pantalla de Perfil del Usuario
@@ -26,10 +30,12 @@ import com.asociacionciguena.app.presentation.components.LoadingIndicator
 @Composable
 fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
+    themeViewModel: ThemeViewModel,
     onNavigateToLogin: () -> Unit,
     onNavigateToAdminPanel: () -> Unit  // NUEVO
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isDarkMode by themeViewModel.isDarkMode.collectAsState()
 
     Scaffold(
         topBar = {
@@ -50,6 +56,8 @@ fun ProfileScreen(
             is ProfileUiState.LoggedIn -> {
                 ProfileContent(
                     user = state.user,
+                    isDarkMode = isDarkMode,  // ← NUEVO
+                    onToggleTheme = { themeViewModel.toggleTheme() },  // ← NUEVO
                     isLoggingOut = state.isLoggingOut,
                     onLogoutClick = { viewModel.logout() },
                     onNavigateToAdminPanel = onNavigateToAdminPanel,  // NUEVO
@@ -81,6 +89,8 @@ fun ProfileScreen(
 @Composable
 private fun ProfileContent(
     user: User,
+    isDarkMode: Boolean,  // ← NUEVO
+    onToggleTheme: () -> Unit,  // ← NUEVO
     isLoggingOut: Boolean,
     onLogoutClick: () -> Unit,
     onNavigateToAdminPanel: () -> Unit,  // NUEVO
@@ -90,7 +100,7 @@ private fun ProfileContent(
         modifier = modifier
             .fillMaxSize()
             .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(32.dp))
 
@@ -178,6 +188,60 @@ private fun ProfileContent(
         }
 
         Spacer(modifier = Modifier.weight(1f))
+
+        // Sección de Configuración
+        Card(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Configuración",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                // Toggle de tema oscuro
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isDarkMode) {
+                                Icons.Default.DarkMode
+                            } else {
+                                Icons.Default.LightMode
+                            },
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Column {
+                            Text(
+                                text = "Tema oscuro",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = if (isDarkMode) "Activado" else "Desactivado",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = isDarkMode,
+                        onCheckedChange = { onToggleTheme() }
+                    )
+                }
+            }
+        }
 
         // Botón de cerrar sesión
         Button(

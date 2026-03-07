@@ -1,10 +1,12 @@
 package com.asociacionciguena.app.presentation.screens.admin.excursions
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,11 +18,13 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import java.util.Date
+import java.util.UUID
 import javax.inject.Inject
 
 @HiltViewModel
 class ExcursionFormViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
+    private val storage: FirebaseStorage,  // ← AÑADIDO
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -44,9 +48,19 @@ class ExcursionFormViewModel @Inject constructor(
     private val _date = MutableStateFlow<LocalDateTime?>(null)
     val date: StateFlow<LocalDateTime?> = _date.asStateFlow()
 
-    // ELIMINADO: maxParticipants
+    // ← NUEVO: Estado del PDF de autorización
+    private val _authorizationPdfUrl = MutableStateFlow<String?>(null)
+    val authorizationPdfUrl: StateFlow<String?> = _authorizationPdfUrl.asStateFlow()
+
+    private val _pdfUploadState = MutableStateFlow<PdfUploadState>(PdfUploadState.Idle)
+    val pdfUploadState: StateFlow<PdfUploadState> = _pdfUploadState.asStateFlow()
 
     val isEditMode = excursionId != null && excursionId != "new"
+
+    // ← NUEVO: Estado de subida de imagen
+    private val _imageUploadState = MutableStateFlow<ImageUploadState>(ImageUploadState.Idle)
+    val imageUploadState: StateFlow<ImageUploadState> = _imageUploadState.asStateFlow()
+
 
     init {
         if (isEditMode && excursionId != null) {
@@ -69,6 +83,7 @@ class ExcursionFormViewModel @Inject constructor(
                     _description.value = doc.getString("description") ?: ""
                     _location.value = doc.getString("location") ?: ""
                     _imageUrl.value = doc.getString("imageUrl") ?: ""
+                    _authorizationPdfUrl.value = doc.getString("authorizationPdfUrl")  // ← NUEVO
 
                     _date.value = doc.getTimestamp("date")?.let {
                         kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
@@ -116,6 +131,55 @@ class ExcursionFormViewModel @Inject constructor(
         )
     }
 
+    // ← NUEVO: Subir PDF de autorización
+    fun uploadAuthorizationPdf(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                _pdfUploadState.value = PdfUploadState.Uploading(0f)
+
+                // Generar nombre único
+                val pdfId = UUID.randomUUID().toString()
+                val fileName = "authorization_${pdfId}.pdf"
+                val storagePath = "excursions/authorizations/$fileName"
+
+                // Subir a Storage
+                val storageRef = storage.reference.child(storagePath)
+                val uploadTask = storageRef.putFile(uri)
+
+                // Monitorear progreso
+                uploadTask.addOnProgressListener { taskSnapshot ->
+                    val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount).toFloat()
+                    _pdfUploadState.value = PdfUploadState.Uploading(progress / 100f)
+                }
+
+                // Esperar a que termine
+                uploadTask.await()
+
+                // Obtener URL de descarga
+                val downloadUrl = storageRef.downloadUrl.await().toString()
+
+                // Guardar URL
+                _authorizationPdfUrl.value = downloadUrl
+                _pdfUploadState.value = PdfUploadState.Success
+
+            } catch (e: Exception) {
+                _pdfUploadState.value = PdfUploadState.Error("Error al subir PDF: ${e.message}")
+            }
+        }
+    }
+
+    // ← NUEVO: Eliminar PDF de autorización
+    fun removeAuthorizationPdf() {
+        _authorizationPdfUrl.value = null
+        _pdfUploadState.value = PdfUploadState.Idle
+    }
+
+    fun clearPdfUploadError() {
+        if (_pdfUploadState.value is PdfUploadState.Error) {
+            _pdfUploadState.value = PdfUploadState.Idle
+        }
+    }
+
     fun saveExcursion(onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
@@ -140,9 +204,7 @@ class ExcursionFormViewModel @Inject constructor(
                 }
 
                 if (_imageUrl.value.isNotBlank() && !isValidImageUrl(_imageUrl.value)) {
-                    _uiState.value = ExcursionFormUiState.Error(
-                        "URL de imagen inválida"
-                    )
+                    _uiState.value = ExcursionFormUiState.Error("URL de imagen inválida")
                     return@launch
                 }
 
@@ -158,7 +220,8 @@ class ExcursionFormViewModel @Inject constructor(
                     "description" to _description.value,
                     "location" to _location.value,
                     "date" to timestamp,
-                    "imageUrl" to _imageUrl.value.ifBlank { null }
+                    "imageUrl" to _imageUrl.value.ifBlank { null },
+                    "authorizationPdfUrl" to _authorizationPdfUrl.value  // ← NUEVO
                 )
 
                 if (isEditMode && excursionId != null) {
@@ -181,9 +244,72 @@ class ExcursionFormViewModel @Inject constructor(
         }
     }
 
+    fun uploadExcursionImage(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                _imageUploadState.value = ImageUploadState.Uploading(0f)
+
+                // Generar nombre único
+                val imageId = UUID.randomUUID().toString()
+                val fileName = "excursion_${imageId}.jpg"
+                val storagePath = "excursions/images/$fileName"
+
+                // Subir a Storage
+                val storageRef = storage.reference.child(storagePath)
+                val uploadTask = storageRef.putFile(uri)
+
+                // Monitorear progreso
+                uploadTask.addOnProgressListener { taskSnapshot ->
+                    val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount).toFloat()
+                    _imageUploadState.value = ImageUploadState.Uploading(progress / 100f)
+                }
+
+                // Esperar a que termine
+                uploadTask.await()
+
+                // Obtener URL de descarga
+                val downloadUrl = storageRef.downloadUrl.await().toString()
+
+                // Guardar URL
+                _imageUrl.value = downloadUrl
+                _imageUploadState.value = ImageUploadState.Success
+
+            } catch (e: Exception) {
+                _imageUploadState.value = ImageUploadState.Error("Error al subir imagen: ${e.message}")
+            }
+        }
+    }
+
+    // ← NUEVO: Eliminar imagen
+    fun removeExcursionImage() {
+        _imageUrl.value = ""
+        _imageUploadState.value = ImageUploadState.Idle
+    }
+
+    fun clearImageUploadError() {
+        if (_imageUploadState.value is ImageUploadState.Error) {
+            _imageUploadState.value = ImageUploadState.Idle
+        }
+    }
+
     fun clearError() {
         if (_uiState.value is ExcursionFormUiState.Error) {
             _uiState.value = ExcursionFormUiState.Idle
         }
     }
+}
+
+// ← NUEVO: Estados de subida de PDF
+sealed class PdfUploadState {
+    object Idle : PdfUploadState()
+    data class Uploading(val progress: Float) : PdfUploadState()
+    object Success : PdfUploadState()
+    data class Error(val message: String) : PdfUploadState()
+}
+
+sealed class ImageUploadState {
+    object Idle : ImageUploadState()
+    data class Uploading(val progress: Float) : ImageUploadState()
+    object Success : ImageUploadState()
+    data class Error(val message: String) : ImageUploadState()
 }

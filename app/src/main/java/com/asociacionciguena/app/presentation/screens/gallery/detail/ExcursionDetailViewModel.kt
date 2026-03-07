@@ -7,6 +7,7 @@ import com.asociacionciguena.app.domain.model.Excursion
 import com.asociacionciguena.app.domain.model.Photo
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,9 @@ class ExcursionDetailViewModel @Inject constructor(
         ExcursionDetailUiState.Loading
     )
     val uiState: StateFlow<ExcursionDetailUiState> = _uiState.asStateFlow()
+
+    // Listener en tiempo real
+    private var photosListener: ListenerRegistration? = null
 
     init {
         loadExcursionDetails()
@@ -65,13 +69,13 @@ class ExcursionDetailViewModel @Inject constructor(
                             .toLocalDateTime(TimeZone.currentSystemDefault())
                     } ?: now,
                     location = excursionDoc.getString("location") ?: "",
-                    imageUrl = excursionDoc.getString("imageUrl")
+                    imageUrl = excursionDoc.getString("imageUrl"),
+                    authorizationPdfUrl = excursionDoc.getString("authorizationPdfUrl")
                 )
 
-                // CORREGIDO: Obtener UID primero
                 val currentUserUid = auth.currentUser?.uid
 
-                // CORREGIDO: Verificar si es admin
+                // Verificar si es admin
                 val isAdmin = if (currentUserUid != null) {
                     val userDoc = firestore.collection("users")
                         .document(currentUserUid)
@@ -83,71 +87,8 @@ class ExcursionDetailViewModel @Inject constructor(
                     false
                 }
 
-                // CORREGIDO: Cargar fotos según permisos
-                val photos = if (currentUserUid != null) {
-                    if (isAdmin) {
-                        // Admins ven TODAS las fotos
-                        val photosSnapshot = firestore.collection("photos")
-                            .whereEqualTo("excursionId", excursionId)
-                            .get()
-                            .await()
-
-                        photosSnapshot.documents.mapNotNull { doc ->
-                            try {
-                                Photo(
-                                    id = doc.id,
-                                    excursionId = doc.getString("excursionId") ?: "",
-                                    imageUrl = doc.getString("imageUrl") ?: "",
-                                    storagePath = doc.getString("storagePath") ?: "",
-                                    uploadedBy = doc.getString("uploadedBy") ?: "",
-                                    uploadedAt = doc.getTimestamp("uploadedAt")?.let {
-                                        kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
-                                            .toLocalDateTime(TimeZone.currentSystemDefault())
-                                    } ?: now,
-                                    authorizedUsers = (doc.get("authorizedUsers") as? List<*>)
-                                        ?.filterIsInstance<String>() ?: emptyList()
-                                )
-                            } catch (e: Exception) {
-                                null
-                            }
-                        }
-                    } else {
-                        // Socios ven SOLO fotos autorizadas
-                        val photosSnapshot = firestore.collection("photos")
-                            .whereEqualTo("excursionId", excursionId)
-                            .whereArrayContains("authorizedUsers", currentUserUid)
-                            .get()
-                            .await()
-
-                        photosSnapshot.documents.mapNotNull { doc ->
-                            try {
-                                Photo(
-                                    id = doc.id,
-                                    excursionId = doc.getString("excursionId") ?: "",
-                                    imageUrl = doc.getString("imageUrl") ?: "",
-                                    storagePath = doc.getString("storagePath") ?: "",
-                                    uploadedBy = doc.getString("uploadedBy") ?: "",
-                                    uploadedAt = doc.getTimestamp("uploadedAt")?.let {
-                                        kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
-                                            .toLocalDateTime(TimeZone.currentSystemDefault())
-                                    } ?: now,
-                                    authorizedUsers = (doc.get("authorizedUsers") as? List<*>)
-                                        ?.filterIsInstance<String>() ?: emptyList()
-                                )
-                            } catch (e: Exception) {
-                                null
-                            }
-                        }
-                    }
-                } else {
-                    emptyList()
-                }
-
-                _uiState.value = ExcursionDetailUiState.Success(
-                    excursion = excursion,
-                    photos = photos,
-                    isAdmin = isAdmin
-                )
+                // Configurar listener en tiempo real
+                setupPhotosListener(excursion, isAdmin, currentUserUid)
 
             } catch (e: Exception) {
                 _uiState.value = ExcursionDetailUiState.Error(
@@ -157,9 +98,76 @@ class ExcursionDetailViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Eliminar una foto
-     */
+    private fun setupPhotosListener(excursion: Excursion, isAdmin: Boolean, currentUserUid: String?) {
+        // Cancelar listener anterior si existe
+        photosListener?.remove()
+
+        if (currentUserUid == null) {
+            _uiState.value = ExcursionDetailUiState.Success(
+                excursion = excursion,
+                photos = emptyList(),
+                isAdmin = false
+            )
+            return
+        }
+
+        val now = Clock.System.now()
+            .toLocalDateTime(TimeZone.currentSystemDefault())
+
+        // Query según permisos
+        val query = if (isAdmin) {
+            // Admins ven TODAS las fotos
+            firestore.collection("photos")
+                .whereEqualTo("excursionId", excursionId)
+        } else {
+            // Socios ven SOLO fotos autorizadas
+            firestore.collection("photos")
+                .whereEqualTo("excursionId", excursionId)
+                .whereArrayContains("authorizedUsers", currentUserUid)
+        }
+
+        // Listener en tiempo real
+        photosListener = query.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                _uiState.value = ExcursionDetailUiState.Error("Error: ${error.message}")
+                return@addSnapshotListener
+            }
+
+            viewModelScope.launch {
+                try {
+                    val photos = snapshot?.documents?.mapNotNull { doc ->
+                        try {
+                            Photo(
+                                id = doc.id,
+                                excursionId = doc.getString("excursionId") ?: "",
+                                imageUrl = doc.getString("imageUrl") ?: "",
+                                storagePath = doc.getString("storagePath") ?: "",
+                                uploadedBy = doc.getString("uploadedBy") ?: "",
+                                uploadedAt = doc.getTimestamp("uploadedAt")?.let {
+                                    kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
+                                        .toLocalDateTime(TimeZone.currentSystemDefault())
+                                } ?: now,
+                                authorizedUsers = (doc.get("authorizedUsers") as? List<*>)
+                                    ?.filterIsInstance<String>() ?: emptyList()
+                            )
+                        } catch (e: Exception) {
+                            null
+                        }
+                    } ?: emptyList()
+
+                    _uiState.value = ExcursionDetailUiState.Success(
+                        excursion = excursion,
+                        photos = photos,
+                        isAdmin = isAdmin
+                    )
+
+                } catch (e: Exception) {
+                    _uiState.value = ExcursionDetailUiState.Error("Error: ${e.message}")
+                }
+            }
+        }
+    }
+
     fun deletePhoto(photoId: String, storagePath: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
@@ -173,9 +181,7 @@ class ExcursionDetailViewModel @Inject constructor(
                     .await()
 
                 onSuccess()
-
-                // Recargar fotos
-                loadExcursionDetails()
+                // El listener actualizará automáticamente
 
             } catch (e: Exception) {
                 onError("Error al eliminar: ${e.message}")
@@ -183,9 +189,6 @@ class ExcursionDetailViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Eliminar múltiples fotos
-     */
     fun deleteMultiplePhotos(photos: List<Photo>, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
@@ -201,9 +204,7 @@ class ExcursionDetailViewModel @Inject constructor(
                 }
 
                 onSuccess()
-
-                // Recargar fotos
-                loadExcursionDetails()
+                // El listener actualizará automáticamente
 
             } catch (e: Exception) {
                 onError("Error al eliminar fotos: ${e.message}")
@@ -213,5 +214,11 @@ class ExcursionDetailViewModel @Inject constructor(
 
     fun retry() {
         loadExcursionDetails()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Cancelar listener al destruir el ViewModel
+        photosListener?.remove()
     }
 }

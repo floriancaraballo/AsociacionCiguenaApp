@@ -35,6 +35,7 @@ fun NewsFormScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val title by viewModel.title.collectAsState()
+    val shortDescription by viewModel.shortDescription.collectAsState()
     val content by viewModel.content.collectAsState()
     val imageUrl by viewModel.imageUrl.collectAsState()
     val isPublic by viewModel.isPublic.collectAsState()
@@ -117,6 +118,7 @@ fun NewsFormScreen(
             else -> {
                 NewsFormContent(
                     title = title,
+                    shortDescription = shortDescription,
                     content = content,
                     imageUrl = imageUrl,
                     isPublic = isPublic,
@@ -134,6 +136,7 @@ fun NewsFormScreen(
                     onRemoveAdditionalPhotoUri = { viewModel.removeAdditionalPhoto(it) },
                     onRemoveAdditionalPhotoUrl = { viewModel.removeAdditionalPhotoUrl(it) },
                     onTitleChange = viewModel::onTitleChange,
+                    onShortDescriptionChange = viewModel::onShortDescriptionChange,
                     onContentChange = viewModel::onContentChange,
                     onImageUrlChange = viewModel::onImageUrlChange,
                     onIsPublicChange = viewModel::onIsPublicChange,
@@ -175,6 +178,7 @@ fun NewsFormScreen(
 @Composable
 private fun NewsFormContent(
     title: String,
+    shortDescription: String,
     content: String,
     imageUrl: String,
     isPublic: Boolean,
@@ -192,6 +196,7 @@ private fun NewsFormContent(
     onRemoveAdditionalPhotoUri: (Int) -> Unit,
     onRemoveAdditionalPhotoUrl: (String) -> Unit,
     onTitleChange: (String) -> Unit,
+    onShortDescriptionChange: (String) -> Unit,
     onContentChange: (String) -> Unit,
     onImageUrlChange: (String) -> Unit,
     onIsPublicChange: (Boolean) -> Unit,
@@ -239,6 +244,20 @@ private fun NewsFormContent(
             modifier = Modifier.fillMaxWidth(),
             enabled = !isSaving,
             singleLine = true
+        )
+        // ← NUEVO: Campo de descripción corta
+        OutlinedTextField(
+            value = shortDescription,
+            onValueChange = onShortDescriptionChange,
+            label = { Text("Descripción Corta *") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp),
+            enabled = !isSaving,
+            maxLines = 3,
+            supportingText = {
+                Text("Breve resumen que aparecerá en la lista de publicaciones (máx. 2-3 líneas)")
+            }
         )
 
         OutlinedTextField(
@@ -532,7 +551,7 @@ private fun NewsFormContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
-            enabled = !isSaving && title.isNotBlank() && content.isNotBlank()
+            enabled = !isSaving && title.isNotBlank() && shortDescription.isNotBlank()  && content.isNotBlank()
         ) {
             if (isSaving) {
                 CircularProgressIndicator(

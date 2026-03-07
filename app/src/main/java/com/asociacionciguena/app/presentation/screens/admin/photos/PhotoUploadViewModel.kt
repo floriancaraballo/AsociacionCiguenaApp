@@ -15,6 +15,7 @@ import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.delay
 
 @HiltViewModel
 class PhotoUploadViewModel @Inject constructor(
@@ -203,6 +204,21 @@ class PhotoUploadViewModel @Inject constructor(
 
                 val totalPhotos = currentState.uris.size
 
+                // ← NUEVO: Crear documento de batch
+                val batchId = UUID.randomUUID().toString()
+                val batchData = hashMapOf(
+                    "excursionId" to currentState.selectedExcursionId,
+                    "photoCount" to totalPhotos,
+                    "status" to "uploading",
+                    "authorizedUsers" to currentState.selectedUsers,
+                    "createdAt" to Timestamp.now()
+                )
+
+                firestore.collection("uploadBatches")
+                    .document(batchId)
+                    .set(batchData)
+                    .await()
+
                 // Subir cada foto
                 currentState.uris.forEachIndexed { index, uri ->
                     _uiState.value = PhotoUploadUiState.Uploading(
@@ -231,7 +247,8 @@ class PhotoUploadViewModel @Inject constructor(
                         "storagePath" to storagePath,
                         "uploadedBy" to "admin",
                         "uploadedAt" to Timestamp.now(),
-                        "authorizedUsers" to currentState.selectedUsers
+                        "authorizedUsers" to currentState.selectedUsers,
+                        "batchId" to batchId  // ← NUEVO: Asociar con batch
                     )
 
                     firestore.collection("photos")
@@ -240,8 +257,25 @@ class PhotoUploadViewModel @Inject constructor(
                         .await()
                 }
 
+                // ← NUEVO: Marcar batch como completado
+                firestore.collection("uploadBatches")
+                    .document(batchId)
+                    .update(
+                        mapOf(
+                            "status" to "completed",
+                            "completedAt" to Timestamp.now()
+                        )
+                    )
+                    .await()
+
                 _uiState.value = PhotoUploadUiState.Success
                 onSuccess()
+
+                // Pequeño delay y volver a Idle
+                viewModelScope.launch {
+                    delay(1500)
+                    _uiState.value = PhotoUploadUiState.Idle
+                }
 
             } catch (e: Exception) {
                 _uiState.value = PhotoUploadUiState.Error(
