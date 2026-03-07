@@ -26,6 +26,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.ErrorMessage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
+import com.asociacionciguena.app.presentation.components.ZoomableImage
 import kotlinx.datetime.toJavaLocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -289,6 +290,8 @@ private fun FullscreenGalleryDialog(
     initialPage: Int,
     onDismiss: () -> Unit
 ) {
+    var isZoomed by remember { mutableStateOf(false) }
+
     val pagerState = rememberPagerState(
         initialPage = initialPage,
         pageCount = { photos.size }
@@ -307,27 +310,17 @@ private fun FullscreenGalleryDialog(
                 .background(Color.Black)
         ) {
             // HorizontalPager para swipe entre fotos
-            // HorizontalPager para swipe entre fotos
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                userScrollEnabled = !isZoomed  // ← DESHABILITAR swipe si hay zoom
             ) { page ->
-                SubcomposeAsyncImage(
-                    model = photos[page],
+                ZoomableImage(
+                    imageUrl = photos[page],
                     contentDescription = "Foto ${page + 1}",
-                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit,
-                    loading = {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(48.dp),
-                                strokeWidth = 4.dp,
-                                color = Color.White
-                            )
-                        }
+                    onScaleChange = { scale ->
+                        isZoomed = scale > 1f  // ← Actualizar estado de zoom
                     }
                 )
             }

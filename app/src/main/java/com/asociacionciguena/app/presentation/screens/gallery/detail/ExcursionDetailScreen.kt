@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import com.asociacionciguena.app.presentation.components.ZoomableImage
 
 @Composable
 fun ExcursionDetailScreen(
@@ -413,6 +414,8 @@ private fun FullscreenGalleryDialog(
     initialIndex: Int,
     onDismiss: () -> Unit
 ) {
+    var isZoomed by remember { mutableStateOf(false) }
+
     val pagerState = rememberPagerState(
         initialPage = initialIndex,
         pageCount = { photos.size }
@@ -453,31 +456,17 @@ private fun FullscreenGalleryDialog(
                 state = pagerState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
+                    .padding(paddingValues),
+                userScrollEnabled = !isZoomed
             ) { page ->
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    SubcomposeAsyncImage(
-                        model = photos[page].imageUrl,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit,
-                        loading = {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(48.dp),
-                                    strokeWidth = 4.dp,
-                                    color = Color.White
-                                )
-                            }
-                        }
-                    )
-                }
+                ZoomableImage(
+                    imageUrl = photos[page].imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    onScaleChange = { scale ->
+                        isZoomed = scale > 1f  // ← Actualizar estado de zoom
+                    }
+                )
             }
         }
     }
