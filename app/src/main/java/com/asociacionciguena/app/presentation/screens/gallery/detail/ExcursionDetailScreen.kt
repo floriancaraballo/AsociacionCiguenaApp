@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import com.asociacionciguena.app.presentation.components.ImageLoadingPlaceholder
 import com.asociacionciguena.app.presentation.components.ZoomableImage
 
 @Composable
@@ -123,7 +124,7 @@ fun ExcursionDetailScreen(
     ) { paddingValues ->
         when (val state = uiState) {
             is ExcursionDetailUiState.Loading -> {
-                LoadingIndicator()
+                ImageLoadingPlaceholder()
             }
 
             is ExcursionDetailUiState.Success -> {
@@ -363,15 +364,7 @@ private fun PhotoGridItem(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
                 loading = {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp
-                        )
-                    }
+                    ImageLoadingPlaceholder()
                 }
             )
 

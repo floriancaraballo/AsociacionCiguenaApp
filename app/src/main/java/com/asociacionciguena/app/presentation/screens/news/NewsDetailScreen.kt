@@ -1,5 +1,6 @@
 package com.asociacionciguena.app.presentation.screens.news
 
+import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -25,11 +27,14 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.ErrorMessage
+import com.asociacionciguena.app.presentation.components.ImageLoadingPlaceholder
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import com.asociacionciguena.app.presentation.components.ZoomableImage
 import kotlinx.datetime.toJavaLocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.material.icons.filled.Share
+import android.content.Context
 
 @Composable
 fun NewsDetailScreen(
@@ -57,6 +62,25 @@ fun NewsDetailScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, "Volver")
+                    }
+                },
+                actions = {  // ← NUEVO
+                    when (val state = uiState) {
+                        is NewsDetailUiState.Success -> {
+                            val context = LocalContext.current
+                            IconButton(
+                                onClick = {
+                                    shareNews(context, state.news)
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = "Compartir",
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
+                        else -> {}
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -129,12 +153,14 @@ private fun NewsDetailContent(
                     contentScale = ContentScale.Crop,
                     loading = {
                         Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(300.dp)
                         ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(32.dp),
-                                strokeWidth = 3.dp
+                            ZoomableImage(
+                                imageUrl = news.imageUrl,
+                                contentDescription = news.title,
+                                contentScale = ContentScale.Crop
                             )
                         }
                     }
@@ -242,15 +268,7 @@ private fun PhotoCarousel(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                     loading = {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp
-                            )
-                        }
+                        ImageLoadingPlaceholder()
                     }
                 )
             }
@@ -389,6 +407,29 @@ private fun FullscreenGalleryDialog(
             }
         }
     }
+}
+
+/**
+ * Compartir noticia por WhatsApp, Email, etc.
+ */
+private fun shareNews(context: Context, news: com.asociacionciguena.app.domain.model.News) {
+    val shareText = buildString {
+        append("📰 ${news.title}\n")
+        append("━━━━━━━━━━━━━━━━━━━━\n\n")
+        append(news.content)  // ← CONTENIDO COMPLETO
+        append("\n\n")
+        append("━━━━━━━━━━━━━━━━━━━━\n")
+        append("📱 Descarga la app de Asociación Cigüeña para más noticias y fotos de nuestras excursiones.")
+    }
+
+    val shareIntent = Intent().apply {
+        action = Intent.ACTION_SEND
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, news.title)
+        putExtra(Intent.EXTRA_TEXT, shareText)
+    }
+
+    context.startActivity(Intent.createChooser(shareIntent, "Compartir noticia"))
 }
 
 private fun formatDate(date: kotlinx.datetime.LocalDateTime): String {

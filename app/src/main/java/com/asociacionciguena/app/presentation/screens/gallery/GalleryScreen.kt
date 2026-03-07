@@ -20,6 +20,8 @@ import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import kotlinx.datetime.LocalDateTime
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.CalendarToday
+import com.asociacionciguena.app.presentation.components.ImageLoadingPlaceholder
+import com.asociacionciguena.app.presentation.screens.gallery.components.GalleryCardSkeleton
 
 @Composable
 fun GalleryScreen(
@@ -41,7 +43,7 @@ fun GalleryScreen(
     ) { paddingValues ->
         when (val state = uiState) {
             is GalleryUiState.Loading -> {
-                LoadingIndicator()
+                GallerySkeletonContent(modifier = Modifier.padding(paddingValues))
             }
 
             is GalleryUiState.Success -> {
@@ -139,15 +141,7 @@ private fun ExcursionCard(
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                         loading = {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            }
+                            ImageLoadingPlaceholder()
                         }
                     )
                 } else {
@@ -232,6 +226,24 @@ private fun ExcursionCard(
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+/**
+ * Contenido skeleton mientras carga
+ */
+@Composable
+private fun GallerySkeletonContent(
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier.fillMaxSize()
+    ) {
+        items(8) { // Mostrar 8 skeletons (más porque esperamos más contenido)
+            GalleryCardSkeleton()
         }
     }
 }

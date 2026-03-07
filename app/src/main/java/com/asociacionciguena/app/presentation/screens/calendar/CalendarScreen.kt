@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import com.asociacionciguena.app.presentation.screens.calendar.components.ExcursionCardSkeleton
 
 @OptIn(ExperimentalMaterialApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -72,7 +73,7 @@ fun CalendarScreen(
             // Contenido
             when (val state = uiState) {
                 is CalendarUiState.Loading -> {
-                    LoadingIndicator()
+                    CalendarSkeletonContent(modifier = Modifier.padding(paddingValues))
                 }
 
                 is CalendarUiState.Success -> {
@@ -298,5 +299,22 @@ private fun CalendarSuccessContent(
             state = pullRefreshState,
             modifier = Modifier.align(Alignment.TopCenter)
         )
+    }
+}
+/**
+ * Contenido skeleton mientras carga
+ */
+@Composable
+private fun CalendarSkeletonContent(
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = modifier.fillMaxSize()
+    ) {
+        items(6) { // Mostrar 6 skeletons
+            ExcursionCardSkeleton()
+        }
     }
 }

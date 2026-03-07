@@ -30,6 +30,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.asociacionciguena.app.presentation.screens.news.components.NewsCardSkeleton
+import androidx.compose.ui.platform.LocalContext
+import android.content.Context
+import android.content.Intent
 
 /**
  * Pantalla principal de Noticias
@@ -56,7 +61,7 @@ fun NewsScreen(
     ) { paddingValues ->
         when (val state = uiState) {
             is NewsUiState.Loading -> {
-                LoadingIndicator()
+                NewsSkeletonContent(modifier = Modifier.padding(paddingValues))
             }
 
             is NewsUiState.Success -> {
@@ -120,11 +125,14 @@ private fun NewsSuccessContent(
                     items = news,
                     key = { it.id }
                 ) { newsItem ->
+                    val context = LocalContext.current
                     NewsCard(
                         news = newsItem,
                         onClick = {
-                            println("🔍 Click en noticia: ${newsItem.id}")
                             onNewsClick(newsItem.id)
+                        },
+                        onShare = {
+                            shareNews(context, newsItem)
                         }
                     )
                 }
@@ -214,4 +222,45 @@ private fun NewsTopBar(
             actionIconContentColor = MaterialTheme.colorScheme.onPrimary
         )
     )
+}
+
+/**
+ * Compartir noticia
+ */
+private fun shareNews(context: Context, news: com.asociacionciguena.app.domain.model.News) {
+    val shareText = buildString {
+        append("📰 ${news.title}\n")
+        append("━━━━━━━━━━━━━━━━━━━━\n\n")
+        append(news.content)  // ← CONTENIDO COMPLETO
+        append("\n\n")
+        append("━━━━━━━━━━━━━━━━━━━━\n")
+        append("📱 Descarga la app de Asociación Cigüeña para más noticias y fotos de nuestras excursiones.")
+    }
+
+    val shareIntent = Intent().apply {
+        action = Intent.ACTION_SEND
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, news.title)
+        putExtra(Intent.EXTRA_TEXT, shareText)
+    }
+
+    context.startActivity(Intent.createChooser(shareIntent, "Compartir noticia"))
+}
+
+/**
+ * Contenido skeleton mientras carga
+ */
+@Composable
+private fun NewsSkeletonContent(
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = modifier.fillMaxSize()
+    ) {
+        items(4) { // Mostrar 4 skeletons
+            NewsCardSkeleton()
+        }
+    }
 }
