@@ -6,6 +6,7 @@ data class User(
     val id: String,
     val email: String,
     val displayName: String,
+    val photoUrl: String? = null,
     val role: String,  // "admin" o "socio"
     val createdAt: LocalDateTime,
     val photoConsents: List<String>  // IDs de excursiones autorizadas

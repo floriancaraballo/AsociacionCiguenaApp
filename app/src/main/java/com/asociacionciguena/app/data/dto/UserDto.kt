@@ -9,9 +9,10 @@ data class UserDto(
     val id: String = "",
     val email: String = "",
     val displayName: String = "",
+    val photoUrl: String? = null,
     val role: String = "socio",  // "admin" o "socio"
     val createdAt: Timestamp? = null,
     val photoConsents: List<String> = emptyList()  // IDs de excursiones autorizadas
 ) {
-    constructor() : this("", "", "", "socio", null, emptyList())
+    constructor() : this("", "", "", "","",null, emptyList())
 }

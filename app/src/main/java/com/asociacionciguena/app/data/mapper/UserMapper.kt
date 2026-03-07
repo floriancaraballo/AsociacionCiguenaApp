@@ -12,6 +12,7 @@ fun UserDto.toDomain(): User {
         id = id,
         email = email,
         displayName = displayName,
+        photoUrl = photoUrl,
         role = role,
         createdAt = createdAt?.toLocalDateTime()
             ?: Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()),

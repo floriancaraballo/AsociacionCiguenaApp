@@ -5,6 +5,7 @@ import com.asociacionciguena.app.util.Constants
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
@@ -32,10 +33,10 @@ class FirebaseAuthDataSourceImpl @Inject constructor(
 
     override suspend fun getUserData(userId: String): UserDto? {
         return try {
-            // PASO 1: Intentar buscar por UID
+            // PASO 1: Intentar buscar por UID (FORZAR SERVIDOR)
             var doc = firestore.collection(Constants.COLLECTION_USERS)
                 .document(userId)
-                .get()
+                .get(com.google.firebase.firestore.Source.SERVER)  // ← FORZAR SERVIDOR
                 .await()
 
             // PASO 2: Si no existe, buscar por email y migrar
@@ -67,7 +68,7 @@ class FirebaseAuthDataSourceImpl @Inject constructor(
                             // Obtener el documento recién migrado
                             doc = firestore.collection(Constants.COLLECTION_USERS)
                                 .document(userId)
-                                .get()
+                                .get(Source.SERVER)
                                 .await()
                         }
                     }

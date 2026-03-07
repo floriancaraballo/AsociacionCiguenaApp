@@ -1,49 +1,63 @@
 package com.asociacionciguena.app.presentation.screens.profile
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.asociacionciguena.app.domain.model.User
 import com.asociacionciguena.app.presentation.components.ErrorMessage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import com.asociacionciguena.app.presentation.theme.ThemeViewModel
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material3.Switch
 
-/**
- * Pantalla de Perfil del Usuario
- * ACTUALIZADO - Con acceso al panel admin
- */
 @Composable
 fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
     themeViewModel: ThemeViewModel,
     onNavigateToLogin: () -> Unit,
-    onNavigateToAdminPanel: () -> Unit  // NUEVO
+    onNavigateToAdminPanel: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isDarkMode by themeViewModel.isDarkMode.collectAsState()
+    val isEditMode by viewModel.isEditMode.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Mi Perfil") },
+                title = { Text(if (isEditMode) "Editar Perfil" else "Mi Perfil") },
+                navigationIcon = {
+                    if (isEditMode) {
+                        IconButton(onClick = { viewModel.cancelEdit() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancelar")
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         }
@@ -54,15 +68,24 @@ fun ProfileScreen(
             }
 
             is ProfileUiState.LoggedIn -> {
-                ProfileContent(
-                    user = state.user,
-                    isDarkMode = isDarkMode,  // ← NUEVO
-                    onToggleTheme = { themeViewModel.toggleTheme() },  // ← NUEVO
-                    isLoggingOut = state.isLoggingOut,
-                    onLogoutClick = { viewModel.logout() },
-                    onNavigateToAdminPanel = onNavigateToAdminPanel,  // NUEVO
-                    modifier = Modifier.padding(paddingValues)
-                )
+                if (isEditMode) {
+                    ProfileEditContent(
+                        viewModel = viewModel,
+                        user = state.user,
+                        modifier = Modifier.padding(paddingValues)
+                    )
+                } else {
+                    ProfileContent(
+                        user = state.user,
+                        isDarkMode = isDarkMode,
+                        onToggleTheme = { themeViewModel.toggleTheme() },
+                        isLoggingOut = state.isLoggingOut,
+                        onLogoutClick = { viewModel.logout() },
+                        onNavigateToAdminPanel = onNavigateToAdminPanel,
+                        onEditClick = { viewModel.enableEditMode() },
+                        modifier = Modifier.padding(paddingValues)
+                    )
+                }
             }
 
             is ProfileUiState.NotLoggedIn -> {
@@ -75,11 +98,199 @@ fun ProfileScreen(
             is ProfileUiState.Error -> {
                 ErrorMessage(
                     message = state.message,
-                    onRetry = { viewModel.retry() },
+                    onRetry = { viewModel.clearError() },
                     modifier = Modifier.padding(paddingValues)
                 )
             }
         }
+    }
+}
+
+/**
+ * Contenido de edición de perfil
+ */
+@Composable
+private fun ProfileEditContent(
+    viewModel: ProfileViewModel,
+    user: User,
+    modifier: Modifier = Modifier
+) {
+    val editedName by viewModel.editedName.collectAsState()
+    val selectedPhotoUri by viewModel.selectedPhotoUri.collectAsState()
+    val uploadProgress by viewModel.uploadProgress.collectAsState()
+    val isSaving by viewModel.isSaving.collectAsState()
+
+    // Photo picker launcher
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.onPhotoSelected(it) }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Avatar editable
+        Box(
+            modifier = Modifier.size(120.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            // Imagen actual o seleccionada
+            if (selectedPhotoUri != null) {
+                AsyncImage(
+                    model = selectedPhotoUri,
+                    contentDescription = "Foto de perfil",
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else if (user.photoUrl != null) {
+                AsyncImage(
+                    model = user.photoUrl,
+                    contentDescription = "Foto de perfil",
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
+            // Botón cambiar foto
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable {
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CameraAlt,
+                    contentDescription = "Cambiar foto",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        if (selectedPhotoUri != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = { viewModel.removeSelectedPhoto() }) {
+                Text("Quitar foto seleccionada")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Campo de nombre
+        OutlinedTextField(
+            value = editedName,
+            onValueChange = { viewModel.onNameChange(it) },
+            label = { Text("Nombre") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            leadingIcon = {
+                Icon(Icons.Default.Person, contentDescription = null)
+            }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Email (no editable)
+        OutlinedTextField(
+            value = user.email,
+            onValueChange = {},
+            label = { Text("Email") },
+            enabled = false,
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            leadingIcon = {
+                Icon(Icons.Default.Email, contentDescription = null)
+            }
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Barra de progreso
+        if (isSaving && uploadProgress > 0) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Subiendo foto... ${(uploadProgress * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { uploadProgress },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+
+        // Botones
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = { viewModel.cancelEdit() },
+                modifier = Modifier.weight(1f).height(50.dp),
+                enabled = !isSaving
+            ) {
+                Text("Cancelar")
+            }
+
+            Button(
+                onClick = { viewModel.saveProfile() },
+                modifier = Modifier.weight(1f).height(50.dp),
+                enabled = !isSaving && editedName.isNotBlank()
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("Guardar")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -89,37 +300,77 @@ fun ProfileScreen(
 @Composable
 private fun ProfileContent(
     user: User,
-    isDarkMode: Boolean,  // ← NUEVO
-    onToggleTheme: () -> Unit,  // ← NUEVO
+    isDarkMode: Boolean,
+    onToggleTheme: () -> Unit,
     isLoggingOut: Boolean,
     onLogoutClick: () -> Unit,
-    onNavigateToAdminPanel: () -> Unit,  // NUEVO
+    onNavigateToAdminPanel: () -> Unit,
+    onEditClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(32.dp))
 
         // Avatar
         Box(
-            modifier = Modifier
-                .size(120.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
+            modifier = Modifier.size(120.dp),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        }
+            if (user.photoUrl != null && user.photoUrl.isNotBlank()) {
+                val imageLoadFailed = remember { mutableStateOf(false) }
 
+                if (!imageLoadFailed.value) {
+                    AsyncImage(
+                        model = user.photoUrl,
+                        contentDescription = "Foto de perfil",
+                        modifier = Modifier
+                            .size(120.dp)
+                            .clip(CircleShape)
+                            .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                        contentScale = ContentScale.Crop,
+                        onError = { imageLoadFailed.value = true }
+                    )
+                } else {
+                    // Mostrar icono si falla la carga
+                    Box(
+                        modifier = Modifier
+                            .size(120.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            } else {
+                // Icono por defecto si no hay foto
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+        }
         Spacer(modifier = Modifier.height(24.dp))
 
         // Nombre
@@ -129,7 +380,20 @@ private fun ProfileContent(
             color = MaterialTheme.colorScheme.onSurface
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Botón editar perfil
+        TextButton(onClick = onEditClick) {
+            Icon(
+                imageVector = Icons.Default.Edit,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Editar perfil")
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Card de información
         Card(
@@ -155,6 +419,7 @@ private fun ProfileContent(
                     label = "Rol",
                     value = when (user.role) {
                         "admin" -> "Administrador"
+                        //"superadmin" -> "Superadministrador"
                         "socio" -> "Socio"
                         else -> user.role.replaceFirstChar { it.uppercase() }
                     }
@@ -162,10 +427,10 @@ private fun ProfileContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // NUEVO - Botón Panel Admin (solo si es admin)
-        if (user?.role == "admin" || user?.role == "superadmin") {
+        // Botón Panel Admin (solo si es admin)
+        if (user.role == "admin" || user.role == "superadmin") {
             Button(
                 onClick = onNavigateToAdminPanel,
                 modifier = Modifier
@@ -187,7 +452,7 @@ private fun ProfileContent(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(32.dp))
 
         // Sección de Configuración
         Card(
@@ -243,6 +508,8 @@ private fun ProfileContent(
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Botón de cerrar sesión
         Button(
             onClick = onLogoutClick,
@@ -274,9 +541,6 @@ private fun ProfileContent(
     }
 }
 
-/**
- * Fila de información
- */
 @Composable
 private fun InfoRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -313,9 +577,6 @@ private fun InfoRow(
     }
 }
 
-/**
- * Contenido cuando el usuario NO está logueado
- */
 @Composable
 private fun NotLoggedInContent(
     onNavigateToLogin: () -> Unit,
@@ -330,7 +591,6 @@ private fun NotLoggedInContent(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.padding(32.dp)
         ) {
-            // Icono
             Box(
                 modifier = Modifier
                     .size(120.dp)
