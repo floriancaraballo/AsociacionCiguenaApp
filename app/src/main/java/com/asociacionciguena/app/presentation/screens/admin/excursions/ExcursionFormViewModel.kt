@@ -20,12 +20,16 @@ import kotlinx.datetime.toLocalDateTime
 import java.util.Date
 import java.util.UUID
 import javax.inject.Inject
+import android.content.Context
+import com.asociacionciguena.app.util.ImageCompressor
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 @HiltViewModel
 class ExcursionFormViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,  // ← AÑADIDO
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val excursionId: String? = savedStateHandle.get<String>("excursionId")
@@ -44,6 +48,9 @@ class ExcursionFormViewModel @Inject constructor(
 
     private val _imageUrl = MutableStateFlow("")
     val imageUrl: StateFlow<String> = _imageUrl.asStateFlow()
+
+    private val _uploadedImageUrl = MutableStateFlow<String?>(null)  // ← NUEVO
+    val uploadedImageUrl: StateFlow<String?> = _uploadedImageUrl.asStateFlow()
 
     private val _date = MutableStateFlow<LocalDateTime?>(null)
     val date: StateFlow<LocalDateTime?> = _date.asStateFlow()
@@ -249,33 +256,33 @@ class ExcursionFormViewModel @Inject constructor(
             try {
                 _imageUploadState.value = ImageUploadState.Uploading(0f)
 
-                // Generar nombre único
+                // COMPRIMIR antes de subir
+                val compressedFile = ImageCompressor.compressPhoto(context, uri)
+
                 val imageId = UUID.randomUUID().toString()
-                val fileName = "excursion_${imageId}.jpg"
+                val fileName = "excursion_$imageId.jpg"
                 val storagePath = "excursions/images/$fileName"
 
-                // Subir a Storage
                 val storageRef = storage.reference.child(storagePath)
-                val uploadTask = storageRef.putFile(uri)
+                val uploadTask = storageRef.putFile(Uri.fromFile(compressedFile))
 
-                // Monitorear progreso
                 uploadTask.addOnProgressListener { taskSnapshot ->
                     val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount).toFloat()
                     _imageUploadState.value = ImageUploadState.Uploading(progress / 100f)
                 }
 
-                // Esperar a que termine
                 uploadTask.await()
-
-                // Obtener URL de descarga
                 val downloadUrl = storageRef.downloadUrl.await().toString()
 
-                // Guardar URL
+                // Limpiar archivo temporal
+                compressedFile.delete()
+
+                _uploadedImageUrl.value = downloadUrl
                 _imageUrl.value = downloadUrl
                 _imageUploadState.value = ImageUploadState.Success
 
             } catch (e: Exception) {
-                _imageUploadState.value = ImageUploadState.Error("Error al subir imagen: ${e.message}")
+                _imageUploadState.value = ImageUploadState.Error(e.message ?: "Error al subir imagen")
             }
         }
     }

@@ -18,6 +18,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import com.asociacionciguena.app.util.ImageCompressor
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
@@ -26,7 +29,8 @@ class ProfileViewModel @Inject constructor(
     private val fcmTokenManager: FCMTokenManager,
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore,
-    private val storage: FirebaseStorage
+    private val storage: FirebaseStorage,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ProfileUiState>(ProfileUiState.Loading)
@@ -124,7 +128,12 @@ class ProfileViewModel @Inject constructor(
                 // Subir foto si hay una nueva seleccionada
                 var newPhotoUrl = currentState.user.photoUrl
                 if (_selectedPhotoUri.value != null) {
-                    newPhotoUrl = uploadProfilePhoto(_selectedPhotoUri.value!!, userId)
+                    // COMPRIMIR antes de subir
+                    val compressedFile = ImageCompressor.compressProfilePhoto(context, _selectedPhotoUri.value!!)
+                    newPhotoUrl = uploadProfilePhoto(Uri.fromFile(compressedFile), userId)
+
+                    // Limpiar archivo temporal
+                    compressedFile.delete()
                 }
 
                 // Actualizar en Firestore

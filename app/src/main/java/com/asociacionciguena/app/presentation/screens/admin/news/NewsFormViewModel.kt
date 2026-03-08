@@ -15,12 +15,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
+import android.content.Context
+import com.asociacionciguena.app.util.ImageCompressor
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 @HiltViewModel
 class NewsFormViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val newsId: String? = savedStateHandle.get<String>("newsId")
@@ -205,10 +209,12 @@ class NewsFormViewModel @Inject constructor(
                 _uiState.value = NewsFormUiState.Saving
                 _uploadProgress.value = 0f
 
-                // Upload foto principal
+                // Upload foto principal (COMPRIMIR antes)
                 var finalImageUrl = _imageUrl.value
                 if (_selectedPhotoUri.value != null) {
-                    finalImageUrl = uploadPhotoToStorage(_selectedPhotoUri.value!!)
+                    val compressedFile = ImageCompressor.compressPhoto(context, _selectedPhotoUri.value!!)
+                    finalImageUrl = uploadPhotoToStorage(Uri.fromFile(compressedFile))
+                    compressedFile.delete()
                 }
 
                 // NUEVO: Upload fotos adicionales
@@ -217,10 +223,12 @@ class NewsFormViewModel @Inject constructor(
                 // Mantener URLs existentes
                 uploadedAdditionalPhotos.addAll(_additionalPhotoUrls.value)
 
-                // Upload nuevas fotos
+                // Upload nuevas fotos (COMPRIMIR antes)
                 _additionalPhotoUris.value.forEachIndexed { index, uri ->
                     _uploadProgress.value = (index + 1).toFloat() / (_additionalPhotoUris.value.size + 1)
-                    val url = uploadPhotoToStorage(uri, "news/additional")
+                    val compressedFile = ImageCompressor.compressPhoto(context, uri)
+                    val url = uploadPhotoToStorage(Uri.fromFile(compressedFile), "news/additional")
+                    compressedFile.delete()
                     uploadedAdditionalPhotos.add(url)
                 }
 

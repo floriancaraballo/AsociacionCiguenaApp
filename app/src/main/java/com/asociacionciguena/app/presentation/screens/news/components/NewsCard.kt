@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.Row
 fun NewsCard(
     news: News,
     onClick: () -> Unit,
-    onShare: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -86,28 +85,6 @@ fun NewsCard(
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-
-            // Al final del Column, después del texto de descripción
-            if (onShare != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    IconButton(
-                        onClick = { onShare() },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "Compartir",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
             }
 
         }

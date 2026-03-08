@@ -5,10 +5,12 @@ import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -17,11 +19,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
 
 @Composable
 fun OnboardingScreen(
@@ -31,6 +33,9 @@ fun OnboardingScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val activity = context as ComponentActivity
+
+    // Estado para aceptación de términos
+    var legalTermsAccepted by remember { mutableStateOf(false) }
 
     // Launcher para solicitar permiso de notificaciones
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -50,7 +55,8 @@ fun OnboardingScreen(
         }
     }
 
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    // 4 páginas: LEGAL + Intro + Galería + Notificaciones
+    val pagerState = rememberPagerState(pageCount = { 4 })
     val coroutineScope = rememberCoroutineScope()
 
     Scaffold { paddingValues ->
@@ -62,27 +68,42 @@ fun OnboardingScreen(
             // Pager de slides
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                userScrollEnabled = if (pagerState.currentPage == 0) legalTermsAccepted else true  // Bloquear scroll en primera página (legal)
             ) { page ->
-                OnboardingPage(
-                    page = when (page) {
-                        0 -> OnboardingPageData(
+                when (page) {
+                    0 -> LegalTermsPage(  // ← PRIMERO: Aviso Legal
+                        accepted = legalTermsAccepted,
+                        onAcceptedChange = { legalTermsAccepted = it }
+                    )
+                    1 -> OnboardingPage(  // ← SEGUNDO: Noticias
+                        page = OnboardingPageData(
                             icon = Icons.Default.Article,
                             title = "Mantente Informado",
                             description = "Recibe las últimas noticias y novedades de la asociación"
                         )
-                        1 -> OnboardingPageData(
+                    )
+                    2 -> OnboardingPage(  // ← TERCERO: Excursiones
+                        page = OnboardingPageData(
                             icon = Icons.Default.CalendarMonth,
                             title = "Próximas Excursiones",
                             description = "Consulta el calendario y no te pierdas ninguna actividad"
                         )
-                        else -> OnboardingPageData(
-                            icon = Icons.Default.PhotoLibrary,
-                            title = "Galería de Fotos",
-                            description = "Revive los mejores momentos en nuestra galería"
-                        )
-                    }
-                )
+                    )
+                    else -> NotificationsPermissionPageContent(  // ← CUARTO: Notificaciones
+                        onEnableNotifications = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                viewModel.enableNotifications()
+                            }
+                        },
+                        onSkip = {
+                            viewModel.skipNotifications()
+                        },
+                        isLoading = uiState is OnboardingUiState.NotificationsRequesting
+                    )
+                }
             }
 
             // Indicadores de página
@@ -92,7 +113,7 @@ fun OnboardingScreen(
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.Center
             ) {
-                repeat(3) { index ->
+                repeat(4) { index ->
                     Box(
                         modifier = Modifier
                             .size(if (pagerState.currentPage == index) 12.dp else 8.dp)
@@ -114,48 +135,39 @@ fun OnboardingScreen(
             }
 
             // Botones de acción
-            if (pagerState.currentPage == 2) {
-                // Última página: mostrar opciones de notificaciones
-                NotificationsPermissionPage(
-                    onEnableNotifications = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            viewModel.enableNotifications()
-                        }
-                    },
-                    onSkip = {
-                        viewModel.skipNotifications()
-                    },
-                    isLoading = uiState is OnboardingUiState.NotificationsRequesting
-                )
-            } else {
-                // Otras páginas: botón siguiente
+            if (pagerState.currentPage < 3) {
+                // Páginas normales y legal: botón siguiente
                 Button(
                     onClick = {
-                        if (pagerState.currentPage < 2) {
-                            // Ir a siguiente página
-                            coroutineScope.launch {  // ← CORREGIDO
-                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                            }
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(16.dp),
+                    enabled = if (pagerState.currentPage == 0) legalTermsAccepted else true  // Bloquear si es página legal (0) y no acepta
                 ) {
                     Text("Siguiente")
                 }
 
-                TextButton(
-                    onClick = { viewModel.skipNotifications() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Text("Omitir")
+                // NO mostrar "Omitir" en página legal (0)
+                if (pagerState.currentPage != 0) {
+                    TextButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(3)  // Saltar a notificaciones
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Text("Omitir")
+                    }
                 }
             }
+            // La página de notificaciones (página 3) tiene sus propios botones internos
         }
     }
 }
@@ -196,53 +208,145 @@ private fun OnboardingPage(page: OnboardingPageData) {
 }
 
 @Composable
-private fun NotificationsPermissionPage(
+private fun LegalTermsPage(
+    accepted: Boolean,
+    onAcceptedChange: (Boolean) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Icono
+        Icon(
+            imageVector = Icons.Default.Gavel,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "Aviso Legal",
+            style = MaterialTheme.typography.headlineMedium,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Contenido legal con scroll
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "Aviso sobre Propiedad Intelectual y Derechos de Imagen",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "Todo el contenido fotográfico y visual disponible en esta aplicación es propiedad exclusiva de Asociación Cigüeña o cuenta con las autorizaciones pertinentes para su uso interno.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Justify
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "Queda estrictamente prohibida la reproducción, distribución, captura de pantalla o compartición de este material fuera del entorno de la aplicación.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Justify,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "El acceso a estas imágenes es personal e intransferible. Al utilizar esta aplicación, el usuario acepta respetar la confidencialidad y los derechos de imagen aquí protegidos.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Justify
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Checkbox de aceptación
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onAcceptedChange(!accepted) }
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = accepted,
+                onCheckedChange = onAcceptedChange
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "He leído y acepto no compartir el contenido multimedia",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}
+
+@Composable
+private fun NotificationsPermissionPageContent(
     onEnableNotifications: () -> Unit,
     onSkip: () -> Unit,
     isLoading: Boolean
 ) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Notifications,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+        Icon(
+            imageVector = Icons.Default.Notifications,
+            contentDescription = null,
+            modifier = Modifier.size(120.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
 
-                Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
-                Text(
-                    text = "¿Activar notificaciones?",
-                    style = MaterialTheme.typography.titleLarge,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Recibe avisos cuando haya nuevas noticias, excursiones o fotos",
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
+        Text(
+            text = "¿Activar notificaciones?",
+            style = MaterialTheme.typography.headlineMedium,
+            textAlign = TextAlign.Center
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Recibe avisos cuando haya nuevas noticias, excursiones o fotos",
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
 
         Button(
             onClick = onEnableNotifications,
@@ -252,7 +356,8 @@ private fun NotificationsPermissionPage(
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary
                 )
             } else {
                 Icon(Icons.Default.Notifications, contentDescription = null)
@@ -260,6 +365,8 @@ private fun NotificationsPermissionPage(
                 Text("Activar Notificaciones")
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         TextButton(
             onClick = onSkip,
@@ -269,14 +376,13 @@ private fun NotificationsPermissionPage(
             Text("Ahora no")
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Text(
             text = "Podrás activarlas más tarde desde los ajustes de tu dispositivo",
             style = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth()
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

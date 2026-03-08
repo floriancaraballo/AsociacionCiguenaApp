@@ -26,7 +26,7 @@ android {
 
     defaultConfig {
         applicationId = "com.asociacionciguena.app"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
@@ -244,6 +244,7 @@ dependencies {
 
     // Para notificaciones locales (opcional)
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("id.zelory:compressor:3.0.1")
 
 }
 

@@ -16,12 +16,16 @@ import java.util.UUID
 import javax.inject.Inject
 import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.delay
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import com.asociacionciguena.app.util.ImageCompressor
 
 @HiltViewModel
 class PhotoUploadViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val firestore: FirebaseFirestore,
-    private val storage: FirebaseStorage
+    private val storage: FirebaseStorage,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val preselectedExcursionId: String? = savedStateHandle["excursionId"]
@@ -232,12 +236,18 @@ class PhotoUploadViewModel @Inject constructor(
                     val fileName = "$photoId.jpg"
                     val storagePath = "excursions/${currentState.selectedExcursionId}/$fileName"
 
-                    // Subir a Storage
-                    val storageRef = storage.reference.child(storagePath)
-                    storageRef.putFile(uri).await()
+                    // COMPRIMIR antes de subir
+                    val compressedFile = ImageCompressor.compressPhoto(context, uri)
 
-                    // Obtener URL
+// Subir a Storage
+                    val storageRef = storage.reference.child(storagePath)
+                    storageRef.putFile(Uri.fromFile(compressedFile)).await()
+
+// Obtener URL
                     val downloadUrl = storageRef.downloadUrl.await().toString()
+
+// Limpiar archivo temporal
+                    compressedFile.delete()
 
                     // Guardar en Firestore
                     val photoData = hashMapOf(
