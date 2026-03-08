@@ -37,7 +37,8 @@ fun AppNavigation() {
             MainScreen(
                 themeViewModel = themeViewModel,
                 onNavigateToNewsDetail = { newsId ->
-                    navController.navigate(Screen.NewsDetail.createRoute(newsId))
+                    navController.navigate(Screen.NewsDetail.createRoute(newsId)){
+                        launchSingleTop = true}
                 }
             )
         }

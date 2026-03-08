@@ -71,27 +71,50 @@ fun CalendarExcursionDetailScreen(
                 ExcursionDetailContent(
                     excursion = state.excursion,
                     onDownloadPdf = { url ->
-                        // Usar DownloadManager para descargar
-                        val request = android.app.DownloadManager.Request(Uri.parse(url))
-                            .setTitle("Autorización - ${state.excursion.title}")
-                            .setDescription("Descargando autorización PDF...")
-                            .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                            .setDestinationInExternalPublicDir(
-                                android.os.Environment.DIRECTORY_DOWNLOADS,
-                                "autorizacion_${state.excursion.title.replace(" ", "_")}.pdf"
-                            )
-                            .setAllowedOverMetered(true)
-                            .setAllowedOverRoaming(true)
+                        try {
+                            android.util.Log.d("PDF_DOWNLOAD", "Intentando descargar: $url")
 
-                        val downloadManager = context.getSystemService(android.content.Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
-                        downloadManager.enqueue(request)
+                            // Limpiar título para nombre de archivo seguro
+                            val safeTitle = state.excursion.title
+                                .replace(Regex("[^a-zA-Z0-9]"), "_")
+                                .take(30)
+                                .lowercase()
 
-                        // Mostrar Toast de confirmación
-                        android.widget.Toast.makeText(
-                            context,
-                            "Descargando PDF...",
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
+                            val fileName = "autorizacion_$safeTitle.pdf"
+
+                            android.util.Log.d("PDF_DOWNLOAD", "Nombre de archivo: $fileName")
+
+                            val request = android.app.DownloadManager.Request(Uri.parse(url))
+                                .setTitle("Autorización - ${state.excursion.title}")
+                                .setDescription("Descargando autorización PDF...")
+                                .setMimeType("application/pdf")
+                                .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                .setDestinationInExternalPublicDir(
+                                    android.os.Environment.DIRECTORY_DOWNLOADS,
+                                    fileName
+                                )
+                                .setAllowedOverMetered(true)
+                                .setAllowedOverRoaming(true)
+
+                            val downloadManager = context.getSystemService(android.content.Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
+                            val downloadId = downloadManager.enqueue(request)
+
+                            android.util.Log.d("PDF_DOWNLOAD", "Download ID: $downloadId")
+
+                            android.widget.Toast.makeText(
+                                context,
+                                "Descargando $fileName...",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+
+                        } catch (e: Exception) {
+                            android.util.Log.e("PDF_DOWNLOAD", "Error al descargar", e)
+                            android.widget.Toast.makeText(
+                                context,
+                                "Error: ${e.message}",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
                     },
                     modifier = Modifier.padding(paddingValues)
                 )

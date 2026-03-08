@@ -15,8 +15,13 @@ import dagger.hilt.android.AndroidEntryPoint
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.lifecycleScope
 import com.asociacionciguena.app.presentation.screens.main.MainScreen
 import com.asociacionciguena.app.presentation.theme.ThemeViewModel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import com.google.firebase.auth.FirebaseAuth
+import javax.inject.Inject
 
 /**
  * Activity principal de la aplicación
@@ -24,6 +29,9 @@ import com.asociacionciguena.app.presentation.theme.ThemeViewModel
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject  // ← NUEVO
+    lateinit var auth: FirebaseAuth
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Instalar Splash Screen
@@ -33,6 +41,15 @@ class MainActivity : ComponentActivity() {
 
         // Habilitar edge-to-edge (pantalla completa moderna)
         enableEdgeToEdge()
+
+        // Refrescar token de Firebase Auth al abrir app
+        lifecycleScope.launch {
+            try {
+                auth.currentUser?.reload()?.await()
+            } catch (e: Exception) {
+                // Ignorar si falla
+            }
+        }
 
         setContent {
             val themeViewModel: ThemeViewModel = hiltViewModel()
