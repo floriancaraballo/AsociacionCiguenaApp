@@ -17,6 +17,7 @@ import java.util.UUID
 import javax.inject.Inject
 import android.content.Context
 import com.asociacionciguena.app.util.ImageCompressor
+import com.asociacionciguena.app.util.NetworkMonitor
 import dagger.hilt.android.qualifiers.ApplicationContext
 
 @HiltViewModel
@@ -24,7 +25,8 @@ class NewsFormViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
     savedStateHandle: SavedStateHandle,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
     private val newsId: String? = savedStateHandle.get<String>("newsId")
@@ -96,7 +98,7 @@ class NewsFormViewModel @Inject constructor(
 
                     _uiState.value = NewsFormUiState.Idle
                 } else {
-                    _uiState.value = NewsFormUiState.Error("Noticia no encontrada")
+                    _uiState.value = NewsFormUiState.Error("Publicación no encontrada")
                 }
 
             } catch (e: Exception) {
@@ -186,6 +188,12 @@ class NewsFormViewModel @Inject constructor(
     fun saveNews(onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
+                // Verificar conexión
+                if (!networkMonitor.isCurrentlyOnline()) {
+                    _uiState.value = NewsFormUiState.Error("Sin conexión a internet. No se puede guardar.")
+                    return@launch
+                }
+
                 if (_title.value.isBlank()) {
                     _uiState.value = NewsFormUiState.Error("El título es obligatorio")
                     return@launch

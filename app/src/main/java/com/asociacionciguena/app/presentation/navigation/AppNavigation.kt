@@ -15,7 +15,7 @@ import com.asociacionciguena.app.presentation.theme.ThemeViewModel
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    val themeViewModel: ThemeViewModel = hiltViewModel()  // ← MOVER AQUÍ
+    val themeViewModel: ThemeViewModel = hiltViewModel() // ← MOVER AQUÍ
 
     NavHost(
         navController = navController,

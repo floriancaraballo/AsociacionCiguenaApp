@@ -21,7 +21,7 @@
     <string name="splash_loading">Cargando…</string>
     <string name="splash_welcome">Bienvenido a Asociación Cigüeña</string>
 
-    <!-- Noticias -->
+    <!-- s -->
     <string name="news_title">Últimas Publicaciones</string>
     <string name="news_empty">No hay publicaciones disponibles</string>
     <string name="news_error">Error al cargar publicaciones</string>

@@ -16,7 +16,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.lifecycleScope
-import com.asociacionciguena.app.presentation.screens.main.MainScreen
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import com.asociacionciguena.app.presentation.theme.ThemeViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -28,10 +29,15 @@ import javax.inject.Inject
  * Punto de entrada de la UI
  */
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), ImageLoaderFactory {
 
     @Inject  // ← NUEVO
     lateinit var auth: FirebaseAuth
+
+    @Inject  // ← NUEVO
+    lateinit var imageLoader: ImageLoader  // ← NUEVO
+
+    override fun newImageLoader(): ImageLoader = imageLoader
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Instalar Splash Screen

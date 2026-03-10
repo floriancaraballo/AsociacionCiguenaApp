@@ -5,8 +5,16 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.Rect
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.asociacionciguena.app.R
 import com.asociacionciguena.app.presentation.MainActivity
 import com.google.firebase.auth.FirebaseAuth
@@ -31,24 +39,19 @@ class FirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-
-        // Guardar el nuevo token en Firestore
         saveTokenToFirestore(token)
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
 
-        // Crear canal de notificación
         createNotificationChannel()
 
-        // Extraer datos
         val title = message.notification?.title ?: message.data["title"] ?: "Nueva notificación"
         val body = message.notification?.body ?: message.data["body"] ?: ""
-        val type = message.data["type"] // "news", "excursion", "photo"
+        val type = message.data["type"]
         val itemId = message.data["itemId"]
 
-        // Mostrar notificación
         showNotification(title, body, type, itemId)
     }
 
@@ -58,36 +61,66 @@ class FirebaseMessagingService : FirebaseMessagingService() {
         type: String?,
         itemId: String?
     ) {
-        // Intent para abrir la app
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        try {
+            android.util.Log.d("FCM_NOTIF", "📱 Mostrando notificación: $title")
 
-            // Pasar datos para deep linking
-            putExtra("notification_type", type)
-            putExtra("item_id", itemId)
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("notification_type", type)
+                putExtra("item_id", itemId)
+            }
+
+            val pendingIntent = PendingIntent.getActivity(
+                this,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            // Cargar large icon - usar launcher como backup seguro
+            val largeIcon = try {
+                val bitmap = BitmapFactory.decodeResource(resources, R.drawable.ic_notificacion_ciguena)
+                if (bitmap != null) {
+                    android.util.Log.d("FCM_NOTIF", "✅ Icono cigüeña cargado")
+                    bitmap
+                } else {
+                    android.util.Log.w("FCM_NOTIF", "⚠️ Icono cigüeña es null, usando launcher")
+                    BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("FCM_NOTIF", "❌ Error cargando icono: ${e.message}")
+                BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
+            }
+
+            val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+                .setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI)
+                .setVibrate(longArrayOf(0, 500, 200, 500))
+
+            // Solo añadir large icon si no es null
+            if (largeIcon != null) {
+                notificationBuilder.setLargeIcon(largeIcon)
+                notificationBuilder.setColor(ContextCompat.getColor(this, android.R.color.holo_blue_dark))
+            }
+
+            val notification = notificationBuilder.build()
+
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.notify(NOTIFICATION_ID, notification)
+
+            android.util.Log.d("FCM_NOTIF", "✅ Notificación mostrada")
+
+        } catch (e: Exception) {
+            android.util.Log.e("FCM_NOTIF", "❌ Error total en showNotification: ${e.message}", e)
         }
-
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // Construir notificación
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-            .build()
-
-        // Mostrar notificación
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
     private fun createNotificationChannel() {
@@ -99,11 +132,42 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             ).apply {
                 description = "Notificaciones de publicaciones, excursiones y fotos"
                 enableVibration(true)
+                vibrationPattern = longArrayOf(0, 500, 200, 500)
+                enableLights(true)
+                lightColor = android.graphics.Color.BLUE
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                setShowBadge(true)
             }
 
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
+    }
+
+    /**
+     * Recortar bitmap en círculo perfecto
+     */
+    private fun getCircularBitmap(bitmap: Bitmap): Bitmap {
+        val size = minOf(bitmap.width, bitmap.height)
+        val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+
+        val canvas = Canvas(output)
+        val paint = Paint().apply {
+            isAntiAlias = true
+            isFilterBitmap = true
+            isDither = true
+        }
+
+        val rect = Rect(0, 0, size, size)
+        val rectF = android.graphics.RectF(rect)
+
+        canvas.drawARGB(0, 0, 0, 0)
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint)
+
+        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+        canvas.drawBitmap(bitmap, null, rect, paint)
+
+        return output
     }
 
     private fun saveTokenToFirestore(token: String) {

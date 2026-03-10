@@ -4,7 +4,7 @@ import com.asociacionciguena.app.data.dto.NewsDto
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Interfaz para acceso a Noticias en Firebase
+ * Interfaz para acceso a s en Firebase
  */
 interface FirebaseNewsDataSource {
 

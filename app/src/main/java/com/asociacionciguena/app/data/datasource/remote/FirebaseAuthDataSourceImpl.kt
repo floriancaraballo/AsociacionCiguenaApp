@@ -33,11 +33,19 @@ class FirebaseAuthDataSourceImpl @Inject constructor(
 
     override suspend fun getUserData(userId: String): UserDto? {
         return try {
-            // PASO 1: Intentar buscar por UID (FORZAR SERVIDOR)
-            var doc = firestore.collection(Constants.COLLECTION_USERS)
-                .document(userId)
-                .get(com.google.firebase.firestore.Source.SERVER)  // ← FORZAR SERVIDOR
-                .await()
+            // PASO 1: Intentar buscar por UID (SERVIDOR primero, CACHÉ si falla)
+            var doc = try {
+                firestore.collection(Constants.COLLECTION_USERS)
+                    .document(userId)
+                    .get(Source.SERVER)  // ← Intentar servidor
+                    .await()
+            } catch (serverError: Exception) {
+                // Si falla servidor (sin internet), usar caché
+                firestore.collection(Constants.COLLECTION_USERS)
+                    .document(userId)
+                    .get(Source.CACHE)  // ← Fallback a caché
+                    .await()
+            }
 
             // PASO 2: Si no existe, buscar por email y migrar
             if (!doc.exists()) {
@@ -66,10 +74,17 @@ class FirebaseAuthDataSourceImpl @Inject constructor(
                             tempDoc.reference.delete().await()
 
                             // Obtener el documento recién migrado
-                            doc = firestore.collection(Constants.COLLECTION_USERS)
-                                .document(userId)
-                                .get(Source.SERVER)
-                                .await()
+                            doc = try {
+                                firestore.collection(Constants.COLLECTION_USERS)
+                                    .document(userId)
+                                    .get(Source.SERVER)
+                                    .await()
+                            } catch (e: Exception) {
+                                firestore.collection(Constants.COLLECTION_USERS)
+                                    .document(userId)
+                                    .get(Source.CACHE)
+                                    .await()
+                            }
                         }
                     }
                 }

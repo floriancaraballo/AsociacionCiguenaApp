@@ -22,6 +22,7 @@ import java.util.UUID
 import javax.inject.Inject
 import android.content.Context
 import com.asociacionciguena.app.util.ImageCompressor
+import com.asociacionciguena.app.util.NetworkMonitor
 import dagger.hilt.android.qualifiers.ApplicationContext
 
 @HiltViewModel
@@ -29,7 +30,8 @@ class ExcursionFormViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,  // ← AÑADIDO
     savedStateHandle: SavedStateHandle,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
     private val excursionId: String? = savedStateHandle.get<String>("excursionId")
@@ -190,6 +192,12 @@ class ExcursionFormViewModel @Inject constructor(
     fun saveExcursion(onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
+                // Verificar conexión
+                if (!networkMonitor.isCurrentlyOnline()) {
+                    _uiState.value = ExcursionFormUiState.Error("Sin conexión a internet. No se puede guardar.")
+                    return@launch
+                }
+
                 if (_title.value.isBlank()) {
                     _uiState.value = ExcursionFormUiState.Error("El título es obligatorio")
                     return@launch

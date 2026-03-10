@@ -89,7 +89,7 @@ fun NewsFormScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(if (viewModel.isEditMode) "Editar Noticia" else "Nueva Noticia")
+                    Text(if (viewModel.isEditMode) "Editar Publicación" else "Nueva Publicación")
                 },
                 navigationIcon = {
                     IconButton(onClick = {

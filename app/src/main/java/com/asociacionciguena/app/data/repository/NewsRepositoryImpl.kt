@@ -33,11 +33,11 @@ class NewsRepositoryImpl @Inject constructor(
             if (newsDto != null) {
                 Result.Success(newsDto.toDomain())
             } else {
-                Result.Error("Noticia no encontrada")
+                Result.Error("Publicación no encontrada")
             }
         } catch (e: Exception) {
             Result.Error(
-                message = e.message ?: "Error al obtener noticia",
+                message = e.message ?: "Error al obtener publicación",
                 exception = e
             )
         }

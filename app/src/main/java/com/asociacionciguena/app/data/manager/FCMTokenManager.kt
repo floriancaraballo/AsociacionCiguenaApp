@@ -1,5 +1,6 @@
 package com.asociacionciguena.app.data.manager
 
+import android.os.Build
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessaging
@@ -31,30 +32,25 @@ class FCMTokenManager @Inject constructor(
      * Guardar token en Firestore
      */
     private suspend fun saveTokenToFirestore(token: String) {
-        val userId = auth.currentUser?.uid ?: return
+        val userId = auth.currentUser?.uid
 
+        // Guardar en deviceTokens (SIEMPRE, incluso sin login)
         try {
-            firestore.collection("users")
-                .document(userId)
-                .update(
-                    mapOf(
-                        "fcmToken" to token,
-                        "fcmTokenUpdatedAt" to com.google.firebase.Timestamp.now()
-                    )
-                )
-                .await()
-        } catch (e: Exception) {
-            // Si el documento no existe, intentar set con merge
-            firestore.collection("users")
-                .document(userId)
+            firestore.collection("deviceTokens")
+                .document(token)
                 .set(
                     mapOf(
-                        "fcmToken" to token,
-                        "fcmTokenUpdatedAt" to com.google.firebase.Timestamp.now()
+                        "token" to token,
+                        "userId" to userId,
+                        "lastUsedAt" to com.google.firebase.Timestamp.now(),
+                        "deviceInfo" to "${Build.MANUFACTURER} ${Build.MODEL}",
+                        "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                     ),
                     com.google.firebase.firestore.SetOptions.merge()
                 )
                 .await()
+        } catch (e: Exception) {
+            android.util.Log.e("FCMTokenManager", "Error guardando token: ${e.message}")
         }
     }
 
@@ -62,17 +58,19 @@ class FCMTokenManager @Inject constructor(
      * Eliminar token (al cerrar sesión)
      */
     suspend fun deleteToken() {
-        val userId = auth.currentUser?.uid ?: return
+        val userId = auth.currentUser?.uid
 
-        try {
-            messaging.deleteToken().await()
-
-            firestore.collection("users")
-                .document(userId)
-                .update("fcmToken", null)
-                .await()
-        } catch (e: Exception) {
-            // Log error
+        if (userId != null) {
+            try {
+                // En deviceTokens, solo marcar como sin usuario (no borrar)
+                val token = messaging.token.await()
+                firestore.collection("deviceTokens")
+                    .document(token)
+                    .update("userId", null)
+                    .await()
+            } catch (e: Exception) {
+                android.util.Log.e("FCMTokenManager", "Error eliminando token: ${e.message}")
+            }
         }
     }
 }

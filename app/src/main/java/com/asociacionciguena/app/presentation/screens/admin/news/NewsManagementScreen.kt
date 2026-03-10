@@ -15,7 +15,6 @@ import com.asociacionciguena.app.domain.model.News
 import com.asociacionciguena.app.presentation.components.ErrorMessage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import kotlinx.coroutines.launch
-import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toJavaLocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -59,7 +58,7 @@ fun NewsManagementScreen(
             FloatingActionButton(
                 onClick = { onNavigateToForm("new") }
             ) {
-                Icon(Icons.Default.Add, "Nueva noticia")
+                Icon(Icons.Default.Add, "¡Nueva publicación!")
             }
         }
     ) { paddingValues ->
@@ -80,7 +79,7 @@ fun NewsManagementScreen(
                         viewModel.deleteNews(newsId) {
                             coroutineScope.launch {
                                 snackbarHostState.showSnackbar(
-                                    message = "Noticia eliminada correctamente",
+                                    message = "Publicación eliminada correctamente",
                                     duration = SnackbarDuration.Short
                                 )
                             }
@@ -351,8 +350,8 @@ private fun NewsManagementCard(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Eliminar noticia") },
-            text = { Text("¿Estás seguro de que quieres eliminar esta noticia? Esta acción no se puede deshacer.") },
+            title = { Text("Eliminar publicación") },
+            text = { Text("¿Estás seguro de que quieres eliminar esta publicación? Esta acción no se puede deshacer.") },
             confirmButton = {
                 TextButton(
                     onClick = {

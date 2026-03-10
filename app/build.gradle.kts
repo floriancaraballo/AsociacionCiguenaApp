@@ -1,5 +1,4 @@
 import java.util.Properties
-import java.io.FileInputStream
 
 plugins {
     alias(libs.plugins.android.application)
@@ -245,6 +244,8 @@ dependencies {
     // Para notificaciones locales (opcional)
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("id.zelory:compressor:3.0.1")
+    implementation("com.google.firebase:firebase-functions-ktx")
+
 
 }
 

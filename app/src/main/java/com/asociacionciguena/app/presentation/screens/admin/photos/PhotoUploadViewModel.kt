@@ -19,13 +19,15 @@ import kotlinx.coroutines.delay
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.asociacionciguena.app.util.ImageCompressor
+import com.asociacionciguena.app.util.NetworkMonitor
 
 @HiltViewModel
 class PhotoUploadViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
     private val preselectedExcursionId: String? = savedStateHandle["excursionId"]
@@ -189,6 +191,11 @@ class PhotoUploadViewModel @Inject constructor(
     fun uploadPhotos(onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
+                if (!networkMonitor.isCurrentlyOnline()) {
+                    _uiState.value = PhotoUploadUiState.Error("Sin conexión a internet. No se pueden subir fotos.")
+                    return@launch
+                }
+
                 val currentState = _uiState.value
                 if (currentState !is PhotoUploadUiState.PhotosSelected) {
                     _uiState.value = PhotoUploadUiState.Error("Estado inválido")

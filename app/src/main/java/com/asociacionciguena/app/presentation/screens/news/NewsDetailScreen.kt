@@ -56,7 +56,7 @@ fun NewsDetailScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-                        else -> Text("Noticia")
+                        else -> Text("Publicación")
                     }
                 },
                 navigationIcon = {
@@ -429,7 +429,7 @@ private fun shareNews(context: Context, news: com.asociacionciguena.app.domain.m
         putExtra(Intent.EXTRA_TEXT, shareText)
     }
 
-    context.startActivity(Intent.createChooser(shareIntent, "Compartir noticia"))
+    context.startActivity(Intent.createChooser(shareIntent, "Compartir publicación"))
 }
 
 private fun formatDate(date: kotlinx.datetime.LocalDateTime): String {

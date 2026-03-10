@@ -61,7 +61,7 @@ class NewsDetailViewModel @Inject constructor(
 
                     _uiState.value = NewsDetailUiState.Success(news)
                 } else {
-                    _uiState.value = NewsDetailUiState.Error("Noticia no encontrada")
+                    _uiState.value = NewsDetailUiState.Error("Publicación no encontrada")
                 }
 
             } catch (e: Exception) {

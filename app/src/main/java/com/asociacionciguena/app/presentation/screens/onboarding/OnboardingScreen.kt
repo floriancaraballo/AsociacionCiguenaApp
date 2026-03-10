@@ -340,7 +340,7 @@ private fun NotificationsPermissionPageContent(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Recibe avisos cuando haya nuevas noticias, excursiones o fotos",
+            text = "Recibe avisos cuando haya nuevas publicaciones, excursiones o fotos",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant

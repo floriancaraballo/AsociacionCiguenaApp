@@ -8,6 +8,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.asociacionciguena.app.util.NetworkMonitor
 
 sealed class AppInitState {
     object Loading : AppInitState()
@@ -20,7 +21,8 @@ sealed class AppInitState {
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val preferencesDataSource: PreferencesDataSource,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    val networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
     private val _initState = MutableStateFlow<AppInitState>(AppInitState.Loading)

@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.auth.FirebaseAuth
-import kotlinx.coroutines.tasks.await
+import com.asociacionciguena.app.util.NetworkMonitor
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
@@ -23,7 +23,8 @@ class AuthViewModel @Inject constructor(
     private val logoutUseCase: LogoutUseCase,
     private val getCurrentUserUseCase: GetCurrentUserUseCase,
     private val fcmTokenManager: FCMTokenManager,
-    private val auth: FirebaseAuth  // ← AÑADIDO
+    private val auth: FirebaseAuth,  // ← AÑADIDO
+    private val networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
@@ -69,6 +70,11 @@ class AuthViewModel @Inject constructor(
 
     fun login() {
         viewModelScope.launch {
+            // Verificar conexión primero
+            if (!networkMonitor.isCurrentlyOnline()) {
+                _uiState.value = AuthUiState.Error("Sin conexión a internet. Por favor, verifica tu conexión.")
+                return@launch
+            }
             _uiState.value = AuthUiState.Loading
 
             when (val result = loginUseCase(_email.value, _password.value)) {

@@ -263,42 +263,38 @@ export const onNewsCreated = onDocumentCreated({
 
   try {
     const title = newsData.title || "Nueva publicación";
-    const isPublic = newsData.isPublic || false;
 
-    // Obtener tokens de usuarios
-    let usersSnapshot;
-    if (isPublic) {
-      // Noticia pública: notificar a TODOS los usuarios
-      usersSnapshot = await admin.firestore()
-        .collection("users")
-        .where("fcmToken", "!=", null)
-        .get();
-    } else {
-      // Noticia privada: solo notificar a usuarios autenticados (socios, admins)
-      usersSnapshot = await admin.firestore()
-        .collection("users")
-        .where("fcmToken", "!=", null)
-        .get();
-    }
+    console.log(`📰 Nueva noticia creada: ${title}`);
+
+    // Obtener tokens de dispositivos (incluye usuarios no logueados)
+    const deviceTokensSnapshot = await admin.firestore()
+      .collection("deviceTokens")
+      .get();
+
+    console.log(`📱 Total dispositivos registrados: ${deviceTokensSnapshot.size}`);
 
     const tokens: string[] = [];
-    usersSnapshot.docs.forEach((doc) => {
-      const token = doc.data().fcmToken;
-      if (token) {
+    deviceTokensSnapshot.docs.forEach((doc) => {
+      const deviceData = doc.data();
+      const token = deviceData.token;
+      
+      if (token && typeof token === 'string' && token.length > 0) {
         tokens.push(token);
       }
     });
 
+    console.log(`📧 Tokens válidos encontrados: ${tokens.length}`);
+
     if (tokens.length === 0) {
-      console.log("No hay tokens para notificar");
+      console.log("❌ No hay tokens para notificar");
       return;
     }
 
-    // Crear mensaje de notificación
+    // Enviar notificación
     const message = {
       notification: {
-        title: "📰 Nueva noticia",
-        body: title,
+        title: "📰 Nueva publicación",
+        body: `${title}`,
       },
       data: {
         type: "news",
@@ -307,36 +303,32 @@ export const onNewsCreated = onDocumentCreated({
       tokens: tokens,
     };
 
-    // Enviar notificación
+    console.log(`📤 Enviando notificaciones a ${tokens.length} dispositivos...`);
+
     const response = await admin.messaging().sendEachForMulticast(message);
-    console.log(`Notificaciones enviadas: ${response.successCount} exitosas, ${response.failureCount} fallidas`);
+    
+    console.log(`✅ Enviadas: ${response.successCount} exitosas, ${response.failureCount} fallidas`);
 
     // Limpiar tokens inválidos
     if (response.failureCount > 0) {
       const tokensToRemove: string[] = [];
       response.responses.forEach((resp, idx) => {
         if (!resp.success) {
+          console.log(`❌ Token fallido: ${tokens[idx].substring(0, 20)}...`);
           tokensToRemove.push(tokens[idx]);
         }
       });
 
-      // Eliminar tokens inválidos de Firestore
+      // Eliminar tokens inválidos de deviceTokens
       const batch = admin.firestore().batch();
       for (const token of tokensToRemove) {
-        const userQuery = await admin.firestore()
-          .collection("users")
-          .where("fcmToken", "==", token)
-          .limit(1)
-          .get();
-
-        if (!userQuery.empty) {
-          batch.update(userQuery.docs[0].ref, {fcmToken: admin.firestore.FieldValue.delete()});
-        }
+        batch.delete(admin.firestore().collection("deviceTokens").doc(token));
+        console.log(`🧹 Eliminando token inválido: ${token.substring(0, 20)}...`);
       }
       await batch.commit();
     }
   } catch (error) {
-    console.error("Error al enviar notificaciones:", error);
+    console.error("❌ Error al enviar notificaciones:", error);
   }
 });
 

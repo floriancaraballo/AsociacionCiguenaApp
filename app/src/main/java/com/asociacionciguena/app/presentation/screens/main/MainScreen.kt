@@ -1,7 +1,10 @@
 package com.asociacionciguena.app.presentation.screens.main
 
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -34,9 +37,15 @@ import com.asociacionciguena.app.presentation.screens.onboarding.OnboardingScree
 import com.asociacionciguena.app.presentation.screens.splash.SplashScreen
 import androidx.compose.runtime.LaunchedEffect
 import com.asociacionciguena.app.presentation.screens.calendar.detail.CalendarExcursionDetailScreen
-import androidx.compose.runtime.LaunchedEffect
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import com.asociacionciguena.app.presentation.theme.ThemeViewModel
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 
 @Composable
 fun MainScreen(
@@ -61,6 +70,42 @@ fun MainScreen(
             }
 
             Scaffold(
+                topBar = {
+                    // Banner de sin conexión
+                    val networkMonitor: com.asociacionciguena.app.util.NetworkMonitor = hiltViewModel<MainViewModel>().networkMonitor
+                    val isOnline by networkMonitor.isOnline.collectAsState(initial = true)
+
+                    val navBackStackEntry by navController.currentBackStackEntryAsState()
+                    val currentRoute = navBackStackEntry?.destination?.route
+
+                    // No mostrar en onboarding
+                    if (currentRoute != Screen.Onboarding.route && !isOnline) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            tonalElevation = 3.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudOff,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Sin conexión - Mostrando contenido guardado",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                    }
+                },
                 bottomBar = {
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStackEntry?.destination?.route
@@ -68,7 +113,7 @@ fun MainScreen(
                     if (currentRoute != Screen.Onboarding.route) {
                         BottomNavigationBar(
                             navController = navController,
-                            isUserLoggedIn = state.isUserLoggedIn  // ← NUEVO
+                            isUserLoggedIn = state.isUserLoggedIn
                         )
                     }
                 }
