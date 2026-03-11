@@ -51,7 +51,9 @@ import androidx.compose.material3.Surface
 fun MainScreen(
     viewModel: MainViewModel = hiltViewModel(),
     onNavigateToNewsDetail: (String) -> Unit = {},
-    themeViewModel: ThemeViewModel  // ← NUEVO
+    themeViewModel: ThemeViewModel, // ← NUEVO
+    notificationType: String? = null,  // ← NUEVO
+    itemId: String? = null
 ) {
     val navController = rememberNavController()
     val initState by viewModel.initState.collectAsState()
@@ -67,6 +69,31 @@ fun MainScreen(
                 Screen.News.route
             } else {
                 Screen.Onboarding.route
+            }
+
+            // Deep linking interno (para excursiones y fotos)
+            LaunchedEffect(notificationType, itemId) {
+                if (!notificationType.isNullOrEmpty() && !itemId.isNullOrEmpty()) {
+                    android.util.Log.d("DEEP_LINK_MAIN", "MainScreen - Type: $notificationType, ID: $itemId")
+
+                    // Esperar a que NavHost interno esté listo
+                    kotlinx.coroutines.delay(1000)
+
+                    when (notificationType) {
+                        "excursion" -> {
+                            android.util.Log.d("DEEP_LINK_MAIN", "Navegando a CalendarExcursionDetail: $itemId")
+                            navController.navigate(Screen.CalendarExcursionDetail.createRoute(itemId))
+                        }
+                        "photo" -> {
+                            android.util.Log.d("DEEP_LINK_MAIN", "Navegando a ExcursionDetail: $itemId")
+                            if (state.isUserLoggedIn) {
+                                navController.navigate(Screen.ExcursionDetail.createRoute(itemId))
+                            } else {
+                                navController.navigate(Screen.Login.createRoute(returnTo = "gallery"))
+                            }
+                        }
+                    }
+                }
             }
 
             Scaffold(

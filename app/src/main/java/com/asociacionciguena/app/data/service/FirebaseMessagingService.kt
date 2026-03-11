@@ -45,13 +45,22 @@ class FirebaseMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
 
+        android.util.Log.d("FCM_NOTIF", "📨 Mensaje recibido")
+        android.util.Log.d("FCM_NOTIF", "Data: ${message.data}")
+        android.util.Log.d("FCM_NOTIF", "Notification: ${message.notification}")
+
+        // Crear canal de notificación
         createNotificationChannel()
 
-        val title = message.notification?.title ?: message.data["title"] ?: "Nueva notificación"
-        val body = message.notification?.body ?: message.data["body"] ?: ""
+        // IMPORTANTE: Ahora SOLO usamos data (no notification)
+        val title = message.data["title"] ?: "Nueva notificación"
+        val body = message.data["body"] ?: ""
         val type = message.data["type"]
         val itemId = message.data["itemId"]
 
+        android.util.Log.d("FCM_NOTIF", "Title: $title, Body: $body, Type: $type")
+
+        // Mostrar notificación
         showNotification(title, body, type, itemId)
     }
 
@@ -108,7 +117,6 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             // Solo añadir large icon si no es null
             if (largeIcon != null) {
                 notificationBuilder.setLargeIcon(largeIcon)
-                notificationBuilder.setColor(ContextCompat.getColor(this, android.R.color.holo_blue_dark))
             }
 
             val notification = notificationBuilder.build()
