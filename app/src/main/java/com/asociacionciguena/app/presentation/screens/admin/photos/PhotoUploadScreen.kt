@@ -4,7 +4,6 @@ import android.Manifest
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -18,7 +17,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.SubcomposeAsyncImage
-import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -421,22 +419,13 @@ private fun PhotosSelectedContent(
         onSelected = onExcursionSelected
     )
 
-    // User selector
-    UserSelector(
-        users = users,
-        selectedUsers = selectedUsers,
-        onUserToggled = onUserToggled,
-        onSelectAll = onSelectAll,
-        onDeselectAll = onDeselectAll
-    )
-
     // Upload button
     Button(
         onClick = onUploadClick,
         modifier = Modifier
             .fillMaxWidth()
             .height(50.dp),
-        enabled = selectedExcursionId != null && selectedUsers.isNotEmpty()
+        enabled = selectedExcursionId != null
     ) {
         Icon(Icons.Default.CloudUpload, contentDescription = null)
         Spacer(modifier = Modifier.width(8.dp))

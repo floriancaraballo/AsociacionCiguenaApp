@@ -208,11 +208,6 @@ class PhotoUploadViewModel @Inject constructor(
                     return@launch
                 }
 
-                if (currentState.selectedUsers.isEmpty()) {
-                    _uiState.value = PhotoUploadUiState.Error("Selecciona al menos un usuario")
-                    return@launch
-                }
-
                 val totalPhotos = currentState.uris.size
 
                 // ← NUEVO: Crear documento de batch
@@ -221,7 +216,7 @@ class PhotoUploadViewModel @Inject constructor(
                     "excursionId" to currentState.selectedExcursionId,
                     "photoCount" to totalPhotos,
                     "status" to "uploading",
-                    "authorizedUsers" to currentState.selectedUsers,
+                    "authorizedUsers" to emptyList<String>(),
                     "createdAt" to Timestamp.now()
                 )
 
@@ -264,7 +259,7 @@ class PhotoUploadViewModel @Inject constructor(
                         "storagePath" to storagePath,
                         "uploadedBy" to "admin",
                         "uploadedAt" to Timestamp.now(),
-                        "authorizedUsers" to currentState.selectedUsers,
+                        "authorizedUsers" to emptyList<String>(),
                         "batchId" to batchId  // ← NUEVO: Asociar con batch
                     )
 
