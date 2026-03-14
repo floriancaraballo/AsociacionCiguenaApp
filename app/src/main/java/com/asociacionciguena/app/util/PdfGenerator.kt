@@ -3,7 +3,9 @@ package com.asociacionciguena.app.util
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.RectF
 import androidx.compose.ui.graphics.asAndroidPath
 import com.itextpdf.io.image.ImageDataFactory
 import com.itextpdf.kernel.colors.ColorConstants
@@ -12,13 +14,15 @@ import com.itextpdf.kernel.pdf.PdfDocument
 import com.itextpdf.kernel.pdf.PdfWriter
 import com.itextpdf.layout.Document
 import com.itextpdf.layout.element.Image
-import com.itextpdf.layout.element.Paragraph
 import com.itextpdf.layout.element.LineSeparator
+import com.itextpdf.layout.element.Paragraph
+import com.itextpdf.layout.properties.HorizontalAlignment
 import com.itextpdf.layout.properties.TextAlignment
 import com.itextpdf.kernel.font.PdfFontFactory
 import com.itextpdf.io.font.constants.StandardFonts
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
 import com.asociacionciguena.app.R
@@ -26,7 +30,7 @@ import com.asociacionciguena.app.R
 object PdfGenerator {
 
     /**
-     * Generar PDF de autorización firmada
+     * Generar PDF de autorización firmada con firma escalada correctamente
      */
     fun generateSignedAuthorization(
         context: Context,
@@ -39,227 +43,131 @@ object PdfGenerator {
         signaturePaths: List<androidx.compose.ui.graphics.Path>
     ): File {
 
-        // Crear archivo temporal
         val outputFile = File(context.cacheDir, "autorizacion_${System.currentTimeMillis()}.pdf")
-
-        // Crear PDF
         val writer = PdfWriter(outputFile)
         val pdfDoc = PdfDocument(writer)
         val document = Document(pdfDoc)
 
-        // Fuentes
+        // Fuentes y colores
         val boldFont = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD)
         val normalFont = PdfFontFactory.createFont(StandardFonts.HELVETICA)
-
-        // Color corporativo (azul)
         val primaryColor = DeviceRgb(25, 118, 210)
 
         try {
-            // HEADER CON LOGO
-            try {
+            // ───────── HEADER CON LOGO ─────────
+            runCatching {
                 val logoDrawable = context.getDrawable(R.drawable.logo_ciguena)
-
                 if (logoDrawable != null) {
-                    // Crear bitmap del logo
-                    val logoBitmap = android.graphics.Bitmap.createBitmap(
-                        150, 150, android.graphics.Bitmap.Config.ARGB_8888
-                    )
-                    val logoCanvas = android.graphics.Canvas(logoBitmap)
+                    val logoBitmap = Bitmap.createBitmap(150, 150, Bitmap.Config.ARGB_8888)
+                    val logoCanvas = Canvas(logoBitmap)
                     logoDrawable.setBounds(0, 0, logoCanvas.width, logoCanvas.height)
                     logoDrawable.draw(logoCanvas)
 
                     val logoBytes = ByteArrayOutputStream()
-                    logoBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, logoBytes)
+                    logoBitmap.compress(Bitmap.CompressFormat.PNG, 100, logoBytes)
 
-                    val logoImageData = ImageDataFactory.create(logoBytes.toByteArray())
-                    val logoImage = Image(logoImageData)
-                    logoImage.setWidth(60f)
-                    logoImage.setHeight(60f)
+                    Image(ImageDataFactory.create(logoBytes.toByteArray())).apply {
+                        setWidth(60f)
+                        setHeight(60f)
+                        setHorizontalAlignment(HorizontalAlignment.LEFT)
+                        setMarginBottom(10f)
+                    }.let { document.add(it) }
 
-                    // Logo a la izquierda (esquina superior izquierda)
-                    logoImage.setHorizontalAlignment(com.itextpdf.layout.properties.HorizontalAlignment.LEFT)
-                    logoImage.setMarginBottom(10f)
-                    document.add(logoImage)
-
-                    // Texto centrado debajo del logo
-                    val headerText = Paragraph("ASOCIACIÓN CIGÜEÑA")
-                    headerText.setFont(boldFont)
-                    headerText.setFontSize(20f)
-                    headerText.setFontColor(primaryColor)
-                    headerText.setTextAlignment(TextAlignment.CENTER)
-                    headerText.setBorder(com.itextpdf.layout.borders.Border.NO_BORDER)  // ← Sin borde
-                    headerText.setMarginTop(5f)
-                    document.add(headerText)
-
+                    Paragraph("ASOCIACIÓN CIGÜEÑA").apply {
+                        setFont(boldFont)
+                        setFontSize(20f)
+                        setFontColor(primaryColor)
+                        setTextAlignment(TextAlignment.CENTER)
+                        setMarginTop(5f)
+                    }.let { document.add(it) }
                 } else {
-                    // Sin logo, solo texto
-                    val header = Paragraph("ASOCIACIÓN CIGÜEÑA")
-                    header.setFont(boldFont)
-                    header.setFontSize(20f)
-                    header.setFontColor(primaryColor)
-                    header.setTextAlignment(TextAlignment.CENTER)
-                    document.add(header)
+                    throw IllegalStateException("Logo no encontrado")
                 }
-            } catch (e: Exception) {
-                // Si falla el logo, solo texto
-                android.util.Log.w("PdfGenerator", "Logo no encontrado: ${e.message}")
-                val header = Paragraph("ASOCIACIÓN CIGÜEÑA")
-                header.setFont(boldFont)
-                header.setFontSize(20f)
-                header.setFontColor(primaryColor)
-                header.setTextAlignment(TextAlignment.CENTER)
-                document.add(header)
+            }.onFailure {
+                android.util.Log.w("PdfGenerator", "Logo fallback: ${it.message}")
+                Paragraph("ASOCIACIÓN CIGÜEÑA").apply {
+                    setFont(boldFont)
+                    setFontSize(20f)
+                    setFontColor(primaryColor)
+                    setTextAlignment(TextAlignment.CENTER)
+                }.let { document.add(it) }
             }
 
-            val subtitle = Paragraph("Autorización de Participación")
-            subtitle.setFont(boldFont)
-            subtitle.setFontSize(16f)
-            subtitle.setTextAlignment(TextAlignment.CENTER)
-            subtitle.setMarginBottom(20f)
-            document.add(subtitle)
+            // ───────── SUBTÍTULO ─────────
+            Paragraph("Autorización de Participación").apply {
+                setFont(boldFont)
+                setFontSize(16f)
+                setTextAlignment(TextAlignment.CENTER)
+                setMarginBottom(20f)
+            }.let { document.add(it) }
 
             document.add(LineSeparator(null))
 
-            // DATOS DE LA EXCURSIÓN
-            val excursionHeader = Paragraph("DATOS DE LA EXCURSIÓN")
-            excursionHeader.setFont(boldFont)
-            excursionHeader.setFontSize(12f)
-            excursionHeader.setFontColor(primaryColor)
-            excursionHeader.setMarginTop(20f)
-            excursionHeader.setMarginBottom(10f)
-            document.add(excursionHeader)
-
-            val excursionTitlePara = Paragraph("Excursión: $excursionTitle")
-            excursionTitlePara.setFont(normalFont)
-            excursionTitlePara.setFontSize(11f)
-            document.add(excursionTitlePara)
-
-            val excursionDatePara = Paragraph("Fecha: $excursionDate")
-            excursionDatePara.setFont(normalFont)
-            excursionDatePara.setFontSize(11f)
-            excursionDatePara.setMarginBottom(20f)
-            document.add(excursionDatePara)
-
+            // ───────── DATOS DE LA EXCURSIÓN ─────────
+            addSectionHeader(document, "DATOS DE LA EXCURSIÓN", boldFont, primaryColor)
+            document.add(Paragraph("Excursión: $excursionTitle").apply { setFont(normalFont); setFontSize(11f) })
+            document.add(Paragraph("Fecha: $excursionDate").apply { setFont(normalFont); setFontSize(11f); setMarginBottom(20f) })
             document.add(LineSeparator(null))
 
-            // DATOS DEL PARTICIPANTE
+            // ───────── DATOS DEL PARTICIPANTE (si es menor) ─────────
             if (minorName != null) {
-                val participantHeader = Paragraph("DATOS DEL PARTICIPANTE")
-                participantHeader.setFont(boldFont)
-                participantHeader.setFontSize(12f)
-                participantHeader.setFontColor(primaryColor)
-                participantHeader.setMarginTop(20f)
-                participantHeader.setMarginBottom(10f)
-                document.add(participantHeader)
-
-                val minorNamePara = Paragraph("Nombre del menor: $minorName")
-                minorNamePara.setFont(normalFont)
-                minorNamePara.setFontSize(11f)
-                minorNamePara.setMarginBottom(20f)
-                document.add(minorNamePara)
-
+                addSectionHeader(document, "DATOS DEL PARTICIPANTE", boldFont, primaryColor)
+                document.add(Paragraph("Nombre del menor: $minorName").apply { setFont(normalFont); setFontSize(11f); setMarginBottom(20f) })
                 document.add(LineSeparator(null))
             }
 
-            // DATOS DEL TUTOR
-            val tutorHeader = Paragraph(if (minorName != null) "DATOS DEL TUTOR LEGAL" else "DATOS DEL PARTICIPANTE")
-            tutorHeader.setFont(boldFont)
-            tutorHeader.setFontSize(12f)
-            tutorHeader.setFontColor(primaryColor)
-            tutorHeader.setMarginTop(20f)
-            tutorHeader.setMarginBottom(10f)
-            document.add(tutorHeader)
-
-            val tutorNamePara = Paragraph("Nombre: $tutorName")
-            tutorNamePara.setFont(normalFont)
-            tutorNamePara.setFontSize(11f)
-            document.add(tutorNamePara)
-
-            val tutorDniPara = Paragraph("DNI/NIE: $tutorDni")
-            tutorDniPara.setFont(normalFont)
-            tutorDniPara.setFontSize(11f)
-            document.add(tutorDniPara)
-
-            val tutorPhonePara = Paragraph("Teléfono: $tutorPhone")
-            tutorPhonePara.setFont(normalFont)
-            tutorPhonePara.setFontSize(11f)
-            tutorPhonePara.setMarginBottom(20f)
-            document.add(tutorPhonePara)
-
+            // ───────── DATOS DEL TUTOR ─────────
+            val tutorHeaderTitle = if (minorName != null) "DATOS DEL TUTOR LEGAL" else "DATOS DEL PARTICIPANTE"
+            addSectionHeader(document, tutorHeaderTitle, boldFont, primaryColor)
+            document.add(Paragraph("Nombre: $tutorName").apply { setFont(normalFont); setFontSize(11f) })
+            document.add(Paragraph("DNI/NIE: $tutorDni").apply { setFont(normalFont); setFontSize(11f) })
+            document.add(Paragraph("Teléfono: $tutorPhone").apply { setFont(normalFont); setFontSize(11f); setMarginBottom(20f) })
             document.add(LineSeparator(null))
 
-            // AUTORIZACIÓN
-            val authHeader = Paragraph("AUTORIZACIÓN")
-            authHeader.setFont(boldFont)
-            authHeader.setFontSize(12f)
-            authHeader.setFontColor(primaryColor)
-            authHeader.setMarginTop(20f)
-            authHeader.setMarginBottom(10f)
-            document.add(authHeader)
-
+            // ───────── TEXTO DE AUTORIZACIÓN ─────────
+            addSectionHeader(document, "AUTORIZACIÓN", boldFont, primaryColor)
             val authText = if (minorName != null) {
                 "Yo, $tutorName, con DNI $tutorDni, como padre/madre/tutor legal de $minorName, autorizo su participación en la excursión \"$excursionTitle\" organizada por la Asociación Cigüeña."
             } else {
                 "Yo, $tutorName, con DNI $tutorDni, autorizo mi participación en la excursión \"$excursionTitle\" organizada por la Asociación Cigüeña."
             }
+            document.add(Paragraph(authText).apply { setFont(normalFont); setFontSize(10f); setMarginBottom(10f) })
+            document.add(Paragraph("Declaro conocer y aceptar las condiciones de la actividad y eximir de responsabilidad a la Asociación Cigüeña en caso de accidente.")
+                .apply { setFont(normalFont); setFontSize(9f); setMarginBottom(20f) })
 
-            val authPara = Paragraph(authText)
-            authPara.setFont(normalFont)
-            authPara.setFontSize(10f)
-            authPara.setMarginBottom(10f)
-            document.add(authPara)
-
-            val disclaimerPara = Paragraph("Declaro conocer y aceptar las condiciones de la actividad y eximir de responsabilidad a la Asociación Cigüeña en caso de accidente.")
-            disclaimerPara.setFont(normalFont)
-            disclaimerPara.setFontSize(9f)
-            disclaimerPara.setMarginBottom(20f)
-            document.add(disclaimerPara)
-
-            // FECHA Y FIRMA
+            // ───────── FECHA Y FIRMA ─────────
             val currentDate = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "ES")).format(Date())
+            document.add(Paragraph("Fecha y hora: $currentDate").apply { setFont(normalFont); setFontSize(10f); setMarginBottom(10f) })
+            document.add(Paragraph("Firma:").apply { setFont(boldFont); setFontSize(11f); setMarginBottom(5f) })
 
-            val datePara = Paragraph("Fecha y hora: $currentDate")
-            datePara.setFont(normalFont)
-            datePara.setFontSize(10f)
-            datePara.setMarginBottom(10f)
-            document.add(datePara)
+            // Generar bitmap de la firma con Smart Fit
+            val signatureBitmap = pathsToBitmap(
+                paths = signaturePaths,
+                bitmapWidth = 800,
+                bitmapHeight = 300,
+                padding = 20f
+            )
 
-            val signatureLabelPara = Paragraph("Firma:")
-            signatureLabelPara.setFont(boldFont)
-            signatureLabelPara.setFontSize(11f)
-            signatureLabelPara.setMarginBottom(5f)
-            document.add(signatureLabelPara)
+            // [OPCIONAL] Debug: guardar bitmap para inspeccionar
+            // saveBitmapDebug(context, signatureBitmap, "debug_signature")
 
-            // Convertir firma a imagen
-            android.util.Log.d("PdfGen", "📝 Paths de firma: ${signaturePaths.size}")
-
-// Canvas real: fillMaxWidth (~1000px) x 200.dp (~600px) = ratio 5:3
-            val signatureBitmap = pathsToBitmap(signaturePaths, 800, 300)
-
-            android.util.Log.d("PdfGen", "🖼️ Bitmap creado: ${signatureBitmap.width}x${signatureBitmap.height}")
-
+            // Insertar firma en el PDF
             val signatureBytes = ByteArrayOutputStream()
             signatureBitmap.compress(Bitmap.CompressFormat.PNG, 100, signatureBytes)
 
-            android.util.Log.d("PdfGen", "📦 Bytes de imagen: ${signatureBytes.size()}")
+            Image(ImageDataFactory.create(signatureBytes.toByteArray())).apply {
+                setWidth(300f)  // Ancho en puntos PDF
+                setHeight(112.5f)  // Mantener proporción 800:300 → 300:112.5
+            }.let { document.add(it) }
 
-            val imageData = ImageDataFactory.create(signatureBytes.toByteArray())
-            val signatureImage = Image(imageData)
-            signatureImage.setWidth(300f)
-            signatureImage.setHeight(112.5f)
-
-            document.add(signatureImage)
-
-            android.util.Log.d("PdfGen", "✅ Firma añadida al PDF")
-
-            // FOOTER
-            val footerPara = Paragraph("\n\nDocumento generado electrónicamente por Asociación Cigüeña")
-            footerPara.setFont(normalFont)
-            footerPara.setFontSize(8f)
-            footerPara.setFontColor(ColorConstants.GRAY)
-            footerPara.setTextAlignment(TextAlignment.CENTER)
-            footerPara.setMarginTop(30f)
-            document.add(footerPara)
+            // ───────── FOOTER ─────────
+            Paragraph("\n\nDocumento generado electrónicamente por Asociación Cigüeña").apply {
+                setFont(normalFont)
+                setFontSize(8f)
+                setFontColor(ColorConstants.GRAY)
+                setTextAlignment(TextAlignment.CENTER)
+                setMarginTop(30f)
+            }.let { document.add(it) }
 
         } finally {
             document.close()
@@ -269,36 +177,111 @@ object PdfGenerator {
     }
 
     /**
-     * Convertir paths de firma a bitmap
+     * Convierte paths de firma a bitmap con ajuste automático de bounds (Smart Fit)
+     * - Calcula el área real dibujada y la escala para que encaje perfectamente
+     * - Mantiene el aspect ratio original de la firma
+     * - No requiere conocer las dimensiones del canvas original
      */
     fun pathsToBitmap(
         paths: List<androidx.compose.ui.graphics.Path>,
-        width: Int,
-        height: Int
+        bitmapWidth: Int = 800,
+        bitmapHeight: Int = 300,
+        padding: Float = 20f
     ): Bitmap {
-        android.util.Log.d("PdfGen", "🎨 Convirtiendo ${paths.size} paths a bitmap")
+        // Bitmap en blanco si no hay firma
+        if (paths.isEmpty()) {
+            return Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888).apply {
+                eraseColor(android.graphics.Color.WHITE)
+            }
+        }
 
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val bitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-
-        // Fondo blanco
         canvas.drawColor(android.graphics.Color.WHITE)
 
+        // 1️⃣ Calcular bounds REALES de todos los paths
+        var minX = Float.MAX_VALUE
+        var minY = Float.MAX_VALUE
+        var maxX = Float.MIN_VALUE
+        var maxY = Float.MIN_VALUE
+
+        paths.forEach { composePath ->
+            val bounds = RectF()
+            composePath.asAndroidPath().computeBounds(bounds, true)
+            minX = minOf(minX, bounds.left)
+            minY = minOf(minY, bounds.top)
+            maxX = maxOf(maxX, bounds.right)
+            maxY = maxOf(maxY, bounds.bottom)
+        }
+
+        val contentWidth = maxX - minX
+        val contentHeight = maxY - minY
+
+        // Evitar división por cero si la firma es inválida
+        if (contentWidth < 1f || contentHeight < 1f) {
+            android.util.Log.w("PdfGenerator", "Firma con bounds inválidos: ${contentWidth}x$contentHeight")
+            return bitmap
+        }
+
+        // 2️⃣ Calcular escala manteniendo aspect ratio
+        val availableWidth = bitmapWidth - (padding * 2)
+        val availableHeight = bitmapHeight - (padding * 2)
+        val scaleX = availableWidth / contentWidth
+        val scaleY = availableHeight / contentHeight
+        val scale = minOf(scaleX, scaleY)  // Usar la menor para que quepa en ambos ejes
+
+        // 3️⃣ Configurar paint con stroke escalado proporcionalmente
         val paint = Paint().apply {
             color = android.graphics.Color.BLACK
-            strokeWidth = 5f
+            strokeWidth = 4f * scale  // Escalar grosor para mantener proporción visual
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
             isAntiAlias = true
         }
 
+        // 4️⃣ Dibujar cada path aplicando transformación: trasladar → escalar → posicionar
         paths.forEach { composePath ->
             val androidPath = composePath.asAndroidPath()
+            val matrix = Matrix().apply {
+                postTranslate(-minX, -minY)      // Mover al origen (0,0)
+                postScale(scale, scale)           // Escalar uniformemente
+                postTranslate(padding, padding)   // Mover a posición con margen
+            }
+            androidPath.transform(matrix)
             canvas.drawPath(androidPath, paint)
         }
 
-        android.util.Log.d("PdfGen", "✅ Bitmap generado")
-
+        android.util.Log.d("PdfGenerator", "✅ Bitmap generado: ${bitmapWidth}x${bitmapHeight}, scale=$scale, bounds=(${minX.toInt()},${minY.toInt()})-(${maxX.toInt()},${maxY.toInt()})")
         return bitmap
+    }
+
+    // ───────── HELPERS ─────────
+
+    private fun addSectionHeader(document: Document, title: String, font: com.itextpdf.kernel.font.PdfFont, color: DeviceRgb) {
+        Paragraph(title).apply {
+            setFont(font)
+            setFontSize(12f)
+            setFontColor(color)
+            setMarginTop(20f)
+            setMarginBottom(10f)
+        }.let { document.add(it) }
+    }
+
+    /**
+     * [DEBUG] Guarda el bitmap en cache para inspeccionar visualmente
+     * Usar solo en desarrollo: adb pull /data/data/com.asociacionciguena.app/cache/debug_signature.png
+     */
+    @Suppress("unused")
+    private fun saveBitmapDebug(context: Context, bitmap: Bitmap, fileName: String) {
+        try {
+            val file = File(context.cacheDir, "${fileName}_${System.currentTimeMillis()}.png")
+            FileOutputStream(file).use { stream ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            }
+            android.util.Log.d("PdfGenerator", "🔍 Bitmap debug guardado: ${file.absolutePath}")
+        } catch (e: Exception) {
+            android.util.Log.e("PdfGenerator", "Error guardando bitmap debug", e)
+        }
     }
 }

@@ -215,7 +215,7 @@ class CalendarExcursionDetailViewModel @Inject constructor(
         tutorPhone: String,
         tutorEmail: String,
         minorName: String?,
-        signaturePaths: List<Path>,
+        signaturePaths: List<androidx.compose.ui.graphics.Path>,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {

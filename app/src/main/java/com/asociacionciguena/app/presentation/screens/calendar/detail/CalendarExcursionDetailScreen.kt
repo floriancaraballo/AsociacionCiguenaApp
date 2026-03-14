@@ -619,33 +619,26 @@ private fun ExcursionDetailContent(
 
                 // SignatureBottomSheet
                 if (showSignatureSheet && currentUser != null) {
+                    // Dentro de CalendarExcursionDetailScreen, en la instancia de SignatureBottomSheet:
+
                     SignatureBottomSheet(
                         excursionTitle = excursion.title,
                         userName = currentUser?.displayName ?: "",
                         userEmail = currentUser?.email ?: "",
                         onDismiss = { showSignatureSheet = false },
-                        onSubmit = { tutorName, tutorDni, tutorPhone, minorName, signaturePaths ->
+                        onSubmit = { tName, tDni, tPhone, mName, sigPaths ->  // ← Parámetros posicionales
                             val excursionDate = formatDate(excursion.date)
-
                             viewModel.signAuthorization(
                                 excursionTitle = excursion.title,
                                 excursionDate = excursionDate,
-                                tutorName = tutorName,
-                                tutorDni = tutorDni,
-                                tutorPhone = tutorPhone,
+                                tutorName = tName,
+                                tutorDni = tDni,
+                                tutorPhone = tPhone,
                                 tutorEmail = currentUser?.email ?: "",
-                                minorName = minorName,
-                                signaturePaths = signaturePaths,
-                                onSuccess = {
-                                    showSignatureSheet = false  // ← Cerrar modal
-                                    showSuccessMessage = true
-                                    showErrorMessage = false
-                                },
-                                onError = { error ->
-                                    showSignatureSheet = false  // ← Cerrar modal también en error
-                                    errorText = "Error al firmar: $error"
-                                    showErrorMessage = true
-                                }
+                                minorName = mName,
+                                signaturePaths = sigPaths,  // ← Sin canvasWidth/Height
+                                onSuccess = { showSignatureSheet = false; showSuccessMessage = true },
+                                onError = { error -> showSignatureSheet = false; errorText = "Error: $error"; showErrorMessage = true }
                             )
                         }
                     )

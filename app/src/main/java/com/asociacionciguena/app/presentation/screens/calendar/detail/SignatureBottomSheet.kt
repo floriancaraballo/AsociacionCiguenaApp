@@ -12,8 +12,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.unit.dp
 import com.asociacionciguena.app.presentation.components.SignatureCanvas
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -22,40 +20,27 @@ fun SignatureBottomSheet(
     userName: String,
     userEmail: String,
     onDismiss: () -> Unit,
-    onSubmit: (
-        tutorName: String,
-        tutorDni: String,
-        tutorPhone: String,
-        minorName: String?,
-        signaturePaths: List<Path>
-    ) -> Unit
+    onSubmit: (String, String, String, String?, List<Path>) -> Unit  // ← 5 parámetros, SIN nombres
 ) {
     var tutorName by remember { mutableStateOf(userName) }
     var tutorDni by remember { mutableStateOf("") }
     var tutorPhone by remember { mutableStateOf("") }
     var minorName by remember { mutableStateOf("") }
     var signaturePaths by remember { mutableStateOf<List<Path>>(emptyList()) }
-
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
-    var isSubmitting by remember { mutableStateOf(false) }  // ← NUEVO
+    var isSubmitting by remember { mutableStateOf(false) }
 
-    val scrollState = rememberScrollState()  // ← NUEVO
-    val coroutineScope = rememberCoroutineScope()  // ← NUEVO
+    val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = true
-    )
-
-    // Prevenir que se cierre
-    LaunchedEffect(Unit) {
-        sheetState.expand()
-    }
+    LaunchedEffect(Unit) { sheetState.expand() }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,  // ← Permitir cerrar pero solo con dismiss explícito
+        onDismissRequest = onDismiss,
         sheetState = sheetState,
-        dragHandle = null  // ← Sin handle de arrastre
+        dragHandle = null
     ) {
         Column(
             modifier = Modifier
@@ -65,150 +50,58 @@ fun SignatureBottomSheet(
                 .verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header con botón cerrar
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Firmar Autorización",
-                    style = MaterialTheme.typography.headlineSmall
-                )
-
+                Text("Firmar Autorización", style = MaterialTheme.typography.headlineSmall)
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = "Cerrar")
                 }
             }
 
-            Text(
-                text = excursionTitle,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-
+            Text(excursionTitle, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             Divider()
 
-            // Error
+            // Error message
             if (showError) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                     Row(
                         modifier = Modifier.padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = errorMessage,
-                            modifier = Modifier.weight(1f),
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
+                        Text(errorMessage, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onErrorContainer)
                         IconButton(onClick = { showError = false }) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Cerrar",
-                                tint = MaterialTheme.colorScheme.onErrorContainer
-                            )
+                            Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = MaterialTheme.colorScheme.onErrorContainer)
                         }
                     }
                 }
             }
 
-            // Nombre del menor (siempre visible)
-            OutlinedTextField(
-                value = minorName,
-                onValueChange = { minorName = it },
-                label = { Text("Nombre completo del menor *") },
-                placeholder = { Text("Juan García López") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                enabled = !showError
-            )
-
+            // Campos del formulario
+            OutlinedTextField(value = minorName, onValueChange = { minorName = it }, label = { Text("Nombre del menor *") }, modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !isSubmitting)
+            Divider()
+            Text("Datos del Tutor Legal", style = MaterialTheme.typography.titleSmall)
+            OutlinedTextField(value = tutorName, onValueChange = { tutorName = it }, label = { Text("Nombre del tutor *") }, modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !isSubmitting)
+            OutlinedTextField(value = tutorDni, onValueChange = { if (it.length <= 9) tutorDni = it.uppercase() }, label = { Text("DNI/NIE *") }, placeholder = { Text("12345678A") }, modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !isSubmitting)
+            OutlinedTextField(value = tutorPhone, onValueChange = { if (it.all { c -> c.isDigit() || c == ' ' }) tutorPhone = it }, label = { Text("Teléfono *") }, modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !isSubmitting)
             Divider()
 
-            Text(
-                text = "Datos del Tutor Legal",
-                style = MaterialTheme.typography.titleSmall
-            )
+            // Firma
+            Text("Firma aquí *", style = MaterialTheme.typography.titleSmall)
+            Text("Dibuja tu firma en el recuadro", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-            // Campos del tutor
-            OutlinedTextField(
-                value = tutorName,
-                onValueChange = { tutorName = it },
-                label = { Text("Nombre completo del tutor *") },
-                placeholder = { Text("María López García") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            OutlinedTextField(
-                value = tutorDni,
-                onValueChange = {
-                    // Solo permitir letras y números, max 9 caracteres
-                    if (it.length <= 9) {
-                        tutorDni = it.uppercase()
-                    }
-                },
-                label = { Text("DNI/NIE del tutor *") },
-                placeholder = { Text("12345678A") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                supportingText = {
-                    Text("Formato: 12345678A")
-                }
-            )
-
-            OutlinedTextField(
-                value = tutorPhone,
-                onValueChange = {
-                    // Solo permitir números y espacios
-                    if (it.all { char -> char.isDigit() || char == ' ' }) {
-                        tutorPhone = it
-                    }
-                },
-                label = { Text("Teléfono del tutor *") },
-                placeholder = { Text("666 123 456 o 666123456") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                supportingText = {
-                    Text("9 dígitos con o sin espacios")
-                }
-            )
-
-            Divider()
-
-            // Canvas de firma
-            Text(
-                text = "Firma aquí *",
-                style = MaterialTheme.typography.titleSmall
-            )
-
-            Text(
-                text = "Dibuja tu firma con el dedo en el recuadro blanco",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            SignatureCanvas(
+            SignatureCanvas(  // ← SIN onCanvasSizeChange, SIN enabled
                 paths = signaturePaths,
-                modifier = Modifier.fillMaxWidth(),
-                onPathsChange = { paths ->
-                    signaturePaths = paths
-                }
+                onPathsChange = { signaturePaths = it },
+                modifier = Modifier.fillMaxWidth().height(200.dp)
             )
 
-            // Botón limpiar firma
-            if (signaturePaths.isNotEmpty()) {
-                OutlinedButton(
-                    onClick = {
-                        signaturePaths = emptyList()
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+            if (signaturePaths.isNotEmpty() && !isSubmitting) {
+                OutlinedButton(onClick = { signaturePaths = emptyList() }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Clear, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text("Limpiar firma")
@@ -218,101 +111,41 @@ fun SignatureBottomSheet(
             Divider()
 
             // Info legal
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                        Column {
-                            Text(
-                                text = "Al firmar aceptas:",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                            Text(
-                                text = "• La participación del menor en la excursión\n• Las condiciones de la actividad\n• Que la asociación no se hace responsable de accidentes",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                    }
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Al firmar aceptas:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Text("• Participación del menor\n• Condiciones de la actividad\n• Exención de responsabilidad", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
             }
 
-            // Botón guardar
+            // Botón enviar
             Button(
                 onClick = {
-                    // Validar
                     when {
-                        minorName.isBlank() -> {
-                            errorMessage = "El nombre del menor es obligatorio"
-                            showError = true
-                            coroutineScope.launch { scrollState.animateScrollTo(0) }
-                        }
-                        tutorName.isBlank() -> {
-                            errorMessage = "El nombre del tutor es obligatorio"
-                            showError = true
-                            coroutineScope.launch { scrollState.animateScrollTo(0) }
-                        }
-                        tutorDni.isBlank() -> {
-                            errorMessage = "El DNI/NIE es obligatorio"
-                            showError = true
-                            coroutineScope.launch { scrollState.animateScrollTo(0) }
-                        }
-                        !isValidDni(tutorDni) -> {
-                            errorMessage = "DNI/NIE inválido. Formato: 12345678A"
-                            showError = true
-                            coroutineScope.launch { scrollState.animateScrollTo(0) }
-                        }
-                        tutorPhone.isBlank() -> {
-                            errorMessage = "El teléfono es obligatorio"
-                            showError = true
-                            coroutineScope.launch { scrollState.animateScrollTo(0) }
-                        }
-                        !isValidPhone(tutorPhone) -> {
-                            errorMessage = "Teléfono inválido. Debe tener 9 dígitos"
-                            showError = true
-                            coroutineScope.launch { scrollState.animateScrollTo(0) }
-                        }
-                        signaturePaths.isEmpty() -> {
-                            errorMessage = "Debes firmar en el recuadro"
-                            showError = true
-                            coroutineScope.launch { scrollState.animateScrollTo(0) }
-                        }
+                        minorName.isBlank() -> { errorMessage = "Nombre del menor obligatorio"; showError = true; coroutineScope.launch { scrollState.animateScrollTo(0) } }
+                        tutorName.isBlank() -> { errorMessage = "Nombre del tutor obligatorio"; showError = true; coroutineScope.launch { scrollState.animateScrollTo(0) } }
+                        tutorDni.isBlank() || !isValidDni(tutorDni) -> { errorMessage = "DNI/NIE inválido (ej: 12345678A)"; showError = true; coroutineScope.launch { scrollState.animateScrollTo(0) } }
+                        tutorPhone.isBlank() || !isValidPhone(tutorPhone) -> { errorMessage = "Teléfono inválido (9 dígitos)"; showError = true; coroutineScope.launch { scrollState.animateScrollTo(0) } }
+                        signaturePaths.isEmpty() -> { errorMessage = "Debes firmar"; showError = true; coroutineScope.launch { scrollState.animateScrollTo(0) } }
                         else -> {
-                            // Todo OK - Mostrar loading
                             isSubmitting = true
                             showError = false
-
+                            // ← LLAMADA POSICIONAL (sin nombres de parámetro)
                             onSubmit(
                                 tutorName,
                                 tutorDni,
                                 tutorPhone,
-                                minorName,
+                                minorName.ifBlank { null },
                                 signaturePaths
                             )
                         }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !isSubmitting  // ← Deshabilitar mientras procesa
+                enabled = !isSubmitting
             ) {
                 if (isSubmitting) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
-                    )
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
                     Text("Firmando...")
                 } else {
@@ -321,59 +154,25 @@ fun SignatureBottomSheet(
                     Text("Firmar y Enviar")
                 }
             }
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
 
-/**
- * Validar DNI/NIE español
- */
+// Validadores
 private fun isValidDni(dni: String): Boolean {
-    // Formato: 8 números + 1 letra
-    val dniRegex = Regex("^[0-9]{8}[A-Z]$")
-    val nieRegex = Regex("^[XYZ][0-9]{7}[A-Z]$")
-
-    if (!dni.matches(dniRegex) && !dni.matches(nieRegex)) {
-        return false
+    if (!dni.matches(Regex("^[0-9]{8}[A-Z]$")) && !dni.matches(Regex("^[XYZ][0-9]{7}[A-Z]$"))) return false
+    val letters = "TRWAGMYFPDXBNJZSQVHLCKE"
+    return if (dni.matches(Regex("^[0-9]{8}[A-Z]$"))) {
+        val number = dni.substring(0, 8).toIntOrNull() ?: return false
+        dni[8] == letters[number % 23]
+    } else {
+        var number = dni.substring(1, 8).toIntOrNull() ?: return false
+        number += when (dni[0]) { 'X' -> 0; 'Y' -> 10000000; 'Z' -> 20000000; else -> return false }
+        dni[8] == letters[number % 23]
     }
-
-    // Validar letra del DNI
-    if (dni.matches(dniRegex)) {
-        val letters = "TRWAGMYFPDXBNJZSQVHLCKE"
-        val number = dni.substring(0, 8).toInt()
-        val letter = dni[8]
-        val expectedLetter = letters[number % 23]
-
-        return letter == expectedLetter
-    }
-
-    // Para NIE, convertir X=0, Y=1, Z=2 y validar igual
-    if (dni.matches(nieRegex)) {
-        val letters = "TRWAGMYFPDXBNJZSQVHLCKE"
-        var number = dni.substring(1, 8).toInt()
-
-        when (dni[0]) {
-            'X' -> number += 0
-            'Y' -> number += 10000000
-            'Z' -> number += 20000000
-        }
-
-        val letter = dni[8]
-        val expectedLetter = letters[number % 23]
-
-        return letter == expectedLetter
-    }
-
-    return true
 }
 
-/**
- * Validar teléfono español (9 dígitos)
- */
 private fun isValidPhone(phone: String): Boolean {
-    // Quitar espacios
-    val cleanPhone = phone.replace(" ", "")
-
-    // Debe tener exactamente 9 dígitos
-    return cleanPhone.matches(Regex("^[6-9][0-9]{8}$"))
+    return phone.replace(" ", "").matches(Regex("^[6-9][0-9]{8}$"))
 }

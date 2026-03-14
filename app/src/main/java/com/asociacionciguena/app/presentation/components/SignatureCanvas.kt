@@ -19,17 +19,12 @@ fun SignatureCanvas(
     modifier: Modifier = Modifier
 ) {
     var currentPath by remember { mutableStateOf(Path()) }
-    var currentOffset by remember { mutableStateOf<Offset?>(null) }  // ← NUEVO: forzar redibujado
+    var currentOffset by remember { mutableStateOf<Offset?>(null) }
 
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outline
-        )
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         Canvas(
             modifier = Modifier
@@ -38,17 +33,12 @@ fun SignatureCanvas(
                 .pointerInput(paths) {
                     detectDragGestures(
                         onDragStart = { offset ->
-                            currentPath = Path().apply {
-                                moveTo(offset.x, offset.y)
-                            }
-                            currentOffset = offset  // ← Actualizar para forzar redibujado
+                            currentPath = Path().apply { moveTo(offset.x, offset.y) }
+                            currentOffset = offset
                         },
                         onDrag = { change, _ ->
-                            currentPath.lineTo(
-                                change.position.x,
-                                change.position.y
-                            )
-                            currentOffset = change.position  // ← Forzar redibujado
+                            currentPath.lineTo(change.position.x, change.position.y)
+                            currentOffset = change.position
                         },
                         onDragEnd = {
                             onPathsChange(paths + currentPath)
@@ -58,7 +48,6 @@ fun SignatureCanvas(
                     )
                 }
         ) {
-            // Dibujar paths guardados
             paths.forEach { path ->
                 drawPath(
                     path = path,
@@ -66,9 +55,7 @@ fun SignatureCanvas(
                     style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                 )
             }
-
-            // Dibujar path actual (en tiempo real)
-            if (currentOffset != null) {  // ← Condición que activa redibujado
+            if (currentOffset != null) {
                 drawPath(
                     path = currentPath,
                     color = Color.Black,
