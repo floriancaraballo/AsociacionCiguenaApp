@@ -7,8 +7,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.asociacionciguena.app.presentation.components.SignatureCanvas
 import kotlinx.coroutines.launch
@@ -111,12 +113,44 @@ fun SignatureBottomSheet(
             Divider()
 
             // Info legal
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Al firmar aceptas:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                    Text("• Participación del menor\n• Condiciones de la actividad\n• Exención de responsabilidad", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer))
+                {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,  // ← Centrar horizontalmente
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Icono centrado arriba
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(28.dp)
+                        )
+
+                        // Título centrado
+                        Text(
+                            text = "Al firmar aceptas:",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            textAlign = TextAlign.Center,  // ← Texto centrado
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Lista de puntos centrada
+                        Text(
+                            text = "• La participación del menor en la excursión\n" +
+                                    "• Las condiciones de la actividad\n" +
+                                    "• Exención de responsabilidad por accidentes",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            textAlign = TextAlign.Center,  // ← Texto centrado
+                            modifier = Modifier.fillMaxWidth(0.9f)  // ← 90% del ancho para que no toque bordes
+                        )
+                    }
                 }
-            }
 
             // Botón enviar
             Button(

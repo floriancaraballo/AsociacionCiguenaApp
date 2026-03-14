@@ -29,6 +29,9 @@ class SignedAuthorizationRepository @Inject constructor(
     /**
      * Firmar autorización
      */
+    /**
+     * Firmar autorización
+     */
     suspend fun signAuthorization(
         excursionId: String,
         excursionTitle: String,
@@ -44,7 +47,7 @@ class SignedAuthorizationRepository @Inject constructor(
             val userId = auth.currentUser?.uid
                 ?: return Result.failure(Exception("Usuario no autenticado"))
 
-            android.util.Log.d("SignAuth", "📝 Firmando autorización - UserID: $userId")
+            android.util.Log.d("SignAuth", "🚀 Inicio firma - UserID: $userId, ExcursionID: $excursionId")
 
             // 1. Generar PDF
             val pdfFile = PdfGenerator.generateSignedAuthorization(
@@ -57,41 +60,43 @@ class SignedAuthorizationRepository @Inject constructor(
                 minorName = minorName,
                 signaturePaths = signaturePaths
             )
+            android.util.Log.d("SignAuth", "📄 PDF generado: ${pdfFile.length()} bytes")
 
-            android.util.Log.d("AUTH", "📄 PDF generado: ${pdfFile.path}, tamaño: ${pdfFile.length()} bytes")
-
-            // 2. Subir firma como imagen
-            val signatureBitmap = PdfGenerator.pathsToBitmap(
-                paths = signaturePaths,
-                bitmapWidth = 800,    // Tamaño final deseado
-                bitmapHeight = 300,
-                padding = 20f
-            )
+            // 2. Subir firma como imagen (ruta corregida: {userId} en lugar de {excursionId})
+            val signatureBitmap = PdfGenerator.pathsToBitmap(signaturePaths, 800, 300, 20f)
             val signatureFile = File(context.cacheDir, "signature_${System.currentTimeMillis()}.png")
             signatureFile.outputStream().use { out ->
                 signatureBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
             }
 
             val signatureId = UUID.randomUUID().toString()
+            // ✅ RUTA CORREGIDA: authorizations/signatures/{userId}/{fileName}
             val signatureRef = storage.reference
-                .child("authorizations/signatures/${excursionId}/${userId}_${signatureId}.png")
+                .child("authorizations")
+                .child("signatures")
+                .child(userId)  // ← CLAVE: userId, NO excursionId
+                .child("${excursionId}_${signatureId}.png")
 
+            android.util.Log.d("SignAuth", "📤 Subiendo firma a: ${signatureRef.path}")
             signatureRef.putFile(Uri.fromFile(signatureFile)).await()
             val signatureUrl = signatureRef.downloadUrl.await().toString()
-
-            // Limpiar archivo temporal
             signatureFile.delete()
+            android.util.Log.d("SignAuth", "✅ Firma subida: $signatureUrl")
 
-            // 3. Subir PDF
+            // 3. Subir PDF firmado (ruta corregida: {userId} en lugar de {excursionId})
             val pdfId = UUID.randomUUID().toString()
+            // ✅ RUTA CORREGIDA: authorizations/signed/{userId}/{fileName}
             val pdfRef = storage.reference
-                .child("authorizations/signed/${excursionId}/${userId}_${pdfId}.pdf")
+                .child("authorizations")
+                .child("signed")
+                .child(userId)  // ← CLAVE: userId, NO excursionId ⭐
+                .child("${excursionId}_${pdfId}.pdf")
 
-            pdfRef.putFile(Uri.fromFile(pdfFile)).await()
+            android.util.Log.d("SignAuth", "📤 Subiendo PDF a: ${pdfRef.path}")
+            pdfRef.putFile(Uri.fromFile(pdfFile)).await()  // ← Si falla aquí, es error 403 de reglas
             val pdfUrl = pdfRef.downloadUrl.await().toString()
-
-            // Limpiar archivo temporal
             pdfFile.delete()
+            android.util.Log.d("SignAuth", "✅ PDF subido: $pdfUrl")
 
             // 4. Guardar en Firestore
             val authorizationData = hashMapOf(
@@ -111,19 +116,13 @@ class SignedAuthorizationRepository @Inject constructor(
                 "status" to AuthorizationStatus.PENDING.name
             )
 
-            android.util.Log.d("SignAuth", "📤 Datos a guardar: $authorizationData")
-
-            val docRef = firestore.collection("signedAuthorizations")
-                .add(authorizationData)
-                .await()
-
-            android.util.Log.d("SignAuth", "✅ Documento creado: ${docRef.id}")
-
-            // 5. Enviar email (se hace vía Cloud Function trigger)
+            val docRef = firestore.collection("signedAuthorizations").add(authorizationData).await()
+            android.util.Log.d("SignAuth", "✅ Firestore doc creado: ${docRef.id}")
 
             Result.success(docRef.id)
 
         } catch (e: Exception) {
+            android.util.Log.e("SignAuth", "❌ ERROR CRÍTICO: ${e.message}", e)
             Result.failure(e)
         }
     }
