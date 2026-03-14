@@ -561,3 +561,195 @@ export const onUploadBatchCompleted = onDocumentUpdated(
     }
   }
 );
+
+// ==========================================
+// ENVÍO DE EMAIL AL FIRMAR AUTORIZACIÓN
+// ==========================================
+
+export const onAuthorizationSigned = onDocumentCreated(
+  {
+    document: "signedAuthorizations/{authorizationId}",
+    region: "europe-west1"
+  },
+  async (event) => {
+    try {
+      const snapshot = event.data;
+      if (!snapshot) return;
+      
+      const authData = snapshot.data();
+      const authorizationId = event.params.authorizationId;
+      
+      const excursionTitle = authData.excursionTitle as string;
+      const tutorName = authData.tutorName as string;
+      const tutorEmail = authData.tutorEmail as string;
+      const minorName = authData.minorName as string | undefined;
+      const signedPdfUrl = authData.signedPdfUrl as string;
+      
+      console.log(`📝 Nueva autorización firmada: ${authorizationId}`);
+      console.log(`👤 Tutor: ${tutorName} (${tutorEmail})`);
+      console.log(`📍 Excursión: ${excursionTitle}`);
+      
+      // Email al usuario
+      const userEmailSubject = `✅ Autorización firmada - ${excursionTitle}`;
+      const userEmailBody = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+            }
+            .container {
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            .header {
+              background: #1976D2;
+              color: white;
+              padding: 20px;
+              text-align: center;
+              border-radius: 10px 10px 0 0;
+            }
+            .content {
+              padding: 30px;
+              background: #f9f9f9;
+            }
+            .button {
+              display: inline-block;
+              padding: 15px 40px;
+              background: #1976D2;
+              color: white !important;
+              text-decoration: none;
+              border-radius: 5px;
+              margin: 20px 0;
+              font-weight: bold;
+            }
+            .footer {
+              padding: 20px;
+              text-align: center;
+              font-size: 12px;
+              color: #666;
+              background: #e9e9e9;
+              border-radius: 0 0 10px 10px;
+            }
+            .info-box {
+              background: #fff;
+              padding: 15px;
+              border-left: 4px solid #4CAF50;
+              margin: 20px 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Asociación Cigüeña</h1>
+            </div>
+            <div class="content">
+              <h2>¡Autorización Firmada Correctamente!</h2>
+              <p>Hola ${tutorName},</p>
+              <p>Has firmado correctamente la autorización para:</p>
+              <div class="info-box">
+                <strong>📍 Excursión:</strong> ${excursionTitle}<br>
+                ${minorName ? `<strong>👤 Participante:</strong> ${minorName}<br>` : ''}
+                <strong>✅ Estado:</strong> Firmada y registrada
+              </div>
+              <p>Adjunto encontrarás una copia de la autorización firmada en formato PDF.</p>
+              <center>
+                <a href="${signedPdfUrl}" class="button">Descargar Autorización</a>
+              </center>
+              <p style="margin-top: 30px; font-size: 14px; color: #666;">
+                Si no solicitaste esta autorización, contacta con nosotros inmediatamente.
+              </p>
+            </div>
+            <div class="footer">
+              <p><strong>Asociación Cigüeña</strong> 2026</p>
+              <p>Email automático, no respondas.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+      
+      // Enviar email al usuario
+      await admin.firestore().collection("mail").add({
+        to: tutorEmail,
+        message: {
+          subject: userEmailSubject,
+          html: userEmailBody,
+        },
+      });
+      
+      console.log(`✅ Email enviado a ${tutorEmail}`);
+      
+      // Email a la asociación (opcional - configura el email de la asociación)
+      const associationEmail = "asociacionciguena1993@gmail.com"; // ← CAMBIAR POR EMAIL REAL
+      
+      const adminEmailSubject = `📝 Nueva autorización firmada - ${excursionTitle}`;
+      const adminEmailBody = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #1976D2; color: white; padding: 20px; text-align: center; }
+            .content { padding: 30px; background: #f9f9f9; }
+            .info-box { background: #fff; padding: 15px; border-left: 4px solid #1976D2; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Nueva Autorización Recibida</h1>
+            </div>
+            <div class="content">
+              <h2>Detalles de la Autorización</h2>
+              <div class="info-box">
+                <strong>👤 Tutor:</strong> ${tutorName}<br>
+                <strong>📧 Email:</strong> ${tutorEmail}<br>
+                <strong>📞 Teléfono:</strong> ${authData.tutorPhone}<br>
+                <strong>🆔 DNI:</strong> ${authData.tutorDni}<br>
+                ${minorName ? `<strong>👶 Menor:</strong> ${minorName}<br>` : ''}
+                <strong>📍 Excursión:</strong> ${excursionTitle}<br>
+                <strong>📅 Firmado:</strong> ${new Date().toLocaleString('es-ES')}
+              </div>
+              <p><a href="${signedPdfUrl}">Descargar PDF firmado</a></p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+      
+      await admin.firestore().collection("mail").add({
+		  to: tutorEmail,
+		  message: {
+			subject: userEmailSubject,
+			html: userEmailBody,
+			attachments: [
+			  {
+				filename: `autorizacion_${excursionTitle.replace(/[^a-z0-9]/gi, '_')}.pdf`,
+				path: signedPdfUrl
+			  }
+			]
+		  },
+		});
+      
+      console.log(`✅ Email enviado a la asociación`);
+      
+      // Marcar email como enviado
+      await snapshot.ref.update({
+        emailSent: true,
+        emailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      
+    } catch (error) {
+      console.error("❌ Error enviando emails:", error);
+    }
+  }
+);

@@ -16,11 +16,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import kotlinx.datetime.*
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +35,7 @@ fun ExcursionFormScreen(
     val title by viewModel.title.collectAsState()
     val description by viewModel.description.collectAsState()
     val location by viewModel.location.collectAsState()
+    val price by viewModel.price.collectAsState()
     val imageUrl by viewModel.imageUrl.collectAsState()
     val imageUploadState by viewModel.imageUploadState.collectAsState()
     val date by viewModel.date.collectAsState()
@@ -109,6 +113,7 @@ fun ExcursionFormScreen(
                     title = title,
                     description = description,
                     location = location,
+                    price = price,  // ← NUEVO
                     imageUrl = imageUrl,
                     date = date,
                     authorizationPdfUrl = authorizationPdfUrl,
@@ -119,6 +124,7 @@ fun ExcursionFormScreen(
                     onTitleChange = viewModel::onTitleChange,
                     onDescriptionChange = viewModel::onDescriptionChange,
                     onLocationChange = viewModel::onLocationChange,
+                    onPriceChange = viewModel::onPriceChange,
                     onImageUrlChange = viewModel::onImageUrlChange,
                     onDatePickerClick = { showDatePicker = true },
                     onUploadImageClick = { imagePickerLauncher.launch("image/*") },  // ← NUEVO
@@ -194,6 +200,7 @@ private fun ExcursionFormContent(
     title: String,
     description: String,
     location: String,
+    price: String,  // ← AÑADIR
     imageUrl: String,
     date: LocalDateTime?,
     authorizationPdfUrl: String?,
@@ -204,6 +211,7 @@ private fun ExcursionFormContent(
     onTitleChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
     onLocationChange: (String) -> Unit,
+    onPriceChange: (String) -> Unit,  // ← NUEVO
     onImageUrlChange: (String) -> Unit,
     onDatePickerClick: () -> Unit,
     onUploadImageClick: () -> Unit,  // ← NUEVO
@@ -280,6 +288,26 @@ private fun ExcursionFormContent(
             modifier = Modifier.fillMaxWidth(),
             enabled = !isSaving,
             singleLine = true
+        )
+
+        // AÑADIR AQUÍ ↓
+        // Campo de precio
+        OutlinedTextField(
+            value = price,
+            onValueChange = onPriceChange,
+            label = { Text("Precio (opcional)") },
+            placeholder = { Text("0.00") },
+            leadingIcon = {
+                Text("€", style = MaterialTheme.typography.bodyLarge)
+            },
+            supportingText = {
+                Text("Déjalo vacío si la excursión es gratuita")
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Decimal
+            ),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedCard(

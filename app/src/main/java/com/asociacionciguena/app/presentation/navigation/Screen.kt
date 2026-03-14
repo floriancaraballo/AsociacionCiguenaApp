@@ -1,5 +1,7 @@
 package com.asociacionciguena.app.presentation.navigation
 
+import android.net.Uri
+
 sealed class Screen(val route: String) {
     object Splash : Screen("splash")
     object News : Screen("news")
@@ -41,5 +43,10 @@ sealed class Screen(val route: String) {
     object Onboarding : Screen("onboarding")
     object CalendarExcursionDetail : Screen("calendar_excursion_detail/{excursionId}") {
         fun createRoute(excursionId: String) = "calendar_excursion_detail/$excursionId"
+    }
+
+    object AuthorizationsList : Screen("authorizations/{excursionId}/{excursionTitle}") {
+        fun createRoute(excursionId: String, excursionTitle: String) =
+            "authorizations/$excursionId/${Uri.encode(excursionTitle)}"
     }
 }

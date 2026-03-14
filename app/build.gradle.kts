@@ -246,6 +246,8 @@ dependencies {
     implementation("id.zelory:compressor:3.0.1")
     implementation("com.google.firebase:firebase-functions-ktx")
 
+    // PDF Generation
+    implementation("com.itextpdf:itext7-core:7.2.5")
 
 }
 

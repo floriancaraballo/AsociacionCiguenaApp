@@ -46,6 +46,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
+import com.asociacionciguena.app.presentation.screens.admin.authorizations.AuthorizationsListScreen
+import android.net.Uri
 
 @Composable
 fun MainScreen(
@@ -214,7 +216,27 @@ fun MainScreen(
                             onNavigateBack = { navController.popBackStack() },
                             onNavigateToEditExcursion = { excursionId ->
                                 navController.navigate(Screen.ExcursionForm.createRoute(excursionId))
+                            },
+                            onNavigateToAuthorizations = { excursionId, excursionTitle ->
+                                navController.navigate(Screen.AuthorizationsList.createRoute(excursionId, excursionTitle))
                             }
+                        )
+                    }
+
+                    composable(
+                        route = Screen.AuthorizationsList.route,
+                        arguments = listOf(
+                            navArgument("excursionId") { type = NavType.StringType },
+                            navArgument("excursionTitle") { type = NavType.StringType }
+                        )
+                    ) { backStackEntry ->
+                        val excursionId = backStackEntry.arguments?.getString("excursionId") ?: return@composable
+                        val excursionTitle = backStackEntry.arguments?.getString("excursionTitle") ?: return@composable
+
+                        AuthorizationsListScreen(
+                            excursionId = excursionId,
+                            excursionTitle = Uri.decode(excursionTitle),
+                            onNavigateBack = { navController.navigateUp() }
                         )
                     }
 

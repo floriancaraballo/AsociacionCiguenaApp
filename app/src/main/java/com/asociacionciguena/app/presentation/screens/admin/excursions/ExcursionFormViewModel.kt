@@ -48,6 +48,9 @@ class ExcursionFormViewModel @Inject constructor(
     private val _location = MutableStateFlow("")
     val location: StateFlow<String> = _location.asStateFlow()
 
+    private val _price = MutableStateFlow("")
+    val price: StateFlow<String> = _price.asStateFlow()
+
     private val _imageUrl = MutableStateFlow("")
     val imageUrl: StateFlow<String> = _imageUrl.asStateFlow()
 
@@ -91,6 +94,7 @@ class ExcursionFormViewModel @Inject constructor(
                     _title.value = doc.getString("title") ?: ""
                     _description.value = doc.getString("description") ?: ""
                     _location.value = doc.getString("location") ?: ""
+                    _price.value = doc.getDouble("price")?.toString() ?: ""
                     _imageUrl.value = doc.getString("imageUrl") ?: ""
                     _authorizationPdfUrl.value = doc.getString("authorizationPdfUrl")  // ← NUEVO
 
@@ -120,6 +124,13 @@ class ExcursionFormViewModel @Inject constructor(
 
     fun onLocationChange(newLocation: String) {
         _location.value = newLocation
+    }
+
+    fun onPriceChange(newPrice: String) {
+        // Solo permitir números y un punto decimal
+        if (newPrice.isEmpty() || newPrice.matches(Regex("^\\d*\\.?\\d{0,2}$"))) {
+            _price.value = newPrice
+        }
     }
 
     fun onImageUrlChange(newUrl: String) {
@@ -230,14 +241,20 @@ class ExcursionFormViewModel @Inject constructor(
                     Timestamp(Date(instant.toEpochMilliseconds()))
                 } ?: Timestamp.now()
 
-                val excursionData = hashMapOf(
+                val excursionData = hashMapOf<String, Any?>(
                     "title" to _title.value,
                     "description" to _description.value,
                     "location" to _location.value,
                     "date" to timestamp,
                     "imageUrl" to _imageUrl.value.ifBlank { null },
-                    "authorizationPdfUrl" to _authorizationPdfUrl.value  // ← NUEVO
+                    "authorizationPdfUrl" to _authorizationPdfUrl.value
                 )
+
+// Solo añadir precio si tiene valor
+                val priceValue = _price.value.toDoubleOrNull()
+                if (priceValue != null && priceValue > 0) {
+                    excursionData["price"] = priceValue
+                }
 
                 if (isEditMode && excursionId != null) {
                     firestore.collection("excursions")

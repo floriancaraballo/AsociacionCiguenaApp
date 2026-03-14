@@ -20,13 +20,20 @@ import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import kotlinx.datetime.toJavaLocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.asociacionciguena.app.domain.model.PaymentStatus
+import androidx.compose.material.icons.filled.Payment
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Description
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarExcursionDetailScreen(
     viewModel: CalendarExcursionDetailViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
-    onNavigateToEditExcursion: (String) -> Unit
+    onNavigateToEditExcursion: (String) -> Unit,
+    onNavigateToAuthorizations: (String, String) -> Unit = { _, _ -> }
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -41,10 +48,20 @@ fun CalendarExcursionDetailScreen(
                     }
                 },
                 actions = {
-                    // Botón editar (solo para admins)
+                    // Botón autorizaciones y editar (solo para admins)
                     if (uiState is CalendarExcursionDetailUiState.Success) {
                         val state = uiState as CalendarExcursionDetailUiState.Success
                         if (state.isAdmin) {
+                            // Botón ver autorizaciones (solo si tiene PDF)
+                            if (!state.excursion.authorizationPdfUrl.isNullOrBlank()) {
+                                IconButton(onClick = {
+                                    onNavigateToAuthorizations(state.excursion.id, state.excursion.title)
+                                }) {
+                                    Icon(Icons.Default.Description, "Ver Autorizaciones")
+                                }
+                            }
+
+                            // Botón editar
                             IconButton(onClick = {
                                 onNavigateToEditExcursion(state.excursion.id)
                             }) {
@@ -70,6 +87,7 @@ fun CalendarExcursionDetailScreen(
             is CalendarExcursionDetailUiState.Success -> {
                 ExcursionDetailContent(
                     excursion = state.excursion,
+                    viewModel = viewModel,
                     onDownloadPdf = { url ->
                         try {
                             android.util.Log.d("PDF_DOWNLOAD", "Intentando descargar: $url")
@@ -134,6 +152,7 @@ fun CalendarExcursionDetailScreen(
 @Composable
 private fun ExcursionDetailContent(
     excursion: com.asociacionciguena.app.domain.model.Excursion,
+    viewModel: CalendarExcursionDetailViewModel,
     onDownloadPdf: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -269,19 +288,25 @@ private fun ExcursionDetailContent(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            // Botón descargar autorización
-            if (!excursion.authorizationPdfUrl.isNullOrBlank()) {
-                Divider(modifier = Modifier.padding(vertical = 8.dp))
+            // Sección de pago
+            excursion.price?.let { price ->
+                val currentUser by viewModel.currentUser.collectAsState()
+                val paymentStatus by viewModel.getPaymentStatus(currentUser?.id ?: "").collectAsState(initial = null)
 
-                Text(
-                    text = "Autorización",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                var showPaymentSheet by remember { mutableStateOf(false) }
+
+                Divider(modifier = Modifier.padding(vertical = 16.dp))
 
                 Card(
+                    modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                        containerColor = when(paymentStatus?.status) {
+                            PaymentStatus.PAID -> MaterialTheme.colorScheme.primaryContainer
+                            PaymentStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
+                            PaymentStatus.REJECTED -> MaterialTheme.colorScheme.errorContainer
+                            null -> MaterialTheme.colorScheme.surfaceVariant
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
                     )
                 ) {
                     Column(
@@ -289,33 +314,341 @@ private fun ExcursionDetailContent(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Precio",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = String.format("%.2f€", price),
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            // Estado del pago
+                            when(paymentStatus?.status) {
+                                PaymentStatus.PAID -> {
+                                    AssistChip(
+                                        onClick = {},
+                                        label = { Text("Pagado") },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.CheckCircle, contentDescription = null)
+                                        },
+                                        colors = AssistChipDefaults.assistChipColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            labelColor = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    )
+                                }
+                                PaymentStatus.PENDING -> {
+                                    AssistChip(
+                                        onClick = {},
+                                        label = { Text("Pendiente") },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Schedule, contentDescription = null)
+                                        }
+                                    )
+                                }
+                                PaymentStatus.REJECTED -> {
+                                    AssistChip(
+                                        onClick = {},
+                                        label = { Text("Rechazado") },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Cancel, contentDescription = null)
+                                        },
+                                        colors = AssistChipDefaults.assistChipColors(
+                                            containerColor = MaterialTheme.colorScheme.error,
+                                            labelColor = MaterialTheme.colorScheme.onError
+                                        )
+                                    )
+                                }
+                                null -> {}
+                            }
+                        }
+
+                        // Botón de pago
+                        when(paymentStatus?.status) {
+                            PaymentStatus.PAID -> {
+                                Text(
+                                    text = "✓ Pago confirmado",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                            PaymentStatus.PENDING -> {
+                                Text(
+                                    text = "Tu comprobante está pendiente de validación por un administrador",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                            PaymentStatus.REJECTED -> {
+                                Text(
+                                    text = "Tu comprobante fue rechazado. Contacta con un administrador.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Button(
+                                    onClick = { showPaymentSheet = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Payment, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Intentar de nuevo")
+                                }
+                            }
+                            null -> {
+                                // No ha pagado aún
+                                if (currentUser != null) {
+                                    Button(
+                                        onClick = { showPaymentSheet = true },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Payment, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Pagar excursión")
+                                    }
+                                } else {
+                                    Text(
+                                        text = "Inicia sesión para pagar",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // PaymentBottomSheet
+                if (showPaymentSheet && currentUser != null) {
+                    PaymentBottomSheet(
+                        excursionTitle = excursion.title,
+                        amount = price,
+                        userName = currentUser?.displayName ?: "Usuario",
+                        onDismiss = { showPaymentSheet = false },
+                        onUploadProof = { uri ->
+                            viewModel.uploadPaymentProof(
+                                excursionId = excursion.id,
+                                amount = price,
+                                photoUri = uri
+                            )
+                        }
+                    )
+                }
+            }
+
+            // Sección de firma de autorización
+            if (!excursion.authorizationPdfUrl.isNullOrBlank()) {
+                val currentUser by viewModel.currentUser.collectAsState()
+                val hasSigned by viewModel.hasUserSignedAuthorization(currentUser?.id ?: "").collectAsState(initial = false)
+
+                var showSignatureSheet by remember { mutableStateOf(false) }
+                var showSuccessMessage by remember { mutableStateOf(false) }
+                var showErrorMessage by remember { mutableStateOf(false) }
+                var errorText by remember { mutableStateOf("") }
+
+                Divider(modifier = Modifier.padding(vertical = 16.dp))
+
+                Text(
+                    text = "Autorización",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                // Mensaje de éxito
+                if (showSuccessMessage) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Info,
+                                Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                tint = MaterialTheme.colorScheme.primary
                             )
-                            Text(
-                                text = "Para participar en esta excursión necesitas descargar, firmar y entregar la autorización en nuestra sede.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-
-                        Button(
-                            onClick = { onDownloadPdf(excursion.authorizationPdfUrl) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = null
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Descargar Autorización PDF")
+                            Column {
+                                Text(
+                                    text = "¡Autorización firmada!",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = "Recibirás una copia por email",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
                         }
                     }
+
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(5000)
+                        showSuccessMessage = false
+                    }
+                }
+
+                // Mensaje de error
+                if (showErrorMessage) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = errorText,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { showErrorMessage = false }) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Cerrar",
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (hasSigned)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (hasSigned) {
+                            // Ya firmada
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Autorización Firmada",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        text = "Ya has firmado esta autorización",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                        } else {
+                            // Pendiente de firmar
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Para participar en esta excursión necesitas firmar la autorización digitalmente.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            if (currentUser != null) {
+                                Button(
+                                    onClick = { showSignatureSheet = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Draw, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Firmar Autorización")
+                                }
+                            } else {
+                                Text(
+                                    text = "Inicia sesión para firmar la autorización",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            // Botón de descarga PDF (solo si NO ha firmado)
+                            OutlinedButton(
+                                onClick = { onDownloadPdf(excursion.authorizationPdfUrl) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = null
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Descargar PDF de Referencia")
+                            }
+                        }
+                    }
+                }
+
+                // SignatureBottomSheet
+                if (showSignatureSheet && currentUser != null) {
+                    SignatureBottomSheet(
+                        excursionTitle = excursion.title,
+                        userName = currentUser?.displayName ?: "",
+                        userEmail = currentUser?.email ?: "",
+                        onDismiss = { showSignatureSheet = false },
+                        onSubmit = { tutorName, tutorDni, tutorPhone, minorName, signaturePaths ->
+                            val excursionDate = formatDate(excursion.date)
+
+                            viewModel.signAuthorization(
+                                excursionTitle = excursion.title,
+                                excursionDate = excursionDate,
+                                tutorName = tutorName,
+                                tutorDni = tutorDni,
+                                tutorPhone = tutorPhone,
+                                tutorEmail = currentUser?.email ?: "",
+                                minorName = minorName,
+                                signaturePaths = signaturePaths,
+                                onSuccess = {
+                                    showSignatureSheet = false  // ← Cerrar modal
+                                    showSuccessMessage = true
+                                    showErrorMessage = false
+                                },
+                                onError = { error ->
+                                    showSignatureSheet = false  // ← Cerrar modal también en error
+                                    errorText = "Error al firmar: $error"
+                                    showErrorMessage = true
+                                }
+                            )
+                        }
+                    )
                 }
             }
         }
