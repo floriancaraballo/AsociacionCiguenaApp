@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.domain.model.SignedAuthorization
@@ -177,30 +178,23 @@ private fun AuthorizationCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // ───────── FILA SUPERIOR: Nombre del menor + Estado ─────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // ✅ Nombre del menor DESTACADO (primero y más visible)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = authorization.tutorName,
-                        style = MaterialTheme.typography.titleMedium
+                        text = authorization.minorName?.takeIf { it.isNotBlank() } ?: "Menor sin nombre",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,  // ← Color destacado
+                        fontWeight = FontWeight.Bold  // ← Negrita para más énfasis
                     )
-                    Text(
-                        text = "DNI: ${authorization.tutorDni}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    if (authorization.minorName != null) {
-                        Text(
-                            text = "Menor: ${authorization.minorName}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
 
+                // Chip de estado (igual que antes)
                 AssistChip(
                     onClick = {},
                     label = {
@@ -224,11 +218,8 @@ private fun AuthorizationCard(
 
             Divider()
 
-            android.util.Log.d("AuthCard", "Estado: ${authorization.status}, ID: ${authorization.id}")
-
-            // Botones de acción (solo si está pendiente)
+            // ───────── BOTONES DE ACCIÓN (solo si está pendiente) ─────────
             if (authorization.status == AuthorizationStatus.PENDING) {
-                android.util.Log.d("AuthCard", "✅ Mostrando botones de aprobar/rechazar")
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(top = 8.dp)
@@ -259,6 +250,7 @@ private fun AuthorizationCard(
                 }
             }
 
+            // ───────── CONTACTO DEL TUTOR (al final, como pediste) ─────────
             Text(
                 text = "📧 ${authorization.tutorEmail} • 📞 ${authorization.tutorPhone}",
                 style = MaterialTheme.typography.bodySmall,

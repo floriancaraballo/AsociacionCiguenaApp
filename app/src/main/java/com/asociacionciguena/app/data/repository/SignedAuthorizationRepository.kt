@@ -17,6 +17,8 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.map
+import com.google.firebase.firestore.snapshots
 
 @Singleton
 class SignedAuthorizationRepository @Inject constructor(
@@ -189,42 +191,36 @@ class SignedAuthorizationRepository @Inject constructor(
     /**
      * Obtener todas las autorizaciones de una excursión (para admin)
      */
-    fun getExcursionAuthorizations(excursionId: String): Flow<List<SignedAuthorization>> = flow {
-        try {
-            val snapshot = firestore.collection("signedAuthorizations")
-                .whereEqualTo("excursionId", excursionId)
-                .orderBy("signedAt", Query.Direction.DESCENDING)
-                .get()
-                .await()
-
-            val authorizations = snapshot.documents.mapNotNull { doc ->
-                try {
-                    SignedAuthorization(
-                        id = doc.id,
-                        excursionId = doc.getString("excursionId") ?: "",
-                        excursionTitle = doc.getString("excursionTitle") ?: "",
-                        userId = doc.getString("userId") ?: "",
-                        tutorName = doc.getString("tutorName") ?: "",
-                        tutorDni = doc.getString("tutorDni") ?: "",
-                        tutorPhone = doc.getString("tutorPhone") ?: "",
-                        tutorEmail = doc.getString("tutorEmail") ?: "",
-                        minorName = doc.getString("minorName"),
-                        signatureImageUrl = doc.getString("signatureImageUrl") ?: "",
-                        signedPdfUrl = doc.getString("signedPdfUrl") ?: "",
-                        emailSent = doc.getBoolean("emailSent") ?: false,
-                        status = AuthorizationStatus.valueOf(
-                            doc.getString("status") ?: "PENDING"
+    fun getExcursionAuthorizations(excursionId: String): Flow<List<SignedAuthorization>> {
+        return firestore.collection("signedAuthorizations")
+            .whereEqualTo("excursionId", excursionId)
+            .orderBy("signedAt", Query.Direction.DESCENDING)
+            .snapshots()  // ← Listener en tiempo real (emite cada vez que cambian los datos)
+            .map { snapshot ->
+                snapshot.documents.mapNotNull { doc ->
+                    try {
+                        SignedAuthorization(
+                            id = doc.id,
+                            excursionId = doc.getString("excursionId") ?: "",
+                            excursionTitle = doc.getString("excursionTitle") ?: "",
+                            userId = doc.getString("userId") ?: "",
+                            tutorName = doc.getString("tutorName") ?: "",
+                            tutorDni = doc.getString("tutorDni") ?: "",
+                            tutorPhone = doc.getString("tutorPhone") ?: "",
+                            tutorEmail = doc.getString("tutorEmail") ?: "",
+                            minorName = doc.getString("minorName"),
+                            signatureImageUrl = doc.getString("signatureImageUrl") ?: "",
+                            signedPdfUrl = doc.getString("signedPdfUrl") ?: "",
+                            emailSent = doc.getBoolean("emailSent") ?: false,
+                            status = AuthorizationStatus.valueOf(
+                                doc.getString("status") ?: "PENDING"
+                            )
                         )
-                    )
-                } catch (e: Exception) {
-                    null
+                    } catch (e: Exception) {
+                        android.util.Log.e("AuthRepo", "❌ Error mapeando documento ${doc.id}: ${e.message}")
+                        null
+                    }
                 }
             }
-
-            emit(authorizations)
-        } catch (e: Exception) {
-            android.util.Log.e("AuthRepo", "❌ Error cargando autorizaciones: ${e.message}", e)
-            emit(emptyList())
-        }
     }
 }
