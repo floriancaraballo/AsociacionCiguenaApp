@@ -256,14 +256,18 @@ private fun ExcursionDetailContent(
             if (!excursion.authorizationPdfUrl.isNullOrBlank()) {
                 val currentUser by viewModel.currentUser.collectAsState()
                 val hasSigned by viewModel.hasUserSignedAuthorization(currentUser?.id ?: "").collectAsState(initial = false)
-                var showSuccessMessage by remember { mutableStateOf(false) }
-                var showErrorMessage by remember { mutableStateOf(false) }
-                var errorText by remember { mutableStateOf("") }
+                val showAuthSuccess by viewModel.showAuthSuccess.collectAsState()
 
                 Divider(modifier = Modifier.padding(vertical = 16.dp))
                 Text("Autorización", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
 
-                if (showSuccessMessage) {
+                // 🔍 DEBUG: Verificar estados
+                LaunchedEffect(hasSigned, showAuthSuccess) {
+                    android.util.Log.d("AuthDebug", "👀 UI: hasSigned=$hasSigned, showAuthSuccess=$showAuthSuccess")
+                }
+
+                if (showAuthSuccess) {
+                    android.util.Log.d("AuthDebug", "🎨 Renderizando Card temporal de éxito")  // ← Añadir esto
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), modifier = Modifier.fillMaxWidth()) {
                         Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
@@ -273,15 +277,9 @@ private fun ExcursionDetailContent(
                             }
                         }
                     }
-                    LaunchedEffect(Unit) { kotlinx.coroutines.delay(5000); showSuccessMessage = false }
-                }
-                if (showErrorMessage) {
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer), modifier = Modifier.fillMaxWidth()) {
-                        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(errorText, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
-                            IconButton(onClick = { showErrorMessage = false }) { Icon(Icons.Default.Close, "Cerrar", tint = MaterialTheme.colorScheme.onErrorContainer) }
-                        }
-                    }
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(5000)
+                        viewModel.dismissAuthSuccess() }
                 }
 
                 Card(colors = CardDefaults.cardColors(containerColor = if (hasSigned) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {

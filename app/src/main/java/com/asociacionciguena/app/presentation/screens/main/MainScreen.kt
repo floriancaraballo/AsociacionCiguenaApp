@@ -48,6 +48,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import com.asociacionciguena.app.presentation.screens.admin.authorizations.AuthorizationsListScreen
 import android.net.Uri
+import com.asociacionciguena.app.presentation.screens.calendar.detail.CalendarExcursionDetailViewModel
 import com.asociacionciguena.app.presentation.screens.calendar.detail.SignatureScreen
 
 @Composable
@@ -235,8 +236,15 @@ fun MainScreen(
                         val excursionId = backStackEntry.arguments?.getString("excursionId")
                             ?: return@composable  // Si no hay ID, salir
 
+                        val parentEntry = remember(backStackEntry) {
+                            navController.getBackStackEntry(Screen.CalendarExcursionDetail.route)
+                        }
+
+                        val viewModel: CalendarExcursionDetailViewModel = hiltViewModel(parentEntry)
+
                         SignatureScreen(
                             excursionId = excursionId,
+                            viewModel = viewModel,
                             onNavigateBack = { navController.popBackStack() }  // ← Este navController es el de MainScreen
                         )
                     }

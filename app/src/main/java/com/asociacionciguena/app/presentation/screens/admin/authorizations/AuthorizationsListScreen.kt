@@ -26,8 +26,18 @@ fun AuthorizationsListScreen(
     viewModel: AuthorizationsListViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit
 ) {
+    LaunchedEffect(excursionId) {
+        android.util.Log.d("AuthListDebug", "🚀 Screen iniciado - excursionId: $excursionId")
+    }
     val authorizations by viewModel.getAuthorizations(excursionId).collectAsState(initial = emptyList())
     val context = LocalContext.current
+
+    LaunchedEffect(authorizations) {
+        android.util.Log.d("AuthListDebug", "📋 Autorizaciones cargadas: ${authorizations.size}")
+        authorizations.forEach { auth ->
+            android.util.Log.d("AuthListDebug", "   • ${auth.tutorName} - Status: ${auth.status} - ID: ${auth.id}")
+        }
+    }
 
     Scaffold(
         topBar = {

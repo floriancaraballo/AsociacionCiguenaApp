@@ -44,6 +44,14 @@ class CalendarExcursionDetailViewModel @Inject constructor(
     )
     val uiState: StateFlow<CalendarExcursionDetailUiState> = _uiState.asStateFlow()
 
+    // ───────── NUEVO: Estado para mensaje de éxito de autorización ─────────
+    private val _showAuthSuccess = MutableStateFlow(false)
+    val showAuthSuccess: StateFlow<Boolean> = _showAuthSuccess.asStateFlow()
+
+    fun dismissAuthSuccess() {
+        _showAuthSuccess.value = false
+    }
+
     init {
         loadExcursionDetail()
     }
@@ -234,6 +242,10 @@ class CalendarExcursionDetailViewModel @Inject constructor(
                 )
 
                 if (result.isSuccess) {
+                    android.util.Log.d("AuthDebug", "✅ FIRMA ÉXITO - Activando showAuthSuccess")
+                    // ✅ Activar mensaje de éxito
+                    _showAuthSuccess.value = true
+
                     android.util.Log.d("SignAuthorization", "✅ Autorización firmada correctamente")
                     onSuccess()
                 } else {

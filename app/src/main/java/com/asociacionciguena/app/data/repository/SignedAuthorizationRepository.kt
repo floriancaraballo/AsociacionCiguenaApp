@@ -223,6 +223,7 @@ class SignedAuthorizationRepository @Inject constructor(
 
             emit(authorizations)
         } catch (e: Exception) {
+            android.util.Log.e("AuthRepo", "❌ Error cargando autorizaciones: ${e.message}", e)
             emit(emptyList())
         }
     }

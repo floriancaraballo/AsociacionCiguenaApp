@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.presentation.components.SignatureCanvas
 import kotlinx.coroutines.launch
 import com.asociacionciguena.app.util.formatDate
@@ -19,7 +18,7 @@ import com.asociacionciguena.app.util.formatDate
 fun SignatureScreen(
     excursionId: String,  // ← CAMBIO: Recibir ID en lugar de título
     onNavigateBack: () -> Unit,
-    viewModel: CalendarExcursionDetailViewModel = hiltViewModel()
+    viewModel: CalendarExcursionDetailViewModel
 ) {
     // Obtener estado desde el ViewModel
     val uiState by viewModel.uiState.collectAsState()
