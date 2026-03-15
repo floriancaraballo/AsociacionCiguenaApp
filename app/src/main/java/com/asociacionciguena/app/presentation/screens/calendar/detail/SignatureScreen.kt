@@ -26,7 +26,7 @@ fun SignatureScreen(
     val currentUser by viewModel.currentUser.collectAsState()
 
     // Estados del formulario
-    var tutorName by remember { mutableStateOf(currentUser?.displayName ?: "") }
+    var tutorName by remember { mutableStateOf("") }
     var tutorDni by remember { mutableStateOf("") }
     var tutorPhone by remember { mutableStateOf("") }
     var minorName by remember { mutableStateOf("") }
@@ -34,6 +34,18 @@ fun SignatureScreen(
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     var isSubmitting by remember { mutableStateOf(false) }
+
+    // ✅ CORREGIDO: Actualizar tutorName cuando currentUser esté disponible
+    LaunchedEffect(currentUser) {
+        currentUser?.displayName?.let { name ->
+            if (tutorName.isBlank()) {  // Solo pre-rellenar si el usuario no ha escrito nada
+                tutorName = name
+            }
+        }
+        currentUser?.email?.let { email ->
+            // Opcional: también pre-rellenar email si lo necesitas en el futuro
+        }
+    }
 
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberLazyListState()
