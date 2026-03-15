@@ -48,6 +48,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import com.asociacionciguena.app.presentation.screens.admin.authorizations.AuthorizationsListScreen
 import android.net.Uri
+import com.asociacionciguena.app.presentation.screens.calendar.detail.SignatureScreen
 
 @Composable
 fun MainScreen(
@@ -213,6 +214,7 @@ fun MainScreen(
                         )
                     ) {
                         CalendarExcursionDetailScreen(
+                            navController = navController,
                             onNavigateBack = { navController.popBackStack() },
                             onNavigateToEditExcursion = { excursionId ->
                                 navController.navigate(Screen.ExcursionForm.createRoute(excursionId))
@@ -220,6 +222,22 @@ fun MainScreen(
                             onNavigateToAuthorizations = { excursionId, excursionTitle ->
                                 navController.navigate(Screen.AuthorizationsList.createRoute(excursionId, excursionTitle))
                             }
+                        )
+                    }
+
+                    // ───────── NUEVA RUTA: Firma de autorización ─────────
+                    composable(
+                        route = Screen.Signature.route,  // "signature/{excursionId}"
+                        arguments = listOf(
+                            navArgument("excursionId") { type = NavType.StringType }
+                        )
+                    ) { backStackEntry ->
+                        val excursionId = backStackEntry.arguments?.getString("excursionId")
+                            ?: return@composable  // Si no hay ID, salir
+
+                        SignatureScreen(
+                            excursionId = excursionId,
+                            onNavigateBack = { navController.popBackStack() }  // ← Este navController es el de MainScreen
                         )
                     }
 

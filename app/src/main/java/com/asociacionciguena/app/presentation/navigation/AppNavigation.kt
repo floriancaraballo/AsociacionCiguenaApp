@@ -8,6 +8,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.asociacionciguena.app.presentation.screens.calendar.detail.SignatureScreen
 import com.asociacionciguena.app.presentation.screens.main.MainScreen
 import com.asociacionciguena.app.presentation.screens.news.NewsDetailScreen
 import com.asociacionciguena.app.presentation.screens.splash.SplashScreen

@@ -1,6 +1,5 @@
 package com.asociacionciguena.app.presentation.screens.gallery.detail
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -22,7 +21,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.domain.model.Photo
 import com.asociacionciguena.app.presentation.components.ErrorMessage
-import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Snackbar

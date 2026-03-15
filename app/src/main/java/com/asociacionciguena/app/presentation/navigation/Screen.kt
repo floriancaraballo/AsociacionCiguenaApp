@@ -44,9 +44,13 @@ sealed class Screen(val route: String) {
     object CalendarExcursionDetail : Screen("calendar_excursion_detail/{excursionId}") {
         fun createRoute(excursionId: String) = "calendar_excursion_detail/$excursionId"
     }
-
+    // ───────── NUEVA RUTA: Firma de autorización ─────────
+    object Signature : Screen("signature/{excursionId}") {
+        fun createRoute(excursionId: String) = "signature/$excursionId"
+    }
     object AuthorizationsList : Screen("authorizations/{excursionId}/{excursionTitle}") {
         fun createRoute(excursionId: String, excursionTitle: String) =
             "authorizations/$excursionId/${Uri.encode(excursionTitle)}"
     }
+
 }
