@@ -191,6 +191,7 @@ fun MainScreen(
                             }
                         )
                     }
+
                     // Noticias
                     composable(Screen.News.route) {
                         NewsScreen(

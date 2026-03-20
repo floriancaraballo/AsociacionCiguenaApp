@@ -10,9 +10,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import com.google.accompanist.swiperefresh.SwipeRefresh
-import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
+import androidx.hilt.navigation.compose.hiltViewModel// ✅ Añadir estos:
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.ui.text.style.TextAlign
 
 @Composable
@@ -27,6 +28,7 @@ fun AdminDashboardScreen(
     val stats by viewModel.stats.collectAsState()
     val isLoadingStats by viewModel.isLoadingStats.collectAsState()
 
+    @OptIn(ExperimentalMaterial3Api::class)  // ← AÑADIR ESTA ANOTACIÓN
     Scaffold(
         topBar = {
             TopAppBar(
@@ -48,9 +50,11 @@ fun AdminDashboardScreen(
             )
         }
     ) { paddingValues ->
-        SwipeRefresh(
-            state = rememberSwipeRefreshState(isLoadingStats),
+        // ✅ PullToRefreshBox nativo de Material3
+        PullToRefreshBox(
+            isRefreshing = isLoadingStats,
             onRefresh = { viewModel.loadStats() },
+            state = rememberPullToRefreshState(),
             modifier = Modifier.padding(paddingValues)
         ) {
             Column(
@@ -69,7 +73,7 @@ fun AdminDashboardScreen(
                     modifier = Modifier.padding(top = 8.dp)
                 )
 
-                // Grid 2x2 como antes
+                // Grid 2x2
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -103,9 +107,9 @@ fun AdminDashboardScreen(
                     AdminOptionCard(
                         title = "Gestionar Usuarios",
                         icon = Icons.Default.People,
-                        onClick = onNavigateToUsers,  // ← Nueva función
+                        onClick = onNavigateToUsers,
                         modifier = Modifier.weight(1f),
-                        enabled = true  // ← Habilitada
+                        enabled = true
                     )
                 }
             }

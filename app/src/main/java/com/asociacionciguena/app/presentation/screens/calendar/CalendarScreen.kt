@@ -1,18 +1,14 @@
 package com.asociacionciguena.app.presentation.screens.calendar
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.pullrefresh.PullRefreshIndicator
-import androidx.compose.material.pullrefresh.pullRefresh
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,17 +18,14 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.presentation.components.EmptyState
 import com.asociacionciguena.app.presentation.components.ErrorMessage
-import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import com.asociacionciguena.app.presentation.screens.calendar.components.ExcursionCard
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import com.asociacionciguena.app.presentation.screens.calendar.components.ExcursionCardSkeleton
 
-@OptIn(ExperimentalMaterialApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(
     viewModel: CalendarViewModel = hiltViewModel(),
@@ -252,7 +245,7 @@ private fun YearSelector(
     }
 }
 
-@OptIn(ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CalendarSuccessContent(
     excursions: List<com.asociacionciguena.app.domain.model.Excursion>,
@@ -261,15 +254,16 @@ private fun CalendarSuccessContent(
     onExcursionClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val pullRefreshState = rememberPullRefreshState(
-        refreshing = isRefreshing,
-        onRefresh = onRefresh
-    )
 
-    Box(
+    // ✅ Material3: Estado simple, sin parámetros en el remember
+    val pullRefreshState = rememberPullToRefreshState()
+
+    // ✅ Material3: PullToRefreshBox incluye el indicador automáticamente
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,  // ← CORREGIDO: era 'refreshing'
+        onRefresh = onRefresh,
+        state = pullRefreshState,     // ← Usar la misma instancia
         modifier = modifier
-            .fillMaxSize()
-            .pullRefresh(pullRefreshState)
     ) {
         if (excursions.isEmpty()) {
             EmptyState(
@@ -293,12 +287,6 @@ private fun CalendarSuccessContent(
                 }
             }
         }
-
-        PullRefreshIndicator(
-            refreshing = isRefreshing,
-            state = pullRefreshState,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
     }
 }
 /**

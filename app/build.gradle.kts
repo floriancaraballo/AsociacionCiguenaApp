@@ -8,10 +8,9 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
-    //id("com.android.application")
-    //id("com.google.gms.google-services")
 }
-// Cargar keystore propertiese
+
+// Cargar keystore properties
 val keystorePropertiesFile: File = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
 
@@ -29,13 +28,10 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
         vectorDrawables {
             useSupportLibrary = true
         }
-
     }
 
     lint {
@@ -48,41 +44,34 @@ android {
             if (keystorePropertiesFile.exists()) {
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = rootProject.file(keystoreProperties["storeFile"] as String)  // ← Cambio
+                storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
                 storePassword = keystoreProperties["storePassword"] as String
             }
         }
     }
 
+    // ✅ UN SOLO BLOQUE buildTypes (corregido)
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
+            isMinifyEnabled = false  // ← Desactivado temporalmente para debug de AbstractTextEvent
+            isShrinkResources = false  // ← Desactivado junto con minify
+            /*proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-        }
-    }
+             */
 
-    buildTypes {
-        release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-
-            // Firma de la aplicación (configurar más adelante)
             signingConfig = signingConfigs.getByName("debug")
         }
 
         debug {
             isDebuggable = true
-            //applicationIdSuffix = ".debug"
-            //versionNameSuffix = "-debug"
+            /*
+            signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".debug"  // ← Opcional: para distinguir APKs
+
+             */
         }
     }
 
@@ -93,8 +82,6 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
-
-        // Opciones del compilador de Kotlin
         freeCompilerArgs += listOf(
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
             "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi"
@@ -122,42 +109,38 @@ dependencies {
     implementation(libs.androidx.activity.compose)
 
     // ========================================
-    // JETPACK COMPOSE (UI)
+    // JETPACK COMPOSE (UI) - SIN VERSIONES FIJAS (el BOM las gestiona)
     // ========================================
     implementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
-
-    // ViewModel en Compose
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
-
-    // ========================================
-    // NAVEGACIÓN
-    // ========================================
     implementation(libs.androidx.navigation.compose)
 
     // ========================================
-    // HILT (INYECCIÓN DE DEPENDENCIAS)
+    // HILT
     // ========================================
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
 
     // ========================================
-    // FIREBASE
+    // FIREBASE - SIN VERSIONES FIJAS (el BOM las gestiona)
     // ========================================
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth.ktx)
     implementation(libs.firebase.firestore.ktx)
     implementation(libs.firebase.storage.ktx)
     implementation(libs.firebase.analytics.ktx)
-
-    //implementation(platform("com.google.firebase:firebase-bom:34.8.0"))
-    //implementation("com.google.firebase:firebase-analytics")
+    // ✅ Dependencia directa con versión:
+    implementation("com.google.firebase:firebase-functions-ktx:21.0.0")
+    implementation("com.google.firebase:firebase-messaging-ktx:23.4.1")
 
     // ========================================
     // NETWORKING & IMAGES
@@ -175,32 +158,31 @@ dependencies {
     implementation(libs.gson)
 
     // ========================================
-    // DATASTORE (ALMACENAMIENTO LOCAL)
+    // DATASTORE & COROUTINES
     // ========================================
     implementation(libs.androidx.datastore.preferences)
-
-    // ========================================
-    // COROUTINES (PROGRAMACIÓN ASÍNCRONA)
-    // ========================================
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
 
     // ========================================
-    // ACCOMPANIST (UTILIDADES PARA COMPOSE)
+    // ACCOMPANIST
     // ========================================
     implementation(libs.accompanist.permissions)
     implementation(libs.accompanist.systemuicontroller)
+    // ✅ Eliminado: accompanist-swiperefresh (usamos PullToRefreshBox nativo)
 
     // ========================================
-    // SPLASH SCREEN API
+    // SPLASH & UTILS
     // ========================================
     implementation(libs.androidx.core.splashscreen)
-
-    // ========================================
-    // FECHA Y HORA
-    // ========================================
     implementation(libs.kotlinx.datetime)
+    implementation("id.zelory:compressor:3.0.1")
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 
+    // ========================================
+    // PDF Generation (para la app, no para Cloud Functions)
+    // ========================================
+    implementation("com.itextpdf:itext7-core:7.2.5")  // ← Comentado si no lo usas en Android
 
     // ========================================
     // TESTING
@@ -211,16 +193,12 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
 
-    // Testing para Hilt
     testImplementation(libs.hilt.android.testing)
     kspTest(libs.hilt.android.compiler)
     androidTestImplementation(libs.hilt.android.testing)
     kspAndroidTest(libs.hilt.android.compiler)
 
-    // Testing para Coroutines
     testImplementation(libs.kotlinx.coroutines.test)
-
-    // MockK para mocking
     testImplementation(libs.mockk)
     androidTestImplementation(libs.mockk.android)
 
@@ -229,30 +207,4 @@ dependencies {
     // ========================================
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-
-    implementation("androidx.compose.material:material:1.7.6")
-
-    // Firebase Storage
-    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
-    implementation("com.google.firebase:firebase-storage-ktx")
-    // Accompanist Permissions - AÑADIR
-    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
-    implementation("com.google.accompanist:accompanist-swiperefresh:0.32.0")
-    // Firebase Cloud Messaging
-    implementation("com.google.firebase:firebase-messaging-ktx:23.4.1")
-
-    // Para notificaciones locales (opcional)
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
-    implementation("id.zelory:compressor:3.0.1")
-    implementation("com.google.firebase:firebase-functions-ktx")
-
-    // PDF Generation
-    implementation("com.itextpdf:itext7-core:7.2.5")
-
-    // Para convertir snapshot listeners en Flow
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
-
-
-
 }
-

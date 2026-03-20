@@ -68,6 +68,7 @@ class NewsViewModel @Inject constructor(
      */
     fun refresh() {
         viewModelScope.launch {
+            android.util.Log.d("NewsVM", "🔄 refresh() iniciado")
             // Marcar como refrescando
             val currentState = _uiState.value
             if (currentState is NewsUiState.Success) {
@@ -76,8 +77,10 @@ class NewsViewModel @Inject constructor(
 
             // Cargar noticias nuevamente
             getNewsUseCase().collect { result ->
+                android.util.Log.d("NewsVM", "📩 Resultado: ${result::class.simpleName}")
                 _uiState.value = when (result) {
                     is Result.Success -> {
+                        android.util.Log.d("NewsVM", "✅ Success: ${result.data.size} noticias")
                         _allNews.value = result.data  // ← AÑADIR
                         filterNews(_searchQuery.value)  // ← AÑADIR
                         NewsUiState.Success(
@@ -87,10 +90,12 @@ class NewsViewModel @Inject constructor(
                     }
 
                     is Result.Error -> {
+                        android.util.Log.e("NewsVM", "❌ Error: ${result.message}")
                         NewsUiState.Error(message = result.message)
                     }
 
                     is Result.Loading -> {
+                        android.util.Log.d("NewsVM", "⏳ Loading...")
                         if (currentState is NewsUiState.Success) {
                             currentState.copy(isRefreshing = true)
                         } else {

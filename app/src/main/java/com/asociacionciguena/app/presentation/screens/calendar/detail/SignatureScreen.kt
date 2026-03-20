@@ -11,48 +11,94 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.presentation.components.SignatureCanvas
 import kotlinx.coroutines.launch
-import com.asociacionciguena.app.util.formatDate
+import kotlinx.datetime.toJavaLocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+// Modelo para cada menor en autorización múltiple
+data class MinorAuth(
+    val minorName: String = "",
+    val signaturePaths: List<Path> = emptyList(),
+    val tutorName: String = "",
+    val tutorDni: String = "",
+    val tutorPhone: String = ""
+)
+
 @Composable
 fun SignatureScreen(
-    excursionId: String,  // ← CAMBIO: Recibir ID en lugar de título
-    onNavigateBack: () -> Unit,
-    viewModel: CalendarExcursionDetailViewModel
+    excursionId: String,
+    viewModel: CalendarExcursionDetailViewModel = hiltViewModel(),
+    onNavigateBack: () -> Unit
 ) {
-    // Obtener estado desde el ViewModel
     val uiState by viewModel.uiState.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
 
     // Estados del formulario
-    var tutorName by remember { mutableStateOf("") }
-    var tutorDni by remember { mutableStateOf("") }
-    var tutorPhone by remember { mutableStateOf("") }
-    var minorName by remember { mutableStateOf("") }
-    var signaturePaths by remember { mutableStateOf<List<Path>>(emptyList()) }
+    var isMultiAuth by remember { mutableStateOf(false) }
+    var minors by remember { mutableStateOf(listOf(MinorAuth())) }
+    var currentMinorIndex by remember { mutableStateOf(0) }
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     var isSubmitting by remember { mutableStateOf(false) }
 
-    // ✅ CORREGIDO: Actualizar tutorName cuando currentUser esté disponible
-    LaunchedEffect(currentUser) {
-        currentUser?.displayName?.let { name ->
-            if (tutorName.isBlank()) {  // Solo pre-rellenar si el usuario no ha escrito nada
-                tutorName = name
-            }
-        }
-        currentUser?.email?.let { email ->
-            // Opcional: también pre-rellenar email si lo necesitas en el futuro
-        }
-    }
-
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberLazyListState()
 
-    // Obtener datos de la excursión (si ya cargaron)
+    // Datos de la excursión
     val excursion = (uiState as? CalendarExcursionDetailUiState.Success)?.excursion
     val excursionTitle = excursion?.title ?: "Cargando..."
     val excursionDate = excursion?.date?.let { formatDate(it) } ?: ""
+
+    // Pre-rellenar datos del tutor cuando se cargue el usuario
+    LaunchedEffect(currentUser) {
+        currentUser?.let { user ->
+            minors = minors.map { minor ->
+                minor.copy(
+                    tutorName = user.displayName ?: "",
+                    tutorPhone = ""
+                )
+            }
+        }
+    }
+
+    // ✅ FUNCIÓN: Actualizar tutor para TODOS los menores (campos compartidos)
+    fun updateTutorForAll(fieldUpdater: (MinorAuth) -> MinorAuth) {
+        minors = minors.map { minor -> fieldUpdater(minor) }
+    }
+
+    // ✅ FUNCIÓN: Actualizar solo el menor actual (campos únicos)
+    fun updateCurrentMinor(fieldUpdater: (MinorAuth) -> MinorAuth) {
+        minors = minors.mapIndexed { index, minor ->
+            if (index == currentMinorIndex) fieldUpdater(minor) else minor
+        }
+    }
+
+    // ✅ FUNCIÓN: Validar un menor específico
+    // ✅ FUNCIÓN: Validar un menor específico CON LOGS DETALLADOS
+    fun validateMinor(minor: MinorAuth, minorLabel: String = "Participante"): Boolean {
+        val checks = listOf(
+            "minorName" to minor.minorName.isNotBlank(),
+            "tutorName" to minor.tutorName.isNotBlank(),
+            "tutorDni" to (minor.tutorDni.isNotBlank() && isValidDni(minor.tutorDni)),
+            "tutorPhone" to (minor.tutorPhone.isNotBlank() && isValidPhone(minor.tutorPhone)),
+            "signaturePaths" to minor.signaturePaths.isNotEmpty()
+        )
+
+        val allValid = checks.all { it.second }
+
+        if (!allValid) {
+            val failed = checks.filter { !it.second }.map { it.first }.joinToString(", ")
+            android.util.Log.d("AuthValidate", "❌ '$minorLabel' falló en: [$failed]")
+            checks.forEach { (field, valid) ->
+                android.util.Log.d("AuthValidate", "   • $field: ${if (valid) "✅" else "❌"}")
+            }
+        }
+
+        return allValid
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -87,6 +133,89 @@ fun SignatureScreen(
             Divider()
         }
 
+        // ───────── TOGGLE MULTI-AUTORIZACIÓN (hasta 3 menores) ─────────
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Autorización múltiple hermanos",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            "Firma hasta 3 autorizaciones a la vez",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                    Switch(
+                        checked = isMultiAuth,
+                        onCheckedChange = {
+                            isMultiAuth = it
+                            if (it && minors.size == 1) {
+                                // Al activar: crear 3 menores total (el primero + 2 más)
+                                val firstTutor = minors.firstOrNull()
+                                minors = listOf(
+                                    minors.first(),
+                                    MinorAuth(tutorName = firstTutor?.tutorName ?: "", tutorPhone = firstTutor?.tutorPhone ?: ""),
+                                    MinorAuth(tutorName = firstTutor?.tutorName ?: "", tutorPhone = firstTutor?.tutorPhone ?: "")
+                                )
+                            } else if (!it && minors.size > 1) {
+                                // Al desactivar: mantener solo el primero
+                                minors = listOf(minors.first())
+                                currentMinorIndex = 0
+                            }
+                        }
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        // ───────── INDICADOR DE PROGRESO (solo multi-auth) ─────────
+        if (isMultiAuth) {
+            item {
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Autorización ${currentMinorIndex + 1} de ${minors.size}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconButton(
+                            onClick = { if (currentMinorIndex > 0) currentMinorIndex-- },
+                            enabled = currentMinorIndex > 0
+                        ) {
+                            Icon(Icons.Default.ChevronLeft, "Anterior")
+                        }
+                        IconButton(
+                            onClick = { if (currentMinorIndex < minors.size - 1) currentMinorIndex++ },
+                            enabled = currentMinorIndex < minors.size - 1
+                        ) {
+                            Icon(Icons.Default.ChevronRight, "Siguiente")
+                        }
+                    }
+                }
+                LinearProgressIndicator(
+                    progress = (currentMinorIndex + 1).toFloat() / minors.size,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                )
+            }
+        }
+
         // ───────── ERROR MESSAGE ─────────
         if (showError) {
             item {
@@ -101,67 +230,145 @@ fun SignatureScreen(
             }
         }
 
-        // ───────── CAMPOS DEL FORMULARIO ─────────
+        // ───────── NOMBRE DEL MENOR (único por menor) ─────────
         item {
             OutlinedTextField(
-                value = minorName,
-                onValueChange = { minorName = it },
-                label = { Text("Nombre del menor *") },
+                value = minors[currentMinorIndex].minorName,
+                onValueChange = { newValue ->
+                    updateCurrentMinor { minor -> minor.copy(minorName = newValue) }
+                },
+                label = { Text("Nombre del participante ${if (isMultiAuth) "${currentMinorIndex + 1}" else ""} *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 enabled = !isSubmitting
             )
         }
+
+        // ───────── SEPARADOR Y TÍTULO DE TUTOR ─────────
         item { Divider() }
-        item { Text("Datos del Tutor Legal", style = MaterialTheme.typography.titleSmall) }
+        item {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("Datos del Tutor Legal", style = MaterialTheme.typography.titleSmall)
+                if (isMultiAuth && currentMinorIndex > 0) {
+                    Spacer(Modifier.width(8.dp))
+                    AssistChip(
+                        onClick = {},
+                        label = { Text("Compartidos", style = MaterialTheme.typography.labelSmall) },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                    )
+                }
+            }
+        }
+
+        // ───────── CAMPOS DEL TUTOR (compartidos - solo editables en el primer menor) ─────────
         item {
             OutlinedTextField(
-                value = tutorName,
-                onValueChange = { tutorName = it },
+                value = minors[currentMinorIndex].tutorName,
+                onValueChange = { newValue ->
+                    updateTutorForAll { minor -> minor.copy(tutorName = newValue) }
+                },
                 label = { Text("Nombre del tutor *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                enabled = !isSubmitting
+                enabled = !isSubmitting && (!isMultiAuth || currentMinorIndex == 0),
+                readOnly = isMultiAuth && currentMinorIndex > 0
             )
         }
         item {
             OutlinedTextField(
-                value = tutorDni,
-                onValueChange = { if (it.length <= 9) tutorDni = it.uppercase() },
+                value = minors[currentMinorIndex].tutorDni,
+                onValueChange = { newValue ->
+                    val newDni = newValue.uppercase().take(9)
+                    updateTutorForAll { minor -> minor.copy(tutorDni = newDni) }
+                },
                 label = { Text("DNI/NIE *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                enabled = !isSubmitting
+                enabled = !isSubmitting && (!isMultiAuth || currentMinorIndex == 0),
+                readOnly = isMultiAuth && currentMinorIndex > 0
             )
         }
         item {
             OutlinedTextField(
-                value = tutorPhone,
-                onValueChange = { if (it.all { c -> c.isDigit() || c == ' ' }) tutorPhone = it },
+                value = minors[currentMinorIndex].tutorPhone,
+                onValueChange = { newValue ->
+                    val newPhone = newValue.filter { c -> c.isDigit() || c == ' ' }.take(15)
+                    updateTutorForAll { minor -> minor.copy(tutorPhone = newPhone) }
+                },
                 label = { Text("Teléfono *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                enabled = !isSubmitting
+                enabled = !isSubmitting && (!isMultiAuth || currentMinorIndex == 0),
+                readOnly = isMultiAuth && currentMinorIndex > 0
             )
         }
         item { Divider() }
 
         // ───────── FIRMA ─────────
         item {
-            Text("Firma aquí *", style = MaterialTheme.typography.titleSmall)
-            Text("Dibuja tu firma en el recuadro", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Firma del padre/madre/tutor para ${minors[currentMinorIndex].minorName.ifBlank { "el participante" }} *",
+                style = MaterialTheme.typography.titleSmall)
+
+            if (isMultiAuth && currentMinorIndex > 0) {
+                // ✅ Menores 2 y 3: mostrar firma del primer menor como read-only
+                Text(
+                    "✓ Firma compartida con el primer hermano/a",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                // Preview simple de la firma (texto o icono)
+                Card(
+                    modifier = Modifier.fillMaxWidth().height(200.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = androidx.compose.ui.Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Firma aplicada",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            } else {
+                // ✅ Primer menor o modo único: canvas editable
+                Text("Dibuja tu firma en el recuadro", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SignatureCanvas(
+                    paths = minors[currentMinorIndex].signaturePaths,
+                    onPathsChange = { newPaths ->
+                        if (isMultiAuth) {
+                            // Si es multi-auth, la firma del primer menor se copia a todos
+                            minors = minors.map { it.copy(signaturePaths = newPaths) }
+                        } else {
+                            updateCurrentMinor { it.copy(signaturePaths = newPaths) }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(200.dp)
+                )
+            }
         }
-        item {
-            SignatureCanvas(
-                paths = signaturePaths,
-                onPathsChange = { signaturePaths = it },
-                modifier = Modifier.fillMaxWidth().height(200.dp)
-            )
-        }
-        if (signaturePaths.isNotEmpty() && !isSubmitting) {
+
+        if (minors[currentMinorIndex].signaturePaths.isNotEmpty() && !isSubmitting && (!isMultiAuth || currentMinorIndex == 0)) {
             item {
                 OutlinedButton(
-                    onClick = { signaturePaths = emptyList() },
+                    onClick = {
+                        if (isMultiAuth) {
+                            updateTutorForAll { it.copy(signaturePaths = emptyList()) }
+                        } else {
+                            updateCurrentMinor { it.copy(signaturePaths = emptyList()) }
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Clear, contentDescription = null)
@@ -190,51 +397,144 @@ fun SignatureScreen(
             }
         }
 
-        // ───────── BOTÓN ENVIAR ─────────
+        // ───────── BOTONES DE ACCIÓN ─────────
         item {
-            Button(
-                onClick = {
-                    when {
-                        minorName.isBlank() -> { errorMessage = "Nombre del menor obligatorio"; showError = true; coroutineScope.launch { scrollState.animateScrollToItem(0) } }
-                        tutorName.isBlank() -> { errorMessage = "Nombre del tutor obligatorio"; showError = true; coroutineScope.launch { scrollState.animateScrollToItem(0) } }
-                        tutorDni.isBlank() || !isValidDni(tutorDni) -> { errorMessage = "DNI/NIE inválido"; showError = true; coroutineScope.launch { scrollState.animateScrollToItem(0) } }
-                        tutorPhone.isBlank() || !isValidPhone(tutorPhone) -> { errorMessage = "Teléfono inválido"; showError = true; coroutineScope.launch { scrollState.animateScrollToItem(0) } }
-                        signaturePaths.isEmpty() -> { errorMessage = "Debes firmar"; showError = true; coroutineScope.launch { scrollState.animateScrollToItem(0) } }
-                        else -> {
+            if (isMultiAuth) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Botón Siguiente (solo si no es el último menor)
+                    if (currentMinorIndex < minors.size - 1) {
+                        Button(
+                            onClick = {
+                                android.util.Log.d("MultiAuth", "🔘 Pulsado: Siguiente (participante ${currentMinorIndex + 1})")
+
+                                // Validar solo el menor actual antes de avanzar
+                                if (validateMinor(minors[currentMinorIndex])) {
+                                    android.util.Log.d("MultiAuth", "✅ Participante ${currentMinorIndex + 1} válido, avanzando")
+                                    currentMinorIndex++
+                                    coroutineScope.launch { scrollState.animateScrollToItem(0) }
+                                } else {
+                                    android.util.Log.d("MultiAuth", "❌ Validación fallida para participante ${currentMinorIndex + 1}")
+                                    showError = true
+                                    errorMessage = "Completa todos los campos del participante ${currentMinorIndex + 1}"
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = !isSubmitting
+                        ) {
+                            Icon(Icons.Default.ChevronRight, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Siguiente")
+                        }
+                    }
+
+                    // Botón Firmar y Terminar (siempre visible desde el segundo menor)
+                    Button(
+                        onClick = {
+                            android.util.Log.d("MultiAuth", "🔘 Pulsado: Firmar y terminar")
+                            android.util.Log.d("MultiAuth", "📊 isSubmitting: $isSubmitting")
+                            android.util.Log.d("MultiAuth", "📊 minors.size: ${minors.size}")
+
+                            // ✅ CORREGIDO: Filtrar solo menores con nombre rellenado
+                            val filledMinors = minors.filter { it.minorName.isNotBlank() }
+
+                            android.util.Log.d("MultiAuth", "📋 Participantes a procesar: ${filledMinors.map { it.minorName }}")
+
+                            // Validar SOLO los menores rellenados
+                            val allValid = filledMinors.all { minor ->
+                                val valid = validateMinor(minor)
+                                android.util.Log.d("MultiAuth", "🔍 '${minor.minorName}' válido: $valid")
+                                valid
+                            }
+
+                            android.util.Log.d("MultiAuth", "✅ Validación final: $allValid (filled: ${filledMinors.size})")
+
+                            if (allValid && filledMinors.isNotEmpty()) {
+                                android.util.Log.d("MultiAuth", "🚀 Iniciando firma para ${filledMinors.size} participante(s)...")
+                                isSubmitting = true
+                                showError = false
+
+                                // ✅ Pasar SOLO los menores rellenados al ViewModel
+                                viewModel.signMultipleAuthorizations(
+                                    excursionId = excursionId,
+                                    excursionTitle = excursionTitle,
+                                    excursionDate = excursionDate,
+                                    minors = filledMinors,  // ← Solo los que tienen nombre
+                                    tutorEmail = currentUser?.email ?: "",
+                                    onSuccess = {
+                                        android.util.Log.d("MultiAuth", "✅ onSuccess llamado")
+                                        onNavigateBack()
+                                    },
+                                    onError = { error ->
+                                        android.util.Log.e("MultiAuth", "❌ onError: $error")
+                                        showError = true
+                                        errorMessage = error
+                                        isSubmitting = false
+                                    }
+                                )
+                            } else {
+                                android.util.Log.e("MultiAuth", "❌ Validación fallida")
+                                showError = true
+                                errorMessage = if (filledMinors.isEmpty()) {
+                                    "Rellena al menos un participante para firmar"
+                                } else {
+                                    "Revisa los datos de los participantes rellenados"
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isSubmitting
+                    ) {
+                        if (isSubmitting) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Firmando...")
+                        } else {
+                            Icon(Icons.Default.Check, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Firmar y terminar")
+                        }
+                    }
+                }
+            } else {
+                // ✅ Autorización única: botón normal
+                Button(
+                    onClick = {
+                        if (validateMinor(minors.first())) {
                             isSubmitting = true
                             showError = false
-                            // Llamar al ViewModel para firmar
                             viewModel.signAuthorization(
                                 excursionTitle = excursionTitle,
                                 excursionDate = excursionDate,
-                                tutorName = tutorName,
-                                tutorDni = tutorDni,
-                                tutorPhone = tutorPhone,
+                                tutorName = minors.first().tutorName,
+                                tutorDni = minors.first().tutorDni,
+                                tutorPhone = minors.first().tutorPhone,
                                 tutorEmail = currentUser?.email ?: "",
-                                minorName = minorName,
-                                signaturePaths = signaturePaths,
-                                onSuccess = { onNavigateBack() },  // ← Volver atrás al éxito
-                                onError = { error -> showError = true; errorMessage = error }
+                                minorName = minors.first().minorName,
+                                signaturePaths = minors.first().signaturePaths,
+                                onSuccess = { onNavigateBack() },
+                                onError = { error -> showError = true; errorMessage = error; isSubmitting = false }
                             )
                         }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSubmitting
+                ) {
+                    if (isSubmitting) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Firmando...")
+                    } else {
+                        Icon(Icons.Default.Check, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Firmar y Enviar")
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isSubmitting && uiState is CalendarExcursionDetailUiState.Success
-            ) {
-                if (isSubmitting) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Firmando...")
-                } else {
-                    Icon(Icons.Default.Check, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Firmar y Enviar")
                 }
             }
         }
 
-        // Espacio final
         item { Spacer(Modifier.height(32.dp)) }
     }
 }
@@ -255,4 +555,10 @@ private fun isValidDni(dni: String): Boolean {
 
 private fun isValidPhone(phone: String): Boolean {
     return phone.replace(" ", "").matches(Regex("^[6-9][0-9]{8}$"))
+}
+
+private fun formatDate(date: kotlinx.datetime.LocalDateTime): String {
+    val javaDate = date.toJavaLocalDateTime()
+    val formatter = DateTimeFormatter.ofPattern("EEEE, dd 'de' MMMM 'de' yyyy", Locale("es", "ES"))
+    return javaDate.format(formatter).replaceFirstChar { it.uppercase() }
 }

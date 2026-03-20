@@ -3,11 +3,7 @@ package com.asociacionciguena.app.presentation.screens.news
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.pullrefresh.PullRefreshIndicator
-import androidx.compose.material.pullrefresh.pullRefresh
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -35,19 +31,22 @@ import com.asociacionciguena.app.presentation.screens.news.components.NewsCardSk
 import androidx.compose.ui.platform.LocalContext
 import android.content.Context
 import android.content.Intent
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 
 /**
  * Pantalla principal de Noticias
  *
  * @param viewModel ViewModel inyectado automáticamente por Hilt
  */
-@OptIn(ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewsScreen(
     viewModel: NewsViewModel = hiltViewModel(),
     onNavigateToDetail: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing = uiState is NewsUiState.Loading
     val searchQuery by viewModel.searchQuery.collectAsState()
 
     Scaffold(
@@ -67,7 +66,7 @@ fun NewsScreen(
             is NewsUiState.Success -> {
                 NewsSuccessContent(
                     news = state.news,
-                    isRefreshing = false,
+                    isRefreshing = isRefreshing,
                     onRefresh = { viewModel.refresh() },
                     onNewsClick = onNavigateToDetail,  // ← AÑADIR
                     modifier = Modifier.padding(paddingValues)
@@ -88,7 +87,7 @@ fun NewsScreen(
 /**
  * Contenido cuando hay noticias cargadas
  */
-@OptIn(ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NewsSuccessContent(
     news: List<com.asociacionciguena.app.domain.model.News>,
@@ -97,17 +96,15 @@ private fun NewsSuccessContent(
     onNewsClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Pull-to-refresh state
-    val pullRefreshState = rememberPullRefreshState(
-        refreshing = isRefreshing,
-        onRefresh = onRefresh
-    )
+    // ✅ Material3: Estado simple, sin parámetros en el remember
+    val pullRefreshState = rememberPullToRefreshState()
 
-    Box(
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,  // ✅ Controlado por el ViewModel
+        onRefresh = onRefresh,
+        state = pullRefreshState,
         modifier = modifier
-            .fillMaxSize()
-            .pullRefresh(pullRefreshState)
-    ) {
+    )  {
         if (news.isEmpty()) {
             // Sin noticias
             EmptyState(
@@ -134,13 +131,6 @@ private fun NewsSuccessContent(
                 }
             }
         }
-
-        // Indicador de pull-to-refresh
-        PullRefreshIndicator(
-            refreshing = isRefreshing,
-            state = pullRefreshState,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
     }
 }
 

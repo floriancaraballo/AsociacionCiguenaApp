@@ -43,7 +43,8 @@ class SignedAuthorizationRepository @Inject constructor(
         tutorPhone: String,
         tutorEmail: String,
         minorName: String?,
-        signaturePaths: List<androidx.compose.ui.graphics.Path>
+        signaturePaths: List<androidx.compose.ui.graphics.Path>,
+        isBatchEmail: Boolean = false
     ): Result<String> {
         return try {
             val userId = auth.currentUser?.uid
@@ -100,6 +101,8 @@ class SignedAuthorizationRepository @Inject constructor(
             pdfFile.delete()
             android.util.Log.d("SignAuth", "✅ PDF subido: $pdfUrl")
 
+            val batchId = UUID.randomUUID().toString()  // ← Pasar desde el ViewModel
+
             // 4. Guardar en Firestore
             val authorizationData = hashMapOf(
                 "excursionId" to excursionId,
@@ -115,7 +118,9 @@ class SignedAuthorizationRepository @Inject constructor(
                 "signedPdfUrl" to pdfUrl,
                 "signedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                 "emailSent" to false,
-                "status" to AuthorizationStatus.PENDING.name
+                "status" to AuthorizationStatus.PENDING.name,
+                "batchId" to batchId,
+                "isBatchEmail" to isBatchEmail
             )
 
             val docRef = firestore.collection("signedAuthorizations").add(authorizationData).await()

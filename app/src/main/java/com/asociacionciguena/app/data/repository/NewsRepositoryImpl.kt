@@ -14,12 +14,19 @@ class NewsRepositoryImpl @Inject constructor(
 ) : NewsRepository {
 
     override fun getNews(): Flow<Result<List<News>>> = flow {
+        // ✅ 1️⃣ Emitir Loading PRIMERO (crucial para el spinner)
+        android.util.Log.d("NewsRepo", "🔄 Emitiendo Result.Loading")
+        emit(Result.Loading)
+
         try {
+            android.util.Log.d("NewsRepo", "📥 Llamando a remoteDataSource.getNews()")
             remoteDataSource.getNews().collect { dtoList ->
+                android.util.Log.d("NewsRepo", "✅ Recibidos ${dtoList.size} DTOs, emitiendo Success")
                 val newsList = dtoList.map { it.toDomain() }
                 emit(Result.Success(newsList))
             }
         } catch (e: Exception) {
+            android.util.Log.e("NewsRepo", "❌ Error: ${e.message}")
             emit(Result.Error(
                 message = e.message ?: "Error al cargar publicaciones",
                 exception = e

@@ -87,14 +87,15 @@ fun AppNavigation(
             arguments = listOf(
                 navArgument("newsId") { type = NavType.StringType }
             )
-        ) {
-            val newsId = it.arguments?.getString("newsId") ?: ""
-            NewsDetailScreen(
-                newsId = newsId,
-                onNavigateBack = {
-                    navController.popBackStack()
-                }
-            )
+        ) { backStackEntry ->
+            val newsId = backStackEntry.arguments?.getString("newsId")
+
+            if (newsId != null) {
+                NewsDetailScreen(  // ← Tu composable de detalle
+                    newsId = newsId,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
     }
 }

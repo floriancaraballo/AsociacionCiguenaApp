@@ -26,6 +26,9 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import androidx.compose.ui.graphics.Path
+import com.google.firebase.Firebase
+import com.google.firebase.functions.functions
+import java.util.UUID
 
 
 @HiltViewModel
@@ -243,8 +246,6 @@ class CalendarExcursionDetailViewModel @Inject constructor(
 
                 if (result.isSuccess) {
                     android.util.Log.d("AuthDebug", "✅ FIRMA ÉXITO - Activando showAuthSuccess")
-                    // ✅ Activar mensaje de éxito
-                    _showAuthSuccess.value = true
 
                     android.util.Log.d("SignAuthorization", "✅ Autorización firmada correctamente")
                     onSuccess()
@@ -256,6 +257,81 @@ class CalendarExcursionDetailViewModel @Inject constructor(
             } catch (e: Exception) {
                 android.util.Log.e("SignAuthorization", "❌ Exception: ${e.message}", e)
                 onError(e.message ?: "Error al firmar autorización")
+            }
+        }
+    }
+    /**
+     * Firmar MÚLTIPLES autorizaciones (hermanos) + enviar email batch
+     */
+    fun signMultipleAuthorizations(
+        excursionId: String,
+        excursionTitle: String,
+        excursionDate: String,
+        minors: List<MinorAuth>,
+        tutorEmail: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val authorizationIds = mutableListOf<String>()
+
+                // 1. Firmar cada autorización CON isBatchEmail = true
+                for (minor in minors) {
+                    val result = signedAuthorizationRepository.signAuthorization(
+                        excursionId = excursionId,
+                        excursionTitle = excursionTitle,
+                        excursionDate = excursionDate,
+                        tutorName = minor.tutorName,
+                        tutorDni = minor.tutorDni,
+                        tutorPhone = minor.tutorPhone,
+                        tutorEmail = tutorEmail,
+                        minorName = minor.minorName,
+                        signaturePaths = minor.signaturePaths,
+                        isBatchEmail = true  // ← IMPORTANTE: marcar como batch
+                    )
+
+                    if (result.isSuccess) {
+                        authorizationIds.add(result.getOrNull() ?: "")
+                    } else {
+                        throw Exception("Error al firmar: ${result.exceptionOrNull()?.message}")
+                    }
+                }
+
+                // 2. ✅ LLAMAR A CLOUD FUNCTION PARA EMAIL BATCH (SOLO UNA VEZ)
+                if (authorizationIds.isNotEmpty()) {
+                    try {
+                        val functions = Firebase.functions("europe-west1")  // ← Región correcta
+                        val sendBatchEmail = functions.getHttpsCallable("sendBatchAuthorizationEmail")
+
+                        android.util.Log.d("BatchDebug", "🔹 Llamando a sendBatchAuthorizationEmail")
+                        android.util.Log.d("BatchDebug", "🔹 authorizationIds: $authorizationIds")
+
+                        // ✅ UNA SOLA LLAMADA:
+                        val callableResult = sendBatchEmail.call(
+                            mapOf("authorizationIds" to authorizationIds)
+                        ).await()
+
+                        val responseData = callableResult.getData() as? Map<*, *>
+                        android.util.Log.d("BatchEmail", "✅ Email batch enviado: $responseData")
+
+                    } catch (e: Exception) {
+                        android.util.Log.e("BatchDebug", "❌ Error llamando a Cloud Function: ${e.message}", e)
+                        android.util.Log.e("BatchEmail", "⚠️ Error enviando email batch: ${e.message}")
+                        // No fallamos: las autorizaciones ya están guardadas
+                    }
+                }
+
+                // 3. ✅ Activar mensaje de éxito (SOLO UNA VEZ, al final)
+                android.util.Log.d("BatchDebug", "🔹 Activando _showAuthSuccess = true")
+                _showAuthSuccess.value = true
+
+                android.util.Log.d("SignAuthorization", "✅ ${minors.size} autorizaciones firmadas correctamente")
+                onSuccess()
+
+            } catch (e: Exception) {
+                android.util.Log.e("SignAuthorization", "❌ Exception: ${e.message}", e)
+                onError(e.message ?: "Error al firmar autorizaciones")
             }
         }
     }

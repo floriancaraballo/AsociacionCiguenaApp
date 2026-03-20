@@ -107,7 +107,7 @@
 }
 
 # ==========================================
-# COMPOSE
+# COMPOSE - BASE
 # ==========================================
 
 -keep class androidx.compose.** { *; }
@@ -121,7 +121,7 @@
 -dontwarn coil.**
 
 # ==========================================
-# RETROFIT / OKHTTP (si usas)
+# RETROFIT / OKHTTP
 # ==========================================
 
 -dontwarn okhttp3.**
@@ -143,8 +143,77 @@
 }
 
 # ==========================================
-# R8 FULL MODE
+# LIBRERÍAS EXTERNAS - IGNORE WARNINGS
 # ==========================================
 
--keepattributes SourceFile,LineNumberTable
--renamesourcefileattribute SourceFile
+# ───────── JACKSON ─────────
+-dontwarn com.fasterxml.jackson.**
+-dontwarn com.fasterxml.jackson.annotation.**
+-dontwarn com.fasterxml.jackson.core.**
+-dontwarn com.fasterxml.jackson.databind.**
+
+# ───────── ITEXT PDF ─────────
+-dontwarn com.itextpdf.**
+-dontwarn com.itextpdf.commons.utils.JsonUtil
+-dontwarn com.itextpdf.barcodes.**
+-dontwarn com.itextpdf.io.image.AwtImageDataFactory
+-dontwarn com.itextpdf.kernel.pdf.xobject.PdfImageXObject
+
+# ───────── JAVA AWT/IMAGEIO (no existen en Android) ─────────
+-dontwarn java.awt.**
+-dontwarn java.awt.image.**
+-dontwarn javax.imageio.**
+-dontwarn java.lang.reflect.AnnotatedType
+
+# ───────── OKHTTP LEGACY ─────────
+-dontwarn com.squareup.okhttp.**
+-dontwarn io.grpc.okhttp.**
+
+# ───────── GUAVA/REFLECTION ─────────
+-dontwarn com.google.common.reflect.**
+-dontwarn com.google.common.util.concurrent.**
+
+# ───────── REGLA FINAL: Ignorar cualquier otra clase faltante ─────────
+-dontwarn **
+
+# ==========================================
+# COMPOSE - TEXT INPUT (CRÍTICO PARA AbstractTextEvent)
+# ==========================================
+
+# Mantener clases generales de texto y UI
+-keep class androidx.compose.ui.text.** { *; }
+-keep class androidx.compose.foundation.text.** { *; }
+-keep class androidx.compose.ui.input.** { *; }
+-keep class androidx.compose.ui.node.** { *; }
+-keep class androidx.compose.runtime.** { *; }
+-keep class androidx.compose.ui.layout.** { *; }
+
+# Mantener clases específicas de input de texto
+-keep class androidx.compose.ui.text.input.** { *; }
+-keep class androidx.compose.foundation.text.input.** { *; }
+
+# ───────── AbstractTextEvent y relacionados (EVITAR ERROR EN RUNTIME) ─────────
+-keep class androidx.compose.ui.text.input.TextFieldValue { *; }
+-keep class androidx.compose.ui.text.input.ImeAction { *; }
+-keep class androidx.compose.ui.text.input.KeyboardOptions { *; }
+-keep class androidx.compose.ui.text.input.KeyboardType { *; }
+-keep class androidx.compose.ui.text.input.VisualTransformation { *; }
+-keep class androidx.compose.ui.text.input.TextFieldState { *; }
+-keepnames class * extends androidx.compose.ui.text.input.AbstractTextEvent
+-keepnames class androidx.compose.ui.text.input.AbstractTextEvent
+-keep class androidx.compose.foundation.text.CoreTextFieldKt { *; }
+-keep class androidx.compose.foundation.text.BasicTextFieldKt { *; }
+-keep class androidx.compose.foundation.text.TextFieldScrollLayoutModifierKt { *; }
+-keep class androidx.compose.ui.text.input.ImeOptions { *; }
+-keep class androidx.compose.ui.text.input.OffsetMapping { *; }
+-keep class androidx.compose.ui.text.input.TransformedText { *; }
+
+# Mantener annotations y atributos de Compose
+-keepattributes *Annotation*, InnerClasses, EnclosingMethod, Signature
+-keep class androidx.compose.** { *; }
+
+# Evitar ofuscación de métodos @Composable
+-keepclassmembers class * {
+    @androidx.compose.runtime.Composable <methods>;
+    @androidx.compose.ui.Modifier <fields>;
+}

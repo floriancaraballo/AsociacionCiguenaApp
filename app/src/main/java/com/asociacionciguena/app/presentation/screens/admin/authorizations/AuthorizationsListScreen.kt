@@ -31,6 +31,10 @@ fun AuthorizationsListScreen(
         android.util.Log.d("AuthListDebug", "🚀 Screen iniciado - excursionId: $excursionId")
     }
     val authorizations by viewModel.getAuthorizations(excursionId).collectAsState(initial = emptyList())
+    var isGeneratingDoc by remember { mutableStateOf(false) }
+    var showDocPreview by remember { mutableStateOf(false) }
+    var docDownloadUrl by remember { mutableStateOf<String?>(null) }
+    var docFileName by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
     LaunchedEffect(authorizations) {
@@ -49,10 +53,53 @@ fun AuthorizationsListScreen(
                         Icon(Icons.Default.ArrowBack, "Volver")
                     }
                 },
+                // ✅ AÑADIR ESTE BLOQUE:
+                actions = {
+                    // Botón generar lista Word
+                    IconButton(
+                        onClick = {
+                            isGeneratingDoc = true
+                            viewModel.generateMinorsListDocx(
+                                excursionId = excursionId,
+                                excursionTitle = excursionTitle,
+                                excursionDate = "",  // ← Si tienes la fecha, pásala aquí
+                                onSuccess = { url, fileName ->
+                                    docDownloadUrl = url
+                                    docFileName = fileName
+                                    isGeneratingDoc = false
+                                    showDocPreview = true
+                                },
+                                onError = { error ->
+                                    isGeneratingDoc = false
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "❌ $error",
+                                        android.widget.Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            )
+                        },
+                        enabled = authorizations.isNotEmpty() && !isGeneratingDoc
+                    ) {
+                        if (isGeneratingDoc) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Description,
+                                contentDescription = "Generar lista Word",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
         }
@@ -161,6 +208,103 @@ fun AuthorizationsListScreen(
                 }
             }
         }
+    }
+    // ───────── DIALOG: Preview del documento generado ─────────
+    if (showDocPreview && docDownloadUrl != null) {
+        AlertDialog(
+            onDismissRequest = { showDocPreview = false },
+            title = { Text("📄 Lista generada") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("El documento \"$docFileName\" se ha generado correctamente.")
+                    Text(
+                        "Contiene ${authorizations.size} participantes en formato Word editable.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        "Puedes descargarlo o enviarlo directamente a la asociación.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        // 💾 Descargar / Abrir documento
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(docDownloadUrl)).apply {
+                            type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                        showDocPreview = false
+                    }
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Descargar / Abrir")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        // 📧 Enviar email con enlace de descarga (sin adjunto)
+                        val emailIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "message/rfc822"
+
+                            // Destinatario
+                            putExtra(Intent.EXTRA_EMAIL, arrayOf("asociacionciguena1993@gmail.com"))
+
+                            // Asunto
+                            putExtra(Intent.EXTRA_SUBJECT, "📋 Lista de participantes - $excursionTitle")
+
+                            // Cuerpo del email con el enlace
+                            val emailBody = """
+                    Hola,
+                    
+                    Adjunto el enlace para descargar la lista de participantes de la excursión:
+                    
+                    🔗 $docDownloadUrl
+                    
+                    📄 Nombre del archivo: $docFileName
+                    👥 Total participantes: ${authorizations.size}
+                    
+                    ⏰ Este enlace expira en 1 hora por seguridad.
+                    
+                    ---
+                    Generado automáticamente desde la app de Asociación Cigüeña
+                    ${java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale("es", "ES")).format(java.util.Date())}
+                """.trimIndent()
+
+                            putExtra(Intent.EXTRA_TEXT, emailBody)
+
+                            // Para que funcione con Gmail y otros clientes
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+
+                        // Abrir selector de apps de email
+                        val chooser = Intent.createChooser(emailIntent, "Enviar por email")
+                        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(chooser)
+
+                        // Cerrar el dialog
+                        showDocPreview = false
+
+                        // Confirmación visual
+                        android.widget.Toast.makeText(
+                            context,
+                            "✅ Abriendo cliente de email...",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    enabled = docDownloadUrl != null
+                ) {
+                    Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Enviar a Asociación")
+                }
+            }
+        )
     }
 }
 

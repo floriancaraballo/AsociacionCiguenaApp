@@ -18,6 +18,9 @@ class ExcursionRepositoryImpl @Inject constructor(
 ) : ExcursionRepository {
 
     override fun getExcursions(): Flow<Result<List<Excursion>>> = flow {
+        // ✅ Emitir Loading primero
+        emit(Result.Loading)
+
         try {
             remoteDataSource.getExcursions().collect { dtoList ->
                 val excursions = dtoList.map { it.toDomain() }

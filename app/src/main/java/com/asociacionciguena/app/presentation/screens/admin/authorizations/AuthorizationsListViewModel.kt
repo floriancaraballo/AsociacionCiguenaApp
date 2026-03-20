@@ -5,11 +5,15 @@ import androidx.lifecycle.viewModelScope
 import com.asociacionciguena.app.data.repository.SignedAuthorizationRepository
 import com.asociacionciguena.app.domain.model.SignedAuthorization
 import com.asociacionciguena.app.domain.model.AuthorizationStatus
+import com.google.firebase.Firebase
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.functions
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
+
 
 @HiltViewModel
 class AuthorizationsListViewModel @Inject constructor(
@@ -72,6 +76,45 @@ class AuthorizationsListViewModel @Inject constructor(
                     }
             } catch (e: Exception) {
                 android.util.Log.e("AuthViewModel", "❌ Exception: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Generar documento Word con lista de menores
+     */
+    fun generateMinorsListDocx(
+        excursionId: String,
+        excursionTitle: String,
+        excursionDate: String,
+        onSuccess: (downloadUrl: String, fileName: String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val functions = Firebase.functions("europe-west1")
+                val generateDoc = functions.getHttpsCallable("generateMinorsListDocx")
+
+                val result = generateDoc.call(
+                    mapOf(
+                        "excursionId" to excursionId,
+                        "excursionTitle" to excursionTitle,
+                        "excursionDate" to excursionDate
+                    )
+                ).await()
+
+                val responseData = result.getData() as? Map<*, *>
+                val downloadUrl = responseData?.get("downloadUrl") as? String
+                val fileName = responseData?.get("fileName") as? String ?: "lista.docx"
+
+                if (downloadUrl != null) {
+                    onSuccess(downloadUrl, fileName)
+                } else {
+                    onError("No se pudo obtener la URL de descarga")
+                }
+
+            } catch (e: Exception) {
+                onError("Error al generar documento: ${e.message}")
             }
         }
     }
