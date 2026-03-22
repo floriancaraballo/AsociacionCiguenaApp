@@ -3,13 +3,13 @@ package com.asociacionciguena.app.presentation.screens.news
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.asociacionciguena.app.domain.model.Result
-import com.asociacionciguena.app.domain.usecase.news.GetNewsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.asociacionciguena.app.domain.usecase.news.GetNewsUseCase
 
 /**
  * ViewModel de la pantalla de Noticias
@@ -27,6 +27,10 @@ class NewsViewModel @Inject constructor(
 
     // Estado público (inmutable) - la UI solo puede observarlo
     val uiState: StateFlow<NewsUiState> = _uiState.asStateFlow()
+
+    // ✅ AÑADIR: Estado separado para el spinner (igual que AdminDashboard)
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     /**
      * Init block se ejecuta al crear el ViewModel
@@ -63,45 +67,53 @@ class NewsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Refresca las noticias (pull-to-refresh)
-     */
     fun refresh() {
         viewModelScope.launch {
-            android.util.Log.d("NewsVM", "🔄 refresh() iniciado")
-            // Marcar como refrescando
-            val currentState = _uiState.value
-            if (currentState is NewsUiState.Success) {
-                _uiState.value = currentState.copy(isRefreshing = true)
-            }
+            android.util.Log.d("NewsVM", "🔴 [1] refresh() INICIADO")
 
-            // Cargar noticias nuevamente
+            // ✅ Activar spinner
+            _isRefreshing.value = true
+            android.util.Log.d("NewsVM", "🟡 [2] _isRefreshing.value = true EJECUTADO")
+
+            // ✅ Registrar cuándo iniciamos para garantizar tiempo mínimo
+            val startTime = System.currentTimeMillis()
+            val MIN_REFRESH_TIME = 200L  // ← 200ms mínimo para que la animación sea visible
+
+            var finished = false
+
             getNewsUseCase().collect { result ->
-                android.util.Log.d("NewsVM", "📩 Resultado: ${result::class.simpleName}")
-                _uiState.value = when (result) {
-                    is Result.Success -> {
-                        android.util.Log.d("NewsVM", "✅ Success: ${result.data.size} noticias")
-                        _allNews.value = result.data  // ← AÑADIR
-                        filterNews(_searchQuery.value)  // ← AÑADIR
-                        NewsUiState.Success(
-                            news = result.data,
-                            isRefreshing = false
-                        )
-                    }
+                android.util.Log.d("NewsVM", "🔵 [3] collect: ${result::class.simpleName}, finished=$finished")
 
-                    is Result.Error -> {
-                        android.util.Log.e("NewsVM", "❌ Error: ${result.message}")
-                        NewsUiState.Error(message = result.message)
-                    }
+                if (!finished && result !is Result.Loading) {
+                    finished = true
+                    android.util.Log.d("NewsVM", "🟢 [4] Procesando primera emisión útil")
 
-                    is Result.Loading -> {
-                        android.util.Log.d("NewsVM", "⏳ Loading...")
-                        if (currentState is NewsUiState.Success) {
-                            currentState.copy(isRefreshing = true)
-                        } else {
-                            NewsUiState.Loading
+                    _uiState.value = when (result) {
+                        is Result.Success -> {
+                            android.util.Log.d("NewsVM", "📦 [5] Success: ${result.data.size} noticias")
+                            _allNews.value = result.data
+                            filterNews(_searchQuery.value)
+                            NewsUiState.Success(news = result.data)
                         }
+                        is Result.Error -> {
+                            android.util.Log.e("NewsVM", "❌ [5] Error: ${result.message}")
+                            NewsUiState.Error(message = result.message)
+                        }
+                        is Result.Loading -> _uiState.value
                     }
+
+                    // ✅ Calcular cuánto tiempo ha pasado
+                    val elapsed = System.currentTimeMillis() - startTime
+
+                    // ✅ Si cargó muy rápido, esperar para que el spinner tenga tiempo de animarse
+                    if (elapsed < MIN_REFRESH_TIME) {
+                        android.util.Log.d("NewsVM", "⏳ Esperando ${MIN_REFRESH_TIME - elapsed}ms para animación")
+                        kotlinx.coroutines.delay(MIN_REFRESH_TIME - elapsed)
+                    }
+
+                    // ✅ Ocultar spinner
+                    _isRefreshing.value = false
+                    android.util.Log.d("NewsVM", "🟣 [6] _isRefreshing.value = false EJECUTADO")
                 }
             }
         }
@@ -126,19 +138,19 @@ class NewsViewModel @Inject constructor(
     }
 
     // ← NUEVO: Filtrar noticias
-    private fun filterNews(query: String) {
+    private fun filterNews(query: String, isRefreshing: Boolean = false) {
         val currentNews = _allNews.value
 
         if (query.isBlank()) {
             // Mostrar todas
-            _uiState.value = NewsUiState.Success(news = currentNews)
+            _uiState.value = NewsUiState.Success(news = currentNews, isRefreshing = isRefreshing)
         } else {
             // Filtrar por título o descripción
             val filtered = currentNews.filter { news ->
                 news.title.contains(query, ignoreCase = true) ||
                         news.shortDescription.contains(query, ignoreCase = true)
             }
-            _uiState.value = NewsUiState.Success(news = filtered)
+            _uiState.value = NewsUiState.Success(news = filtered, isRefreshing = isRefreshing)
         }
     }
 

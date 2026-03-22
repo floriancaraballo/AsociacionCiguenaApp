@@ -46,7 +46,13 @@ fun NewsScreen(
     onNavigateToDetail: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val isRefreshing = uiState is NewsUiState.Loading
+
+    // ✅ Observar estado separado del spinner (igual que AdminDashboard)
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
+
+    // ← AÑADIR ESTE LOG:
+    android.util.Log.d("NewsUI", "📱 UI: isRefreshing = $isRefreshing")
+
     val searchQuery by viewModel.searchQuery.collectAsState()
 
     Scaffold(
@@ -58,75 +64,48 @@ fun NewsScreen(
             )
         }
     ) { paddingValues ->
-        when (val state = uiState) {
-            is NewsUiState.Loading -> {
-                NewsSkeletonContent(modifier = Modifier.padding(paddingValues))
-            }
-
-            is NewsUiState.Success -> {
-                NewsSuccessContent(
-                    news = state.news,
-                    isRefreshing = isRefreshing,
-                    onRefresh = { viewModel.refresh() },
-                    onNewsClick = onNavigateToDetail,  // ← AÑADIR
-                    modifier = Modifier.padding(paddingValues)
-                )
-            }
-
-            is NewsUiState.Error -> {
-                ErrorMessage(
-                    message = state.message,
-                    onRetry = { viewModel.retry() },
-                    modifier = Modifier.padding(paddingValues)
-                )
-            }
-        }
-    }
-}
-
-/**
- * Contenido cuando hay noticias cargadas
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun NewsSuccessContent(
-    news: List<com.asociacionciguena.app.domain.model.News>,
-    isRefreshing: Boolean,
-    onRefresh: () -> Unit,
-    onNewsClick: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // ✅ Material3: Estado simple, sin parámetros en el remember
-    val pullRefreshState = rememberPullToRefreshState()
-
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,  // ✅ Controlado por el ViewModel
-        onRefresh = onRefresh,
-        state = pullRefreshState,
-        modifier = modifier
-    )  {
-        if (news.isEmpty()) {
-            // Sin noticias
-            EmptyState(
-                message = "No hay publicaciones disponibles",
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            // Lista de noticias
-            LazyColumn(
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(
-                    items = news,
-                    key = { it.id }
-                ) { newsItem ->
-                    NewsCard(
-                        news = newsItem,
-                        onClick = {
-                            onNewsClick(newsItem.id)
+        // ✅ PullToRefreshBox con patrón IDÉNTICO a AdminDashboard
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,  // ← Boolean observado directamente
+            onRefresh = {android.util.Log.d("NewsUI", "👆 UI: onRefresh llamado")
+                viewModel.refresh() },  // ← Callback directo
+            state = rememberPullToRefreshState(),  // ← Estado simple
+            modifier = Modifier.padding(paddingValues)  // ← Padding correcto
+        ) {
+            // Contenido: mismo que tenías
+            when (val state = uiState) {
+                is NewsUiState.Loading -> {
+                    NewsSkeletonContent(modifier = Modifier.fillMaxSize())
+                }
+                is NewsUiState.Success -> {
+                    if (state.news.isEmpty()) {
+                        EmptyState(
+                            message = "No hay publicaciones disponibles",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(
+                                items = state.news,
+                                key = { it.id }
+                            ) { newsItem ->
+                                NewsCard(
+                                    news = newsItem,
+                                    onClick = { onNavigateToDetail(newsItem.id) }
+                                )
+                            }
                         }
+                    }
+                }
+                is NewsUiState.Error -> {
+                    ErrorMessage(
+                        message = state.message,
+                        onRetry = { viewModel.retry() },
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }

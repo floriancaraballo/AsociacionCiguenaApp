@@ -5,6 +5,7 @@ import com.asociacionciguena.app.data.mapper.toDomain
 import com.asociacionciguena.app.domain.model.News
 import com.asociacionciguena.app.domain.model.Result
 import com.asociacionciguena.app.domain.repository.NewsRepository
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
@@ -22,11 +23,14 @@ class NewsRepositoryImpl @Inject constructor(
             android.util.Log.d("NewsRepo", "📥 Llamando a remoteDataSource.getNews()")
             remoteDataSource.getNews().collect { dtoList ->
                 android.util.Log.d("NewsRepo", "✅ Recibidos ${dtoList.size} DTOs, emitiendo Success")
+
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 val newsList = dtoList.map { it.toDomain() }
                 emit(Result.Success(newsList))
             }
         } catch (e: Exception) {
             android.util.Log.e("NewsRepo", "❌ Error: ${e.message}")
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
             emit(Result.Error(
                 message = e.message ?: "Error al cargar publicaciones",
                 exception = e

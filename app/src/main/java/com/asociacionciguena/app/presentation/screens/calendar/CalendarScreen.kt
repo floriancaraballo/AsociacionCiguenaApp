@@ -38,6 +38,10 @@ fun CalendarScreen(
 
     var isSearchActive by remember { mutableStateOf(false) }
 
+    // ✅ DESPUÉS:
+    // Añadir junto a las otras observaciones:
+    val isRefreshing by viewModel.isRefreshing.collectAsState()  // ← NUEVA LÍNEA
+
     Scaffold(
         topBar = {
             CalendarTopBar(
@@ -72,7 +76,7 @@ fun CalendarScreen(
                 is CalendarUiState.Success -> {
                     CalendarSuccessContent(
                         excursions = state.excursions,
-                        isRefreshing = state.isRefreshing,
+                        isRefreshing = isRefreshing,  // ← Usar la variable observada directamente
                         onRefresh = { viewModel.refresh() },
                         onExcursionClick = onNavigateToExcursionDetail,
                         modifier = Modifier.weight(1f)
@@ -263,7 +267,8 @@ private fun CalendarSuccessContent(
         isRefreshing = isRefreshing,  // ← CORREGIDO: era 'refreshing'
         onRefresh = onRefresh,
         state = pullRefreshState,     // ← Usar la misma instancia
-        modifier = modifier
+        // ✅ AÑADIR: fillMaxSize() para que detecte gestos en toda el área
+        modifier = modifier.fillMaxSize()  // ← Cambiar de 'modifier' a 'modifier.fillMaxSize()'
     ) {
         if (excursions.isEmpty()) {
             EmptyState(

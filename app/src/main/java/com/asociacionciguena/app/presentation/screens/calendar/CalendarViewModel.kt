@@ -21,6 +21,10 @@ class CalendarViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<CalendarUiState>(CalendarUiState.Loading)
     val uiState: StateFlow<CalendarUiState> = _uiState.asStateFlow()
 
+    // ✅ AÑADIR: Estado separado para el spinner (igual que NewsViewModel)
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     // ← NUEVO: Todas las excursiones sin filtrar
     private val _allExcursions = MutableStateFlow<List<Excursion>>(emptyList())
 
@@ -129,42 +133,49 @@ class CalendarViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
-            val currentState = _uiState.value
-            if (currentState is CalendarUiState.Success) {
-                _uiState.value = currentState.copy(isRefreshing = true)
-            }
+            // ✅ Activar spinner al inicio
+            _isRefreshing.value = true
+
+            val startTime = System.currentTimeMillis()
+            val MIN_REFRESH_TIME = 200L
+
+            // ✅ Flag para procesar solo la primera emisión útil
+            var finished = false
 
             getAllExcursionsUseCase().collect { result ->
-                when (result) {
-                    is Result.Success -> {
-                        _allExcursions.value = result.data
+                if (!finished && result !is Result.Loading) {
+                    finished = true
 
-                        val years = result.data
-                            .map { it.date.year }
-                            .distinct()
-                            .sortedDescending()
+                    _uiState.value = when (result) {
+                        is Result.Success -> {
+                            _allExcursions.value = result.data
 
-                        _availableYears.value = years
+                            // Actualizar años disponibles
+                            val years = result.data
+                                .map { it.date.year }
+                                .distinct()
+                                .sortedDescending()
+                            _availableYears.value = years
 
-                        filterExcursions()
+                            // Aplicar filtros actuales
+                            filterExcursions()
 
-                        val currentState = _uiState.value
-                        if (currentState is CalendarUiState.Success) {
-                            _uiState.value = currentState.copy(isRefreshing = false)
+                            CalendarUiState.Success(excursions = result.data)
                         }
-                    }
-
-                    is Result.Error -> {
-                        _uiState.value = CalendarUiState.Error(message = result.message)
-                    }
-
-                    is Result.Loading -> {
-                        if (currentState is CalendarUiState.Success) {
-                            _uiState.value = currentState.copy(isRefreshing = true)
-                        } else {
-                            _uiState.value = CalendarUiState.Loading
+                        is Result.Error -> {
+                            CalendarUiState.Error(message = result.message)
                         }
+                        is Result.Loading -> _uiState.value
                     }
+
+                    // Antes de ocultar el spinner:
+                    val elapsed = System.currentTimeMillis() - startTime
+                    if (elapsed < MIN_REFRESH_TIME) {
+                        kotlinx.coroutines.delay(MIN_REFRESH_TIME - elapsed)
+                    }
+
+                    // ✅ Ocultar spinner después de procesar
+                    _isRefreshing.value = false
                 }
             }
         }
