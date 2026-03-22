@@ -14,7 +14,6 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.os.Build
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import com.asociacionciguena.app.R
 import com.asociacionciguena.app.presentation.MainActivity
 import com.google.firebase.auth.FirebaseAuth
@@ -103,6 +102,7 @@ class FirebaseMessagingService : FirebaseMessagingService() {
 
             val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
+                .setColor(android.graphics.Color.parseColor("#FFFFFF"))// ← Fondo blanco (opcional, depende del launcher)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))
