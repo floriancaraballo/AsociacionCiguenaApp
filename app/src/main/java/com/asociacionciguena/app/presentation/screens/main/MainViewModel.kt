@@ -35,10 +35,14 @@ class MainViewModel @Inject constructor(
 
     private fun checkInitialState() {
         viewModelScope.launch {
+            android.util.Log.d("INIT_DEBUG", "🚀 App iniciando...")
             val isOnboardingCompleted = preferencesDataSource.isOnboardingCompleted()
                 .first()
 
             val isUserLoggedIn = auth.currentUser != null
+
+            android.util.Log.d("INIT_DEBUG", "🔍 isOnboardingCompleted = $isOnboardingCompleted")
+            android.util.Log.d("INIT_DEBUG", "🔍 isUserLoggedIn = $isUserLoggedIn")
 
             _initState.value = AppInitState.Ready(
                 isOnboardingCompleted = isOnboardingCompleted,

@@ -58,7 +58,10 @@ class PreferencesDataSourceImpl @Inject constructor(
 
     override fun isOnboardingCompleted(): Flow<Boolean> {
         return dataStore.data.map { preferences ->
-            preferences[KEY_ONBOARDING_COMPLETED] ?: false
+            val value = preferences[KEY_ONBOARDING_COMPLETED] ?: false
+            android.util.Log.d("PREF_DEBUG", "🔑 onboarding_completed = $value")
+            android.util.Log.d("PREF_DEBUG", "📦 Package: ${javaClass.`package`?.name}")
+            value
         }
     }
 }

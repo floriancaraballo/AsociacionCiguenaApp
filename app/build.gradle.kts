@@ -1,5 +1,6 @@
 import java.util.Properties
 
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -11,7 +12,7 @@ plugins {
 }
 
 // Cargar keystore properties
-val keystorePropertiesFile: File = rootProject.file("keystore.properties")
+val keystorePropertiesFile: File = project.file("keystore.properties")
 val keystoreProperties = Properties()
 
 if (keystorePropertiesFile.exists()) {
@@ -51,27 +52,32 @@ android {
     }
 
     // ✅ UN SOLO BLOQUE buildTypes (corregido)
+    // ✅ buildTypes corregido
     buildTypes {
         release {
+            // ✅ Firmar con la configuración de release (NO debug)
             signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = false  // ← Desactivado temporalmente para debug de AbstractTextEvent
-            isShrinkResources = false  // ← Desactivado junto con minify
-            /*proguardFiles(
+
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isDebuggable = false  // ← Explícito: no debuggable en release
+
+            proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-             */
-
-            signingConfig = signingConfigs.getByName("debug")
         }
 
         debug {
             isDebuggable = true
-            /*
+            // ✅ Firmar con debug (puede ser implícito, pero mejor explícito)
             signingConfig = signingConfigs.getByName("debug")
-            applicationIdSuffix = ".debug"  // ← Opcional: para distinguir APKs
 
-             */
+            // ✅ IMPORTANTE: Sufijo para poder tener debug y release instalados a la vez
+            applicationIdSuffix = ".debug"
+
+            // Opcional: prefijo en el nombre de la app para distinguir
+            resValue("string", "app_name", "Asociación Ciguena (Debug)")
         }
     }
 
@@ -80,12 +86,15 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-        freeCompilerArgs += listOf(
-            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
-            "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi"
-        )
+    // ✅ Reemplaza el bloque kotlinOptions por esto:
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            freeCompilerArgs.addAll(
+                "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+                "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi"
+            )
+        }
     }
 
     buildFeatures {
