@@ -16,6 +16,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.auth.FirebaseAuth
 import com.asociacionciguena.app.util.NetworkMonitor
+import com.google.firebase.messaging.FirebaseMessaging
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
@@ -47,6 +48,9 @@ class AuthViewModel @Inject constructor(
                     result.data?.let { user ->
                         // NUEVO: Obtener token FCM si ya está logueado
                         refreshFCMToken()
+                        // ✅ Si el usuario ya estaba logueado al iniciar la app, suscribir a topic privado
+                        subscribeToAuthenticatedTopic()
+
                         _uiState.value = AuthUiState.Success(user)
                     }
                 }
@@ -82,6 +86,9 @@ class AuthViewModel @Inject constructor(
                     // NUEVO: Obtener token FCM después del login exitoso
                     refreshFCMToken()
 
+                    // ✅ NUEVO: Suscribirse a topic "authenticated" para notificaciones privadas (fotos)
+                    subscribeToAuthenticatedTopic()
+
                     _uiState.value = AuthUiState.Success(result.data)
                 }
 
@@ -104,6 +111,9 @@ class AuthViewModel @Inject constructor(
             } catch (e: Exception) {
                 // Log error pero continuar con logout
             }
+
+            // ✅ NUEVO: Desuscribir de topic "authenticated" al cerrar sesión
+            unsubscribeFromAuthenticatedTopic()
 
             logoutUseCase()
             _uiState.value = AuthUiState.Idle
@@ -168,6 +178,34 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Suscribirse a topic "authenticated" para recibir notificaciones privadas (fotos)
+     */
+    private fun subscribeToAuthenticatedTopic() {
+        FirebaseMessaging.getInstance()
+            .subscribeToTopic("authenticated")
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    android.util.Log.d("FCM_TOPIC", "✅ Suscrito a topic 'authenticated' tras login")
+                } else {
+                    android.util.Log.e("FCM_TOPIC", "❌ Error al suscribir a 'authenticated': ${task.exception?.message}")
+                }
+            }
+    }
+    /**
+     * Desuscribirse de topic "authenticated" al cerrar sesión
+     */
+    private fun unsubscribeFromAuthenticatedTopic() {
+        FirebaseMessaging.getInstance()
+            .unsubscribeFromTopic("authenticated")
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    android.util.Log.d("FCM_TOPIC", "✅ Desuscrito de topic 'authenticated' tras logout")
+                } else {
+                    android.util.Log.e("FCM_TOPIC", "❌ Error al desuscribir de 'authenticated': ${task.exception?.message}")
+                }
+            }
+    }
     /**
      * Limpiar estado de password reset
      */

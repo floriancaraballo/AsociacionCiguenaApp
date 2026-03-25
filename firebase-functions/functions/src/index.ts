@@ -263,75 +263,43 @@ export const onNewsCreated = onDocumentCreated({
   const newsId = event.params.newsId;
   const newsData = snapshot.data();
 
+  // Solo notificar si es pública
+  if (newsData.isPublic !== true) {
+    console.log(`ℹ️ Noticia ${newsId} no es pública, no se notifica`);
+    return;
+  }
+
   try {
     const title = newsData.title || "Nueva publicación";
+    const shortDesc = newsData.shortDescription || "";
 
-    console.log(`📰 Nueva noticia creada: ${title}`);
+    console.log(`📰 Nueva publicación: ${title}`);
 
-    // Obtener tokens de dispositivos (incluye usuarios no logueados)
-    const deviceTokensSnapshot = await admin.firestore()
-      .collection("deviceTokens")
-      .get();
-
-    console.log(`📱 Total dispositivos registrados: ${deviceTokensSnapshot.size}`);
-
-    const tokens: string[] = [];
-    deviceTokensSnapshot.docs.forEach((doc) => {
-      const deviceData = doc.data();
-      const token = deviceData.token;
-      
-      if (token && typeof token === 'string' && token.length > 0) {
-        tokens.push(token);
-      }
-    });
-
-    console.log(`📧 Tokens válidos encontrados: ${tokens.length}`);
-
-    if (tokens.length === 0) {
-      console.log("❌ No hay tokens para notificar");
-      return;
-    }
-
-    // Enviar notificación
+    // ✅ ENVIAR A TOPIC "public" (todos los dispositivos con la app)
     const message = {
+      topic: "public",  // ← CAMBIO CLAVE: topic en lugar de tokens
       data: {
-	  type: "news",
+        type: "news",
         itemId: newsId,
         title: "📰 Nueva publicación",
-        body: `${title}`,
+        body: title,
+        // Opcional: incluir descripción corta
+        ...(shortDesc && { shortDescription: shortDesc })
       },
       android: {
         priority: "high" as const,
-      },
-      tokens: tokens,
+        notification: {
+          icon: "ic_notification",
+          color: "#FFFFFF"
+        }
+      }
     };
 
-    console.log(`📤 Enviando notificaciones a ${tokens.length} dispositivos...`);
+    const response = await admin.messaging().send(message);
+    console.log(`✅ Notificación de noticia enviada: ${response}`);
 
-    const response = await admin.messaging().sendEachForMulticast(message);
-    
-    console.log(`✅ Enviadas: ${response.successCount} exitosas, ${response.failureCount} fallidas`);
-
-    // Limpiar tokens inválidos
-    if (response.failureCount > 0) {
-      const tokensToRemove: string[] = [];
-      response.responses.forEach((resp, idx) => {
-        if (!resp.success) {
-          console.log(`❌ Token fallido: ${tokens[idx].substring(0, 20)}...`);
-          tokensToRemove.push(tokens[idx]);
-        }
-      });
-
-      // Eliminar tokens inválidos de deviceTokens
-      const batch = admin.firestore().batch();
-      for (const token of tokensToRemove) {
-        batch.delete(admin.firestore().collection("deviceTokens").doc(token));
-        console.log(`🧹 Eliminando token inválido: ${token.substring(0, 20)}...`);
-      }
-      await batch.commit();
-    }
   } catch (error) {
-    console.error("❌ Error al enviar notificaciones:", error);
+    console.error("❌ Error al enviar notificación de noticia:", error);
   }
 });
 
@@ -354,77 +322,36 @@ export const onExcursionCreated = onDocumentCreated({
 
     console.log(`🏔️ Nueva excursión creada: ${title}`);
 
-    // Formatear fecha
+    // Formatear fecha para el body
     let dateStr = "";
-    if (date) {
+    if (date && typeof date.toDate === 'function') {
       const d = date.toDate();
       dateStr = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
     }
 
-    // Obtener tokens de dispositivos
-    const deviceTokensSnapshot = await admin.firestore()
-      .collection("deviceTokens")
-      .get();
-
-    console.log(`📱 Total dispositivos registrados: ${deviceTokensSnapshot.size}`);
-
-    const tokens: string[] = [];
-    deviceTokensSnapshot.docs.forEach((doc) => {
-      const deviceData = doc.data();
-      const token = deviceData.token;
-      
-      if (token && typeof token === 'string' && token.length > 0) {
-        tokens.push(token);
-      }
-    });
-
-    console.log(`📧 Tokens válidos encontrados: ${tokens.length}`);
-
-    if (tokens.length === 0) {
-      console.log("❌ No hay tokens para notificar");
-      return;
-    }
-
-    // Crear mensaje
+    // ✅ ENVIAR A TOPIC "public" (todos los dispositivos)
     const message = {
+      topic: "public",  // ← CAMBIO CLAVE
       data: {
-		type: "excursion",
+        type: "excursion",
         itemId: excursionId,
         title: "Nueva Excursión Programada",
-        body: dateStr ? `${title} - ${dateStr}` : `${title}`,
+        body: dateStr ? `${title} - ${dateStr}` : title
       },
       android: {
         priority: "high" as const,
-      },
-      tokens: tokens,
+        notification: {
+          icon: "ic_notification",
+          color: "#FFFFFF"
+        }
+      }
     };
 
-    console.log(`📤 Enviando notificaciones a ${tokens.length} dispositivos...`);
+    const response = await admin.messaging().send(message);
+    console.log(`✅ Notificación de excursión enviada: ${response}`);
 
-    // Enviar notificación
-    const response = await admin.messaging().sendEachForMulticast(message);
-    
-    console.log(`✅ Enviadas: ${response.successCount} exitosas, ${response.failureCount} fallidas`);
-
-    // Limpiar tokens inválidos
-    if (response.failureCount > 0) {
-      const tokensToRemove: string[] = [];
-      response.responses.forEach((resp, idx) => {
-        if (!resp.success) {
-          console.log(`❌ Token fallido: ${tokens[idx].substring(0, 20)}...`);
-          tokensToRemove.push(tokens[idx]);
-        }
-      });
-
-      const batch = admin.firestore().batch();
-      for (const token of tokensToRemove) {
-        batch.delete(admin.firestore().collection("deviceTokens").doc(token));
-        console.log(`🧹 Eliminando token inválido: ${token.substring(0, 20)}...`);
-      }
-      await batch.commit();
-    }
   } catch (error) {
-    console.error("❌ Error al enviar notificaciones:", error);
+    console.error("❌ Error al enviar notificación de excursión:", error);
   }
 });
 
@@ -448,7 +375,6 @@ export const onUploadBatchCompleted = onDocumentUpdated(
       if (beforeData?.status === "uploading" && afterData.status === "completed") {
         const excursionId = afterData.excursionId as string;
         const photoCount = afterData.photoCount as number;
-        const authorizedUsers = afterData.authorizedUsers as string[] || [];
 
         if (!excursionId) {
           console.log("❌ No excursionId");
@@ -457,7 +383,7 @@ export const onUploadBatchCompleted = onDocumentUpdated(
 
         console.log(`📸 Upload batch completed: ${photoCount} photos for excursion ${excursionId}`);
 
-        // Obtener título de la excursión
+        // Obtener título de la excursión para el mensaje
         const excursionDoc = await admin.firestore()
           .collection("excursions")
           .doc(excursionId)
@@ -465,101 +391,34 @@ export const onUploadBatchCompleted = onDocumentUpdated(
 
         const excursionTitle = excursionDoc.data()?.title || "una excursión";
 
-        // Si NO hay usuarios autorizados, enviar a TODOS
-        let tokens: string[] = [];
-
-        if (authorizedUsers.length === 0) {
-          console.log("📢 No hay usuarios autorizados específicos, enviando a TODOS");
-          
-          const deviceTokensSnapshot = await admin.firestore()
-            .collection("deviceTokens")
-            .get();
-
-          deviceTokensSnapshot.forEach((doc) => {
-            const deviceData = doc.data();
-            const token = deviceData.token;
-            if (token && typeof token === 'string' && token.length > 0) {
-              tokens.push(token);
-            }
-          });
-        } else {
-          // Obtener tokens de usuarios autorizados (en lotes de 10)
-          console.log(`👥 Usuarios autorizados: ${authorizedUsers.length}`);
-
-          for (let i = 0; i < authorizedUsers.length; i += 10) {
-            const batch = authorizedUsers.slice(i, i + 10);
-
-            const usersSnapshot = await admin.firestore()
-              .collection("users")
-              .where(admin.firestore.FieldPath.documentId(), "in", batch)
-              .get();
-
-            // Obtener tokens de deviceTokens por userId
-            for (const userDoc of usersSnapshot.docs) {
-              const deviceTokensQuery = await admin.firestore()
-                .collection("deviceTokens")
-                .where("userId", "==", userDoc.id)
-                .get();
-
-              deviceTokensQuery.forEach((deviceDoc) => {
-                const token = deviceDoc.data().token;
-                if (token && typeof token === 'string' && token.length > 0) {
-                  tokens.push(token);
-                }
-              });
-            }
-          }
-        }
-
-        console.log(`📧 Tokens encontrados: ${tokens.length}`);
-
-        if (tokens.length === 0) {
-          console.log("✅ No FCM tokens found");
-          return;
-        }
-
         // Mensaje según el número de fotos
         const body = photoCount === 1
           ? `Nueva foto de "${excursionTitle}" disponible en la galería`
           : `${photoCount} nuevas fotos de "${excursionTitle}" disponibles en la galería`;
 
-        // Enviar notificación
-        const response = await admin.messaging().sendEachForMulticast({
-          tokens: tokens,
+        // ✅ ENVIAR A TOPIC "authenticated" (solo usuarios logueados)
+        const message = {
+          topic: "authenticated",  // ← CAMBIO CLAVE: solo logueados
           data: {
-			type: "photo",
+            type: "photo",
             itemId: excursionId,
             title: "📸 ¡Fotos Nuevas Disponibles!",
-            body: body,
+            body: body
           },
           android: {
             priority: "high" as const,
-          },
-        });
-
-        console.log(`✅ Sent notification: ${response.successCount} success, ${response.failureCount} failed`);
-
-        // Limpiar tokens inválidos
-        if (response.failureCount > 0) {
-          const invalidTokens: string[] = [];
-          response.responses.forEach((resp, idx) => {
-            if (!resp.success) {
-              invalidTokens.push(tokens[idx]);
+            notification: {
+              icon: "ic_notification",
+              color: "#FFFFFF"
             }
-          });
-
-          if (invalidTokens.length > 0) {
-            const batch = admin.firestore().batch();
-            for (const token of invalidTokens.slice(0, 10)) {
-              batch.delete(admin.firestore().collection("deviceTokens").doc(token));
-            }
-            await batch.commit();
-            console.log(`🧹 Cleaned ${Math.min(invalidTokens.length, 10)} invalid tokens`);
           }
-        }
+        };
+
+        const response = await admin.messaging().send(message);
+        console.log(`✅ Notificación de fotos enviada a topic "authenticated": ${response}`);
       }
     } catch (error) {
-      console.error("❌ Error in onUploadBatchCompleted:", error);
+      console.error("❌ Error en onUploadBatchCompleted:", error);
     }
   }
 );

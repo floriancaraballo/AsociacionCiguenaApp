@@ -18,6 +18,7 @@ import com.asociacionciguena.app.R
 import com.asociacionciguena.app.presentation.MainActivity
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.CoroutineScope
@@ -31,36 +32,96 @@ class FirebaseMessagingService : FirebaseMessagingService() {
     private val auth by lazy { FirebaseAuth.getInstance() }
 
     companion object {
-        private const val CHANNEL_ID = "asociacion_ciguena_notifications"
+        private const val CHANNEL_ID = "asociacion_ciguena_notifications_v3"
         private const val CHANNEL_NAME = "Notificaciones Generales"
         private const val NOTIFICATION_ID = 1
+
+        // ✅ NUEVO: Topics para segmentar notificaciones
+        private const val TOPIC_PUBLIC = "public"           // ← Todos los dispositivos
+        private const val TOPIC_AUTHENTICATED = "authenticated"  // ← Solo usuarios logueados
     }
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
+
+        android.util.Log.d("FCM_TOPIC", "🔑 Nuevo token generado: ${token.take(20)}...")
+
+        // ✅ 1. Suscribirse SIEMPRE a topic público (noticias/calendario para todos)
+        subscribeToTopic(TOPIC_PUBLIC)
+
+        // ✅ 2. Si hay usuario logueado, suscribir a topic privado (fotos)
+        if (auth.currentUser != null) {
+            subscribeToTopic(TOPIC_AUTHENTICATED)
+            android.util.Log.d("FCM_TOPIC", "✅ Usuario logueado: suscrito a '$TOPIC_AUTHENTICATED'")
+        }
+
+        // ✅ 3. Guardar token en Firestore
         saveTokenToFirestore(token)
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
 
-        android.util.Log.d("FCM_NOTIF", "📨 Mensaje recibido")
-        android.util.Log.d("FCM_NOTIF", "Data: ${message.data}")
-        android.util.Log.d("FCM_NOTIF", "Notification: ${message.notification}")
+        // ✅ LOGS CRÍTICOS
+        android.util.Log.d("FCM_LOCKSCREEN", "📨 onMessageReceived llamado")
+        android.util.Log.d("FCM_LOCKSCREEN", "📦 message.data completo: ${message.data}")
+        android.util.Log.d("FCM_LOCKSCREEN", "📝 title: '${message.data["title"]}'")
+        android.util.Log.d("FCM_LOCKSCREEN", "📄 body: '${message.data["body"]}'")
+        android.util.Log.d("FCM_LOCKSCREEN", "🏷️ type: '${message.data["type"]}'")
+        android.util.Log.d("FCM_LOCKSCREEN", "🆔 itemId: '${message.data["itemId"]}'")
 
-        // Crear canal de notificación
         createNotificationChannel()
 
-        // IMPORTANTE: Ahora SOLO usamos data (no notification)
         val title = message.data["title"] ?: "Nueva notificación"
         val body = message.data["body"] ?: ""
         val type = message.data["type"]
         val itemId = message.data["itemId"]
 
-        android.util.Log.d("FCM_NOTIF", "Title: $title, Body: $body, Type: $type")
+        android.util.Log.d("FCM_LOCKSCREEN", "🔍 Valores finales: title='$title', body='$body'")
 
-        // Mostrar notificación
         showNotification(title, body, type, itemId)
+    }
+
+    // ✅ NUEVO: Métodos para gestionar suscripción a topics
+    fun subscribeToTopic(topic: String) {
+        FirebaseMessaging.getInstance().subscribeToTopic(topic)
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    android.util.Log.d("FCM_TOPIC", "✅ Suscrito a topic: $topic")
+                } else {
+                    android.util.Log.e("FCM_TOPIC", "❌ Error al suscribir a $topic: ${task.exception?.message}")
+                }
+            }
+    }
+
+    fun unsubscribeFromTopic(topic: String) {
+        FirebaseMessaging.getInstance().unsubscribeFromTopic(topic)
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    android.util.Log.d("FCM_TOPIC", "✅ Desuscrito de topic: $topic")
+                } else {
+                    android.util.Log.e("FCM_TOPIC", "❌ Error al desuscribir de $topic: ${task.exception?.message}")
+                }
+            }
+    }
+
+    // ✅ NUEVO: Llamar cuando el usuario se loguea
+    fun onUserLogin() {
+        android.util.Log.d("FCM_TOPIC", "🔐 Usuario logueado: suscribiendo a '$TOPIC_AUTHENTICATED'")
+        subscribeToTopic(TOPIC_AUTHENTICATED)
+
+        // Actualizar token en Firestore por si acaso
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                saveTokenToFirestore(task.result)
+            }
+        }
+    }
+
+    // ✅ NUEVO: Llamar cuando el usuario se desloguea
+    fun onUserLogout() {
+        android.util.Log.d("FCM_TOPIC", "🔓 Usuario deslogueado: desuscribiendo de '$TOPIC_AUTHENTICATED'")
+        unsubscribeFromTopic(TOPIC_AUTHENTICATED)
     }
 
     private fun showNotification(
@@ -85,7 +146,7 @@ class FirebaseMessagingService : FirebaseMessagingService() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            // Cargar large icon - usar launcher como backup seguro
+
             val largeIcon = try {
                 val bitmap = BitmapFactory.decodeResource(resources, R.drawable.ic_notificacion_ciguena)
                 if (bitmap != null) {
@@ -101,20 +162,26 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             }
 
             val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_notification)
-                .setColor(android.graphics.Color.parseColor("#FFFFFF"))// ← Fondo blanco (opcional, depende del launcher)
+                .setSmallIcon(R.drawable.ic_notification_dark)
+                .setColor(android.graphics.Color.WHITE)
+                .setColorized(true)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                // ✅ CONFIGURACIÓN EXTRA PARA LOCKSCREEN
+                .setWhen(System.currentTimeMillis())
+                .setShowWhen(true)
+                .setUsesChronometer(false)
+                // ✅ NOTIFICACIÓN COMPLETA
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
                 .setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI)
                 .setVibrate(longArrayOf(0, 500, 200, 500))
 
-            // Solo añadir large icon si no es null
             if (largeIcon != null) {
                 notificationBuilder.setLargeIcon(largeIcon)
             }
@@ -139,11 +206,12 @@ class FirebaseMessagingService : FirebaseMessagingService() {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Notificaciones de publicaciones, excursiones y fotos"
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 500, 200, 500)
                 enableLights(true)
                 lightColor = android.graphics.Color.BLUE
-                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+
                 setShowBadge(true)
             }
 
@@ -152,9 +220,6 @@ class FirebaseMessagingService : FirebaseMessagingService() {
         }
     }
 
-    /**
-     * Recortar bitmap en círculo perfecto
-     */
     private fun getCircularBitmap(bitmap: Bitmap): Bitmap {
         val size = minOf(bitmap.width, bitmap.height)
         val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -179,16 +244,37 @@ class FirebaseMessagingService : FirebaseMessagingService() {
     }
 
     private fun saveTokenToFirestore(token: String) {
-        val userId = auth.currentUser?.uid ?: return
+        val userId = auth.currentUser?.uid
+
+        android.util.Log.d("FCM_TOKEN", "💾 Guardando token para userId: $userId")
+
+        if (userId == null) {
+            android.util.Log.w("FCM_TOKEN", "⚠️ No hay usuario logueado, solo se guarda para analytics")
+            // ✅ No retornamos: guardamos el token aunque no haya usuario (para posibles usos futuros)
+        }
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                firestore.collection("users")
-                    .document(userId)
-                    .update("fcmToken", token)
+                val userRef = firestore.collection("users").document(userId ?: "anonymous_${token.take(8)}")
+
+                // ✅ CAMBIO CLAVE: Usar set() con merge en lugar de update()
+                // Esto crea el documento si no existe, o actualiza si ya existe
+                userRef.set(
+                    mapOf(
+                        "fcmToken" to token,
+                        "fcmTopics" to listOfNotNull(
+                            TOPIC_PUBLIC,
+                            if (auth.currentUser != null) TOPIC_AUTHENTICATED else null
+                        ),
+                        "updatedAt" to com.google.firebase.Timestamp.now()
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
                     .await()
+
+                android.util.Log.d("FCM_TOKEN", "✅ Token guardado en Firestore")
             } catch (e: Exception) {
-                // Log error
+                android.util.Log.e("FCM_TOKEN", "❌ Error guardando token: ${e.message}", e)
             }
         }
     }
