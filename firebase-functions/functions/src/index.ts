@@ -6,6 +6,13 @@ import { generateMinorsListDocx } from "./generateMinorsList";
 
 admin.initializeApp();
 
+// ✅ IMPORTAR funciones de pago
+import { createPaymentIntent } from './payments/createPaymentIntent';
+import { paymentNotification } from './payments/paymentNotification';
+
+// ✅ EXPORTAR funciones de pago (nombres exactos para deploy)
+export { createPaymentIntent, paymentNotification };
+
 interface PendingUserDocument {
   email: string;
   displayName: string;
@@ -276,24 +283,27 @@ export const onNewsCreated = onDocumentCreated({
     console.log(`📰 Nueva publicación: ${title}`);
 
     // ✅ ENVIAR A TOPIC "public" (todos los dispositivos con la app)
-    const message = {
-      topic: "public",  // ← CAMBIO CLAVE: topic en lugar de tokens
-      data: {
-        type: "news",
-        itemId: newsId,
-        title: "📰 Nueva publicación",
-        body: title,
-        // Opcional: incluir descripción corta
-        ...(shortDesc && { shortDescription: shortDesc })
-      },
-      android: {
-        priority: "high" as const,
-        notification: {
-          icon: "ic_notification",
-          color: "#FFFFFF"
-        }
-      }
-    };
+	const message = {
+	  topic: "public",
+	  notification: {  // ← AÑADIR campo notification
+		title: "📰 Nueva publicación",
+		body: title
+	  },
+	  data: {
+		type: "news",
+		itemId: newsId,
+		title: "📰 Nueva publicación",
+		body: title,
+		...(shortDesc && { shortDescription: shortDesc })
+	  },
+	  android: {
+		priority: "high" as const,
+		notification: {
+		  icon: "ic_notification",
+		  color: "#1976D2"
+		}
+	  }
+	};
 
     const response = await admin.messaging().send(message);
     console.log(`✅ Notificación de noticia enviada: ${response}`);
@@ -329,23 +339,28 @@ export const onExcursionCreated = onDocumentCreated({
       dateStr = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
     }
 
-    // ✅ ENVIAR A TOPIC "public" (todos los dispositivos)
-    const message = {
-      topic: "public",  // ← CAMBIO CLAVE
-      data: {
-        type: "excursion",
-        itemId: excursionId,
-        title: "Nueva Excursión Programada",
-        body: dateStr ? `${title} - ${dateStr}` : title
-      },
-      android: {
-        priority: "high" as const,
-        notification: {
-          icon: "ic_notification",
-          color: "#FFFFFF"
-        }
-      }
-    };
+    const bodyText = dateStr ? `${title} - ${dateStr}` : title;
+
+	const message = {
+	  topic: "public",
+	  notification: {  // ← AÑADIR campo notification
+		title: "🏔️ Nueva Excursión Programada",
+		body: bodyText
+	  },
+	  data: {
+		type: "excursion",
+		itemId: excursionId,
+		title: "Nueva Excursión Programada",
+		body: bodyText
+	  },
+	  android: {
+		priority: "high" as const,
+		notification: {
+		  icon: "ic_notification",
+		  color: "#1976D2"
+		}
+	  }
+	};
 
     const response = await admin.messaging().send(message);
     console.log(`✅ Notificación de excursión enviada: ${response}`);
@@ -398,21 +413,25 @@ export const onUploadBatchCompleted = onDocumentUpdated(
 
         // ✅ ENVIAR A TOPIC "authenticated" (solo usuarios logueados)
         const message = {
-          topic: "authenticated",  // ← CAMBIO CLAVE: solo logueados
-          data: {
-            type: "photo",
-            itemId: excursionId,
-            title: "📸 ¡Fotos Nuevas Disponibles!",
-            body: body
-          },
-          android: {
-            priority: "high" as const,
-            notification: {
-              icon: "ic_notification",
-              color: "#FFFFFF"
-            }
-          }
-        };
+		  topic: "authenticated",
+		  notification: {  // ← AÑADIR campo notification
+			title: "📸 ¡Fotos Nuevas Disponibles!",
+			body: body
+		  },
+		  data: {
+			type: "photo",
+			itemId: excursionId,
+			title: "📸 ¡Fotos Nuevas Disponibles!",
+			body: body
+		  },
+		  android: {
+			priority: "high" as const,
+			notification: {
+			  icon: "ic_notification",
+			  color: "#1976D2"
+			}
+		  }
+		};	
 
         const response = await admin.messaging().send(message);
         console.log(`✅ Notificación de fotos enviada a topic "authenticated": ${response}`);

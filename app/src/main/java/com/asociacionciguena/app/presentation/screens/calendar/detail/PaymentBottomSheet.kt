@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.asociacionciguena.app.util.BankingUtils
+import androidx.compose.ui.res.painterResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -20,8 +21,10 @@ fun PaymentBottomSheet(
     excursionTitle: String,
     amount: Double,
     userName: String,
+    excursionId: String,  // ← AÑADIR: para pasar al pago
     onDismiss: () -> Unit,
-    onUploadProof: (Uri) -> Unit
+    onUploadProof: (Uri) -> Unit,
+    onNavigateToPayment: (String, Double) -> Unit
 ) {
     val context = LocalContext.current
     val concept = "Excursión $excursionTitle - $userName"
@@ -87,6 +90,52 @@ fun PaymentBottomSheet(
             }
 
             Divider()
+
+            // ✅ NUEVA SECCIÓN: Pago con tarjeta (Redsys)
+            Text(
+                text = "Pago con tarjeta",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Button(
+                onClick = {
+                    // ✅ AÑADIR ESTE LOG
+                    android.util.Log.d("PAYMENT_DEBUG", "🔘 Botón 'Pagar con tarjeta' PULSADO")
+                    android.util.Log.d("PAYMENT_DEBUG", "   excursionId: $excursionId")
+                    android.util.Log.d("PAYMENT_DEBUG", "   amount: $amount")
+                    // ✅ Navegar a WebView de Redsys
+                    onNavigateToPayment(excursionId, amount)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Icon(
+                    painter = painterResource(id = com.asociacionciguena.app.R.drawable.ic_payment), // O el icono que tengas
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Pagar con tarjeta (TPV Seguro)")
+            }
+
+            Text(
+                text = "Pago seguro mediante pasarela de Cajasur. Tus datos están protegidos.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Divider()
+
+            // Sección existente: Datos bancarios (transferencia)
+            Text(
+                text = "Transferencia bancaria",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
 
             Text(
                 text = "Opciones de pago",
@@ -200,53 +249,6 @@ fun PaymentBottomSheet(
                             Icon(Icons.Default.ContentCopy, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Copiar todos los datos")
-                        }
-                    }
-                }
-            }
-
-            // Opción 2: Ver/copiar datos
-            OutlinedButton(
-                onClick = { showBankingDetails = !showBankingDetails },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(
-                    if (showBankingDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(if (showBankingDetails) "Ocultar datos" else "Ver datos bancarios")
-            }
-
-            // Datos bancarios expandibles
-            if (showBankingDetails) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = BankingUtils.getBankingDetailsText(amount, concept),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-
-                        Button(
-                            onClick = {
-                                BankingUtils.copyToClipboard(
-                                    context = context,
-                                    amount = amount,
-                                    concept = concept
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Copiar datos")
                         }
                     }
                 }

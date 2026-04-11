@@ -14,6 +14,7 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.asociacionciguena.app.AsociacionCiguenaApp
 import com.asociacionciguena.app.R
 import com.asociacionciguena.app.presentation.MainActivity
 import com.google.firebase.auth.FirebaseAuth
@@ -32,13 +33,14 @@ class FirebaseMessagingService : FirebaseMessagingService() {
     private val auth by lazy { FirebaseAuth.getInstance() }
 
     companion object {
-        private const val CHANNEL_ID = "asociacion_ciguena_notifications_v3"
-        private const val CHANNEL_NAME = "Notificaciones Generales"
+        // ✅ Usar la constante de AsociacionCiguenaApp para evitar desincronización
+        private const val CHANNEL_ID = AsociacionCiguenaApp.NOTIFICATION_CHANNEL_ID
+        private const val CHANNEL_NAME = AsociacionCiguenaApp.NOTIFICATION_CHANNEL_NAME
         private const val NOTIFICATION_ID = 1
 
         // ✅ NUEVO: Topics para segmentar notificaciones
-        private const val TOPIC_PUBLIC = "public"           // ← Todos los dispositivos
-        private const val TOPIC_AUTHENTICATED = "authenticated"  // ← Solo usuarios logueados
+        private const val TOPIC_PUBLIC = "public"
+        private const val TOPIC_AUTHENTICATED = "authenticated"
     }
 
     override fun onNewToken(token: String) {
@@ -76,7 +78,6 @@ class FirebaseMessagingService : FirebaseMessagingService() {
         val body = message.data["body"] ?: ""
         val type = message.data["type"]
         val itemId = message.data["itemId"]
-
         android.util.Log.d("FCM_LOCKSCREEN", "🔍 Valores finales: title='$title', body='$body'")
 
         showNotification(title, body, type, itemId)
@@ -134,16 +135,18 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             android.util.Log.d("FCM_NOTIF", "📱 Mostrando notificación: $title")
 
             val intent = Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or  // ✅ Reusa instancia existente si hay
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP    // ✅ Evita recrear si ya está en top
                 putExtra("notification_type", type)
                 putExtra("item_id", itemId)
             }
 
             val pendingIntent = PendingIntent.getActivity(
                 this,
-                0,
+                System.currentTimeMillis().toInt(),
                 intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
             )
 
 
@@ -163,7 +166,7 @@ class FirebaseMessagingService : FirebaseMessagingService() {
 
             val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification_dark)
-                .setColor(android.graphics.Color.WHITE)
+                .setColor(android.graphics.Color.parseColor("#1976D2"))
                 .setColorized(true)
                 .setContentTitle(title)
                 .setContentText(body)
@@ -179,12 +182,24 @@ class FirebaseMessagingService : FirebaseMessagingService() {
                 .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
-                .setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI)
-                .setVibrate(longArrayOf(0, 500, 200, 500))
+                //.setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI)
+                //.setVibrate(longArrayOf(0, 500, 200, 500))
 
             if (largeIcon != null) {
                 notificationBuilder.setLargeIcon(largeIcon)
             }
+
+            // ✅ CLAVE: Versión PÚBLICA con MISMO estilo que la principal
+            val publicVersion = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification_dark)  // ← Mismo icono
+                .setContentTitle(title)                          // ← Mismo título
+                .setContentText(body)                            // ← Mismo cuerpo
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))  // ← ✅ ESTO FALTABA
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)       // ← Visibilidad pública
+                .build()
+
+            // Aplicar al builder principal
+            notificationBuilder.setPublicVersion(publicVersion)
 
             val notification = notificationBuilder.build()
 

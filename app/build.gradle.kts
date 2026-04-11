@@ -193,6 +193,9 @@ dependencies {
     // ========================================
     implementation("com.itextpdf:itext7-core:7.2.5")  // ← Comentado si no lo usas en Android
 
+    // ✅ WebView para pagos
+    implementation("com.google.accompanist:accompanist-webview:0.34.0")
+
     // ========================================
     // TESTING
     // ========================================

@@ -52,5 +52,10 @@ sealed class Screen(val route: String) {
         fun createRoute(excursionId: String, excursionTitle: String) =
             "authorizations/$excursionId/${Uri.encode(excursionTitle)}"
     }
-
+    // ✅ RUTA Payment: amount como String (se convierte a Double al leer)
+    object Payment : Screen("payment/{excursionId}/{amount}") {
+        fun createRoute(excursionId: String, amount: Double): String {
+            return "payment/$excursionId/$amount"  // amount se convierte a String automáticamente
+        }
+    }
 }

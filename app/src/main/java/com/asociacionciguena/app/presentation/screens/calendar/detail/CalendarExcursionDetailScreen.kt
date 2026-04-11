@@ -244,10 +244,19 @@ private fun ExcursionDetailContent(
                 }
                 if (showPaymentSheet && currentUser != null) {
                     PaymentBottomSheet(
-                        excursionTitle = excursion.title, amount = price,
-                        userName = currentUser?.displayName ?: "Usuario",
+                        excursionTitle = excursion.title,
+                        amount = excursion.price ?: 0.0,
+                        userName = currentUser?.displayName ?: "",
+                        excursionId = excursion.id,  // ← Asegúrate de pasar esto
                         onDismiss = { showPaymentSheet = false },
-                        onUploadProof = { uri -> viewModel.uploadPaymentProof(excursionId = excursion.id, amount = price, photoUri = uri) }
+                        onUploadProof = { uri ->
+                            viewModel.uploadPaymentProof(excursion.id, excursion.price ?: 0.0, uri)
+                            showPaymentSheet = false
+                        },
+                        onNavigateToPayment = { excursionId, amount ->
+                            showPaymentSheet = false
+                            navController.navigate(Screen.Payment.createRoute(excursionId, amount))
+                        }
                     )
                 }
             }

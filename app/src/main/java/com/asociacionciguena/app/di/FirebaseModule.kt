@@ -2,6 +2,7 @@ package com.asociacionciguena.app.di
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import dagger.Module
 import dagger.Provides
@@ -50,5 +51,13 @@ object FirebaseModule {
     @Singleton
     fun provideStorage(): FirebaseStorage {
         return FirebaseStorage.getInstance()
+    }
+
+    @Provides
+    @Singleton
+    fun provideFunctions(): FirebaseFunctions {
+        return FirebaseFunctions.getInstance()
+        // O si usas una región específica:
+        // return FirebaseFunctions.getInstance("europe-west1")
     }
 }

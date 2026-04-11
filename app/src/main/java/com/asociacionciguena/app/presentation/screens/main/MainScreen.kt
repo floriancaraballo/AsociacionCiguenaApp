@@ -50,6 +50,8 @@ import com.asociacionciguena.app.presentation.screens.admin.authorizations.Autho
 import android.net.Uri
 import com.asociacionciguena.app.presentation.screens.calendar.detail.CalendarExcursionDetailViewModel
 import com.asociacionciguena.app.presentation.screens.calendar.detail.SignatureScreen
+import com.asociacionciguena.app.presentation.components.PaymentWebView
+import com.asociacionciguena.app.presentation.screens.payment.PaymentScreen
 
 @Composable
 fun MainScreen(
@@ -223,6 +225,51 @@ fun MainScreen(
                             },
                             onNavigateToAuthorizations = { excursionId, excursionTitle ->
                                 navController.navigate(Screen.AuthorizationsList.createRoute(excursionId, excursionTitle))
+                            }
+                        )
+                    }
+                    // ───────── NUEVA RUTA: Pago con TPV (Redsys) ─────────
+                    composable(
+                        route = Screen.Payment.route,
+                        arguments = listOf(
+                            navArgument("excursionId") { type = NavType.StringType },
+                            navArgument("amount") { type = NavType.StringType }
+                        )
+                    ) { backStackEntry ->
+                        val excursionId = backStackEntry.arguments?.getString("excursionId") ?: run {
+                            navController.popBackStack()
+                            return@composable
+                        }
+
+                        val amountStr = backStackEntry.arguments?.getString("amount") ?: "0"
+                        val amount = amountStr.toDoubleOrNull() ?: 0.0
+
+                        if (amount <= 0) {
+                            navController.popBackStack()
+                            return@composable
+                        }
+
+                        PaymentScreen(
+                            excursionId = excursionId,
+                            amount = amount,
+                            onPaymentSuccess = {
+                                navController.popBackStack()
+                                android.widget.Toast.makeText(
+                                    navController.context,
+                                    "✅ Pago realizado correctamente",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            },
+                            onPaymentError = { error ->
+                                navController.popBackStack()
+                                android.widget.Toast.makeText(
+                                    navController.context,
+                                    "❌ $error",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            },
+                            onNavigateBack = {
+                                navController.popBackStack()
                             }
                         )
                     }

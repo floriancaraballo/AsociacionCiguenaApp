@@ -13,14 +13,21 @@ import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.google.firebase.functions.FirebaseFunctions  // ← AÑADIR
+import kotlinx.coroutines.tasks.await  // ← Ya deberías tenerlo
 
 @Singleton
 class PaymentRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
     private val auth: FirebaseAuth
+   // private val functions: FirebaseFunctions  // ← AÑADIR ESTE PARÁMETRO
 ) {
 
+    // ✅ NUEVO: Forzar región europe-west1
+    private val functions: FirebaseFunctions by lazy {
+        FirebaseFunctions.getInstance("europe-west1")  // ← ¡CLAVE!
+    }
     /**
      * Obtener estado de pago de un usuario para una excursión
      */
@@ -180,4 +187,61 @@ class PaymentRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    /**
+     * ✅ NUEVO: Crear intención de pago con Redsys (TPV Virtual Cajasur)
+     */
+    suspend fun createPaymentIntent(
+        excursionId: String,
+        amount: Double,
+        userName: String,
+        userEmail: String
+    ): PaymentIntentResult {
+        val data = mapOf(
+            "excursionId" to excursionId,
+            "amount" to amount,
+            "userName" to userName,
+            "userEmail" to userEmail
+        )
+
+        try {
+            val callable = functions.getHttpsCallable("createPaymentIntent")
+            val result = callable.call(data).await()
+
+            // ✅ FIX: Usar getData() en lugar de data (propiedad privada en versiones recientes)
+            @Suppress("UNCHECKED_CAST")
+            val responseData = result.getData() as? Map<String, Any> ?: emptyMap()
+
+            // Extraer campos con fallback seguro
+            val orderId = responseData["orderId"] as? String ?: ""
+            val tpvUrl = responseData["tpvUrl"] as? String ?: ""
+
+            // Extraer params: puede ser Map<String, Any> o Map<String, String>
+            val paramsRaw = responseData["params"]
+            val params = when (paramsRaw) {
+                is Map<*, *> -> paramsRaw.mapKeys { it.key as? String ?: "" }
+                    .mapValues { it.value as? String ?: "" }
+                else -> emptyMap()
+            }
+
+            return PaymentIntentResult(
+                orderId = orderId,
+                tpvUrl = tpvUrl,
+                params = params
+            )
+
+        } catch (e: Exception) {
+            android.util.Log.e("PaymentRepo", "❌ Error en createPaymentIntent: ${e.message}", e)
+            throw Exception("Error al crear intención de pago: ${e.message}")
+        }
+    }
 }
+
+/**
+ * Resultado de crear una intención de pago con Redsys
+ */
+data class PaymentIntentResult(
+    val orderId: String,
+    val tpvUrl: String,
+    val params: Map<String, String>
+)

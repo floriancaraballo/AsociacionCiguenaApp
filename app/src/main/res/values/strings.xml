@@ -58,7 +58,7 @@
     <string name="delete">Eliminar</string>
     <string name="logout">Cerrar sesión</string>
 
-    <string name="default_notification_channel_id">asociacion_ciguena_notifications</string>
+    <string name="default_notification_channel_id">asociacion_ciguena_notifications_v4</string>
     <string name="default_notification_channel_name">Notificaciones Generales</string>
     <string name="default_notification_channel_description">Notificaciones de publicaciones, excursiones y fotos</string>
 </resources>
