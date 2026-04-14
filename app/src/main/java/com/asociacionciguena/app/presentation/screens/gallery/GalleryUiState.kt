@@ -17,5 +17,7 @@ sealed class GalleryUiState {
 data class ExcursionWithPhotos(
     val excursion: Excursion,
     val photoCount: Int,
-    val firstPhotoUrl: String?
+    val firstPhotoUrl: String?,
+    val firstPhotoThumbnailUrl: String? = null,
+    val firstPhotoMediaType: String = "image"
 )

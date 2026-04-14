@@ -17,6 +17,7 @@ import javax.inject.Inject
 import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.delay
 import android.content.Context
+import android.media.MediaMetadataRetriever
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.asociacionciguena.app.util.ImageCompressor
 import com.asociacionciguena.app.util.NetworkMonitor
@@ -308,14 +309,16 @@ class PhotoUploadViewModel @Inject constructor(
 
                         // ✅ GENERAR MINIATURA DEL VÍDEO (CORREGIDO)
                         thumbnailUrl = try {
-                            // ✅ PASO 1: Convertir Uri a String path
-                            val uriPath = uri.toString()
-
-                            // ✅ PASO 2: Usar la sobrecarga que acepta String
-                            val thumbnailBitmap = android.media.ThumbnailUtils.createVideoThumbnail(
-                                uriPath,  // ← ✅ String path (NO Uri)
-                                android.provider.MediaStore.Video.Thumbnails.MINI_KIND
-                            )
+                            val retriever = MediaMetadataRetriever()
+                            val thumbnailBitmap = try {
+                                retriever.setDataSource(context, uri)
+                                retriever.getFrameAtTime(
+                                    0,
+                                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                                )
+                            } finally {
+                                retriever.release()
+                            }
 
                             if (thumbnailBitmap != null) {
                                 // Guardar miniatura en Storage

@@ -1,6 +1,8 @@
 package com.asociacionciguena.app.presentation.screens.admin.photos
 
 import android.Manifest
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -13,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -87,7 +90,7 @@ fun PhotoUploadScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Subir Fotos") },
+                title = { Text("Subir archivos multimedia") },
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateBack,
@@ -211,7 +214,7 @@ private fun PhotoUploadContent(
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Fotos subidas correctamente",
+                        text = "Fotos/vídeos subidos correctamente",
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
@@ -251,7 +254,7 @@ private fun PhotoUploadContent(
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        text = "Hasta 20 fotos",
+                        text = "Hasta 20 archivos",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -310,15 +313,15 @@ private fun PermissionRequestCard(
 
             Text(
                 text = if (shouldShowRationale) {
-                    "Necesitamos acceso a tus fotos para subir imágenes"
+                    "Necesitamos acceso a tus archivos para subir fotos y vídeos"
                 } else {
-                    "Permiso de fotos requerido"
+                    "Permiso de archivos requerido"
                 },
                 style = MaterialTheme.typography.titleMedium
             )
 
             Text(
-                text = "La app necesita permiso para acceder a la galería y seleccionar fotos",
+                text = "La app necesita permiso para acceder a la galería y seleccionar fotos/vídeos",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -356,7 +359,7 @@ private fun PhotosSelectedContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "${uris.size} foto${if (uris.size != 1) "s" else ""} seleccionada${if (uris.size != 1) "s" else ""}",
+                text = "${uris.size} elemento${if (uris.size != 1) "s" else ""} seleccionado${if (uris.size != 1) "s" else ""}",
                 style = MaterialTheme.typography.titleMedium
             )
 
@@ -381,12 +384,7 @@ private fun PhotosSelectedContent(
         ) { uri ->
             Box {
                 Card(modifier = Modifier.aspectRatio(1f)) {
-                    SubcomposeAsyncImage(
-                        model = uri,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                    MediaPreview(uri = uri, modifier = Modifier.fillMaxSize())
                 }
 
                 // Botón eliminar
@@ -429,7 +427,7 @@ private fun PhotosSelectedContent(
     ) {
         Icon(Icons.Default.CloudUpload, contentDescription = null)
         Spacer(modifier = Modifier.width(8.dp))
-        Text("Subir ${uris.size} foto${if (uris.size != 1) "s" else ""}")
+        Text("Subir ${uris.size} elemento${if (uris.size != 1) "s" else ""}")
     }
 }
 
@@ -451,7 +449,7 @@ private fun UploadingContent(
             )
 
             Text(
-                text = "Subiendo fotos...",
+                text = "Subiendo archivos...",
                 style = MaterialTheme.typography.titleMedium
             )
             // ← NUEVO
@@ -480,7 +478,7 @@ private fun UploadingContent(
             }
 
             Text(
-                text = "Foto $currentPhoto de $totalPhotos",
+                text = "Elemento $currentPhoto de $totalPhotos",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -490,6 +488,44 @@ private fun UploadingContent(
                 modifier = Modifier.fillMaxWidth()
             )
         }
+    }
+}
+
+@Composable
+private fun MediaPreview(
+    uri: Uri,
+    modifier: Modifier = Modifier
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val mimeType = remember(uri) { context.contentResolver.getType(uri).orEmpty() }
+    val thumbnail: Bitmap? = remember(uri, mimeType) {
+        if (!mimeType.startsWith("video/")) {
+            null
+        } else {
+            runCatching {
+                val retriever = MediaMetadataRetriever()
+                retriever.setDataSource(context, uri)
+                val frame = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                retriever.release()
+                frame
+            }.getOrNull()
+        }
+    }
+
+    if (thumbnail != null) {
+        androidx.compose.foundation.Image(
+            bitmap = thumbnail.asImageBitmap(),
+            contentDescription = null,
+            modifier = modifier,
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        SubcomposeAsyncImage(
+            model = uri,
+            contentDescription = null,
+            modifier = modifier,
+            contentScale = ContentScale.Crop
+        )
     }
 }
 

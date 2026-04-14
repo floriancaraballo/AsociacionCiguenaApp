@@ -109,20 +109,17 @@ class GalleryViewModel @Inject constructor(
                         val excursionsWithPhotos = excursions.map { excursion ->
                             val photos = photosByExcursion[excursion.id] ?: emptyList()
                             val photoCount = photos.size
-                            val firstPhotoUrl = photos.firstOrNull()?.let { firstPhoto ->
-                                val mediaType = firstPhoto.getString("mediaType") ?: "image"
-                                if (mediaType == "video") {
-                                    firstPhoto.getString("thumbnailUrl")
-                                        ?: firstPhoto.getString("imageUrl")
-                                } else {
-                                    firstPhoto.getString("imageUrl")
-                                }
-                            }
+                            val firstPhoto = photos.firstOrNull()
+                            val firstPhotoUrl = firstPhoto?.getString("imageUrl")
+                            val firstPhotoThumbnailUrl = firstPhoto?.getString("thumbnailUrl")
+                            val firstPhotoMediaType = firstPhoto?.getString("mediaType") ?: "image"
 
                             ExcursionWithPhotos(
                                 excursion = excursion,
                                 photoCount = photoCount,
-                                firstPhotoUrl = firstPhotoUrl ?: excursion.imageUrl  // Usar imagen de excursión si no hay fotos
+                                firstPhotoUrl = firstPhotoUrl ?: excursion.imageUrl,
+                                firstPhotoThumbnailUrl = firstPhotoThumbnailUrl,
+                                firstPhotoMediaType = firstPhotoMediaType
                             )
                         }
 

@@ -1,5 +1,8 @@
 package com.asociacionciguena.app.presentation.screens.gallery
 
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -22,6 +26,8 @@ import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.CalendarToday
 import com.asociacionciguena.app.presentation.components.ImageLoadingPlaceholder
 import com.asociacionciguena.app.presentation.screens.gallery.components.GalleryCardSkeleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun GalleryScreen(
@@ -135,14 +141,11 @@ private fun ExcursionCard(
                 }
             ) {
                 if (excursionWithPhotos.firstPhotoUrl != null) {
-                    SubcomposeAsyncImage(
-                        model = excursionWithPhotos.firstPhotoUrl,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        loading = {
-                            ImageLoadingPlaceholder()
-                        }
+                    GalleryMediaPreview(
+                        mediaUrl = excursionWithPhotos.firstPhotoUrl,
+                        thumbnailUrl = excursionWithPhotos.firstPhotoThumbnailUrl,
+                        mediaType = excursionWithPhotos.firstPhotoMediaType,
+                        modifier = Modifier.fillMaxSize()
                     )
                 } else {
                     // Placeholder cuando no hay fotos
@@ -227,6 +230,67 @@ private fun ExcursionCard(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+@Composable
+private fun GalleryMediaPreview(
+    mediaUrl: String,
+    thumbnailUrl: String?,
+    mediaType: String,
+    modifier: Modifier = Modifier
+) {
+    if (mediaType == "video") {
+        val generatedThumbnail by produceState<Bitmap?>(initialValue = null, mediaUrl) {
+            value = withContext(Dispatchers.IO) {
+                runCatching {
+                    val retriever = MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(mediaUrl, emptyMap())
+                        retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    } finally {
+                        retriever.release()
+                    }
+                }.getOrNull()
+            }
+        }
+
+        when {
+            generatedThumbnail != null -> {
+                Image(
+                    bitmap = generatedThumbnail!!.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = modifier,
+                    contentScale = ContentScale.Crop
+                )
+            }
+            !thumbnailUrl.isNullOrBlank() -> {
+                SubcomposeAsyncImage(
+                    model = thumbnailUrl,
+                    contentDescription = null,
+                    modifier = modifier,
+                    contentScale = ContentScale.Crop,
+                    loading = { ImageLoadingPlaceholder() }
+                )
+            }
+            else -> {
+                SubcomposeAsyncImage(
+                    model = mediaUrl,
+                    contentDescription = null,
+                    modifier = modifier,
+                    contentScale = ContentScale.Crop,
+                    loading = { ImageLoadingPlaceholder() }
+                )
+            }
+        }
+    } else {
+        SubcomposeAsyncImage(
+            model = mediaUrl,
+            contentDescription = null,
+            modifier = modifier,
+            contentScale = ContentScale.Crop,
+            loading = { ImageLoadingPlaceholder() }
+        )
     }
 }
 

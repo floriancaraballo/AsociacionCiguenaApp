@@ -38,6 +38,7 @@ import com.asociacionciguena.app.presentation.screens.splash.SplashScreen
 import androidx.compose.runtime.LaunchedEffect
 import com.asociacionciguena.app.presentation.screens.calendar.detail.CalendarExcursionDetailScreen
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.asociacionciguena.app.presentation.theme.ThemeViewModel
 import androidx.compose.foundation.layout.Row
@@ -514,11 +515,15 @@ private fun BottomNavigationBar(
                         imageVector = item.icon,
                         contentDescription = item.title
                     )
-                }/*,
+                },
                 label = {
-                    Text(text = item.title)
+                    Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip
+                    )
                 }
-                */
             )
         }
     }

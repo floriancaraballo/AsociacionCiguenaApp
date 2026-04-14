@@ -1,5 +1,10 @@
 package com.asociacionciguena.app.presentation.screens.gallery.detail
 
+import android.app.Activity
+import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -12,8 +17,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -22,6 +29,7 @@ import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.domain.model.Photo
 import com.asociacionciguena.app.presentation.components.ErrorMessage
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -50,7 +58,7 @@ fun ExcursionDetailScreen(
                     when (val state = uiState) {
                         is ExcursionDetailUiState.Success -> {
                             if (selectionMode) {
-                                Text("${selectedPhotos.size} seleccionadas")
+                                Text("${selectedPhotos.size} elementos seleccionados")
                             } else {
                                 Text(
                                     text = state.excursion.title,
@@ -83,7 +91,7 @@ fun ExcursionDetailScreen(
                                         onClick = { showDeleteMultipleDialog = true },
                                         enabled = selectedPhotos.isNotEmpty()
                                     ) {
-                                        Icon(Icons.Default.Delete, "Eliminar seleccionadas")
+                                        Icon(Icons.Default.Delete, "Eliminar elementos seleccionados")
                                     }
                                 } else {
                                     // Modo normal: botón seleccionar
@@ -111,7 +119,7 @@ fun ExcursionDetailScreen(
                         FloatingActionButton(
                             onClick = { onNavigateToUpload(state.excursion.id) }
                         ) {
-                            Icon(Icons.Default.Add, "Subir Fotos")
+                            Icon(Icons.Default.Add, "Subir archivos multimedia")
                         }
                     }
                 }
@@ -175,14 +183,11 @@ fun ExcursionDetailScreen(
                         onConfirm = {
                             // Cerrar dialog INMEDIATAMENTE
                             showDeleteDialog = false
-                            val photoId = photoToDeleteCopy.id
-                            val storagePath = photoToDeleteCopy.storagePath
                             photoToDelete = null
 
-                            // Luego eliminar foto
+                            // Luego eliminar elemento
                             viewModel.deletePhoto(
-                                photoId = photoId,
-                                storagePath = storagePath,
+                                photo = photoToDeleteCopy,
                                 onSuccess = {},
                                 onError = { error ->
                                     deleteError = error
@@ -206,7 +211,7 @@ fun ExcursionDetailScreen(
                             // Cerrar dialog INMEDIATAMENTE
                             showDeleteMultipleDialog = false
 
-                            // Luego eliminar fotos
+                            // Luego eliminar elementos
                             viewModel.deleteMultiplePhotos(
                                 photos = photosToDelete,
                                 onSuccess = {
@@ -306,7 +311,7 @@ private fun ExcursionDetailContent(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "Aún no hay fotos",
+                        text = "Aún no hay fotos ni vídeos",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -348,31 +353,61 @@ private fun PhotoGridItem(
 ) {
     Card(
         modifier = modifier
-            .aspectRatio(1f)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongPress
-            )
+            .aspectRatio(1f),
+        border = if (isSelected) {
+            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            null
+        }
     ) {
-        Box {
-            // ✅ Mostrar thumbnail para vídeos, imagen normal para fotos
-            SubcomposeAsyncImage(
-                model = if (photo.mediaType == "video")
-                    photo.thumbnailUrl ?: photo.imageUrl
-                else
-                    photo.imageUrl,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                loading = {
-                    ImageLoadingPlaceholder()
-                }
-            )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongPress
+                )
+        ) {
+            DetailMediaPreview(photo = photo, modifier = Modifier.fillMaxSize())
 
-            // ✅ Icono de reproducción para vídeos
+            if (selectionMode) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
+                    } else {
+                        Color.Black.copy(alpha = 0.18f)
+                    }
+                ) {}
+
+                Surface(
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .align(Alignment.TopEnd),
+                    shape = MaterialTheme.shapes.small,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        Color.Black.copy(alpha = 0.55f)
+                    }
+                ) {
+                    Icon(
+                        imageVector = if (isSelected) Icons.Default.Check else Icons.Default.RadioButtonUnchecked,
+                        contentDescription = if (isSelected) "Seleccionado" else "No seleccionado",
+                        modifier = Modifier
+                            .padding(6.dp)
+                            .size(16.dp),
+                        tint = Color.White
+                    )
+                }
+            }
+
             if (photo.mediaType == "video") {
                 Surface(
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp),
                     shape = MaterialTheme.shapes.small,
                     color = Color.Black.copy(alpha = 0.6f)
                 ) {
@@ -380,8 +415,8 @@ private fun PhotoGridItem(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "Vídeo",
                         modifier = Modifier
-                            .padding(12.dp)
-                            .size(32.dp),
+                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                            .size(18.dp),
                         tint = Color.White
                     )
                 }
@@ -457,6 +492,7 @@ private fun PhotoFullscreenContent(
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         if (photo.mediaType == "video") {
+            AllowLandscapeOrientation()
             // ✅ Asegurar que la URL tiene el formato correcto para streaming
             val videoUrl = ensureVideoUrlFormat(photo.imageUrl)
 
@@ -470,6 +506,81 @@ private fun PhotoFullscreenContent(
                 contentDescription = null,
                 contentScale = ContentScale.Fit
             )
+        }
+    }
+}
+
+@Composable
+private fun DetailMediaPreview(
+    photo: Photo,
+    modifier: Modifier = Modifier
+) {
+    if (photo.mediaType != "video") {
+        SubcomposeAsyncImage(
+            model = photo.imageUrl,
+            contentDescription = null,
+            modifier = modifier,
+            contentScale = ContentScale.Crop,
+            loading = { ImageLoadingPlaceholder() }
+        )
+        return
+    }
+
+    val videoUrl = remember(photo.imageUrl) { ensureVideoUrlFormat(photo.imageUrl) }
+    val generatedThumbnail by produceState<Bitmap?>(initialValue = null, videoUrl) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(videoUrl, emptyMap())
+                    retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                } finally {
+                    retriever.release()
+                }
+            }.getOrNull()
+        }
+    }
+
+    when {
+        generatedThumbnail != null -> {
+            Image(
+                bitmap = generatedThumbnail!!.asImageBitmap(),
+                contentDescription = null,
+                modifier = modifier,
+                contentScale = ContentScale.Crop
+            )
+        }
+        !photo.thumbnailUrl.isNullOrBlank() -> {
+            SubcomposeAsyncImage(
+                model = photo.thumbnailUrl,
+                contentDescription = null,
+                modifier = modifier,
+                contentScale = ContentScale.Crop,
+                loading = { ImageLoadingPlaceholder() }
+            )
+        }
+        else -> {
+            SubcomposeAsyncImage(
+                model = photo.imageUrl,
+                contentDescription = null,
+                modifier = modifier,
+                contentScale = ContentScale.Crop,
+                loading = { ImageLoadingPlaceholder() }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AllowLandscapeOrientation() {
+    val activity = LocalContext.current as? Activity ?: return
+
+    DisposableEffect(activity) {
+        val previousOrientation = activity.requestedOrientation
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+
+        onDispose {
+            activity.requestedOrientation = previousOrientation
         }
     }
 }
@@ -492,9 +603,9 @@ private fun DeletePhotoDialog(
         title = {
             Text(
                 text = if (photoCount == 1) {
-                    "¿Eliminar foto?"
+                    "¿Eliminar elemento?"
                 } else {
-                    "¿Eliminar $photoCount fotos?"
+                    "¿Eliminar $photoCount elementos?"
                 }
             )
         },
@@ -503,7 +614,7 @@ private fun DeletePhotoDialog(
                 text = if (photoCount == 1) {
                     "Esta acción no se puede deshacer."
                 } else {
-                    "Se eliminarán $photoCount fotos. Esta acción no se puede deshacer."
+                    "Se eliminarán $photoCount fotos o vídeos. Esta acción no se puede deshacer."
                 }
             )
         },

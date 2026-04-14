@@ -8,6 +8,7 @@ import com.asociacionciguena.app.domain.model.Photo
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.storage.StorageException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -170,15 +171,14 @@ class ExcursionDetailViewModel @Inject constructor(
         }
     }
 
-    fun deletePhoto(photoId: String, storagePath: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    fun deletePhoto(photo: Photo, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
-                // Eliminar de Storage
-                storage.reference.child(storagePath).delete().await()
+                deleteStorageAsset(photo.storagePath)
+                photo.thumbnailUrl?.let { deleteStorageAssetByUrl(it) }
 
-                // Eliminar de Firestore
                 firestore.collection("photos")
-                    .document(photoId)
+                    .document(photo.id)
                     .delete()
                     .await()
 
@@ -195,10 +195,8 @@ class ExcursionDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 photos.forEach { photo ->
-                    // Eliminar de Storage
-                    storage.reference.child(photo.storagePath).delete().await()
-
-                    // Eliminar de Firestore
+                    deleteStorageAsset(photo.storagePath)
+                    photo.thumbnailUrl?.let { deleteStorageAssetByUrl(it) }
                     firestore.collection("photos")
                         .document(photo.id)
                         .delete()
@@ -209,7 +207,31 @@ class ExcursionDetailViewModel @Inject constructor(
                 // El listener actualizará automáticamente
 
             } catch (e: Exception) {
-                onError("Error al eliminar fotos: ${e.message}")
+                onError("Error al eliminar elementos: ${e.message}")
+            }
+        }
+    }
+
+    private suspend fun deleteStorageAsset(storagePath: String) {
+        if (storagePath.isBlank()) return
+
+        try {
+            storage.reference.child(storagePath).delete().await()
+        } catch (e: Exception) {
+            if (e !is StorageException || e.errorCode != StorageException.ERROR_OBJECT_NOT_FOUND) {
+                throw e
+            }
+        }
+    }
+
+    private suspend fun deleteStorageAssetByUrl(url: String) {
+        if (url.isBlank()) return
+
+        try {
+            storage.getReferenceFromUrl(url).delete().await()
+        } catch (e: Exception) {
+            if (e !is StorageException || e.errorCode != StorageException.ERROR_OBJECT_NOT_FOUND) {
+                throw e
             }
         }
     }
