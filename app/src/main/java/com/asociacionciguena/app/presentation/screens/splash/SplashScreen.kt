@@ -12,7 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale  // ← Importante para el escalado
 import androidx.compose.ui.res.painterResource
 import com.asociacionciguena.app.R
-import kotlinx.coroutines.delay
 
 /**
  * Pantalla de splash (carga inicial) con imagen a tamaño completo
@@ -39,7 +38,6 @@ fun SplashScreen(
     }
 
     LaunchedEffect(Unit) {
-        delay(2000)
         onNavigateToMain()
     }
 }

@@ -219,7 +219,10 @@ class ExcursionDetailViewModel @Inject constructor(
             storage.reference.child(storagePath).delete().await()
         } catch (e: Exception) {
             if (e !is StorageException || e.errorCode != StorageException.ERROR_OBJECT_NOT_FOUND) {
-                throw e
+                throw IllegalStateException(
+                    "Storage denegó el borrado de '$storagePath': ${e.message}",
+                    e
+                )
             }
         }
     }
@@ -231,7 +234,10 @@ class ExcursionDetailViewModel @Inject constructor(
             storage.getReferenceFromUrl(url).delete().await()
         } catch (e: Exception) {
             if (e !is StorageException || e.errorCode != StorageException.ERROR_OBJECT_NOT_FOUND) {
-                throw e
+                throw IllegalStateException(
+                    "Storage denegó el borrado de la miniatura '$url': ${e.message}",
+                    e
+                )
             }
         }
     }

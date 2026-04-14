@@ -1,5 +1,6 @@
 package com.asociacionciguena.app.presentation
 
+import android.content.pm.ActivityInfo
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -45,6 +46,9 @@ class MainActivity : ComponentActivity(), ImageLoaderFactory {
         val splashScreen = installSplashScreen()
 
         super.onCreate(savedInstanceState)
+
+        // La app se mantiene en vertical por defecto.
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 
         // Habilitar edge-to-edge (pantalla completa moderna)
         enableEdgeToEdge()

@@ -1,40 +1,70 @@
 package com.asociacionciguena.app.presentation.screens.gallery.detail
 
-import android.app.Activity
-import android.content.pm.ActivityInfo
+import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.domain.model.Photo
 import com.asociacionciguena.app.presentation.components.ErrorMessage
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.material3.Snackbar
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import com.asociacionciguena.app.presentation.components.ImageLoadingPlaceholder
-import com.asociacionciguena.app.presentation.components.ZoomableImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ExcursionDetailScreen(
@@ -43,7 +73,7 @@ fun ExcursionDetailScreen(
     onNavigateToUpload: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var selectedPhotoIndex by remember { mutableStateOf<Int?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     var showDeleteDialog by remember { mutableStateOf(false) }
     var photoToDelete by remember { mutableStateOf<Photo?>(null) }
     var selectionMode by remember { mutableStateOf(false) }
@@ -66,18 +96,21 @@ fun ExcursionDetailScreen(
                                 )
                             }
                         }
+
                         else -> Text("Detalle")
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = {
-                        if (selectionMode) {
-                            selectionMode = false
-                            selectedPhotos = emptySet()
-                        } else {
-                            onNavigateBack()
+                    IconButton(
+                        onClick = {
+                            if (selectionMode) {
+                                selectionMode = false
+                                selectedPhotos = emptySet()
+                            } else {
+                                onNavigateBack()
+                            }
                         }
-                    }) {
+                    ) {
                         Icon(Icons.Default.ArrowBack, "Volver")
                     }
                 },
@@ -86,7 +119,6 @@ fun ExcursionDetailScreen(
                         is ExcursionDetailUiState.Success -> {
                             if (state.isAdmin && state.photos.isNotEmpty()) {
                                 if (selectionMode) {
-                                    // Modo selección: botón eliminar
                                     IconButton(
                                         onClick = { showDeleteMultipleDialog = true },
                                         enabled = selectedPhotos.isNotEmpty()
@@ -94,13 +126,13 @@ fun ExcursionDetailScreen(
                                         Icon(Icons.Default.Delete, "Eliminar elementos seleccionados")
                                     }
                                 } else {
-                                    // Modo normal: botón seleccionar
                                     IconButton(onClick = { selectionMode = true }) {
                                         Icon(Icons.Default.CheckCircle, "Seleccionar")
                                     }
                                 }
                             }
                         }
+
                         else -> {}
                     }
                 },
@@ -123,6 +155,7 @@ fun ExcursionDetailScreen(
                         }
                     }
                 }
+
                 else -> {}
             }
         }
@@ -133,7 +166,6 @@ fun ExcursionDetailScreen(
             }
 
             is ExcursionDetailUiState.Success -> {
-                // Mensaje de error
                 deleteError?.let { error ->
                     Snackbar(
                         modifier = Modifier.padding(16.dp),
@@ -150,7 +182,6 @@ fun ExcursionDetailScreen(
                 ExcursionDetailContent(
                     excursion = state.excursion,
                     photos = state.photos,
-                    isAdmin = state.isAdmin,
                     selectionMode = selectionMode,
                     selectedPhotos = selectedPhotos,
                     onPhotoClick = { index ->
@@ -162,7 +193,12 @@ fun ExcursionDetailScreen(
                                 selectedPhotos + photo.id
                             }
                         } else {
-                            selectedPhotoIndex = index
+                            val photo = state.photos[index]
+                            openFullscreenMedia(
+                                context = context,
+                                excursionId = state.excursion.id,
+                                photoId = photo.id
+                            )
                         }
                     },
                     onPhotoLongPress = { index ->
@@ -174,24 +210,17 @@ fun ExcursionDetailScreen(
                     modifier = Modifier.padding(paddingValues)
                 )
 
-                // Dialog eliminar foto individual
-                // Dialog eliminar foto individual
                 if (showDeleteDialog && photoToDelete != null) {
-                    val photoToDeleteCopy = photoToDelete!!  // Copiar para evitar null
+                    val photoToDeleteCopy = photoToDelete!!
                     DeletePhotoDialog(
                         photoCount = 1,
                         onConfirm = {
-                            // Cerrar dialog INMEDIATAMENTE
                             showDeleteDialog = false
                             photoToDelete = null
-
-                            // Luego eliminar elemento
                             viewModel.deletePhoto(
                                 photo = photoToDeleteCopy,
                                 onSuccess = {},
-                                onError = { error ->
-                                    deleteError = error
-                                }
+                                onError = { error -> deleteError = error }
                             )
                         },
                         onDismiss = {
@@ -201,17 +230,12 @@ fun ExcursionDetailScreen(
                     )
                 }
 
-                // Dialog eliminar múltiples fotos
-                // Dialog eliminar múltiples fotos
                 if (showDeleteMultipleDialog) {
                     val photosToDelete = state.photos.filter { it.id in selectedPhotos }
                     DeletePhotoDialog(
                         photoCount = photosToDelete.size,
                         onConfirm = {
-                            // Cerrar dialog INMEDIATAMENTE
                             showDeleteMultipleDialog = false
-
-                            // Luego eliminar elementos
                             viewModel.deleteMultiplePhotos(
                                 photos = photosToDelete,
                                 onSuccess = {
@@ -225,18 +249,7 @@ fun ExcursionDetailScreen(
                                 }
                             )
                         },
-                        onDismiss = {
-                            showDeleteMultipleDialog = false
-                        }
-                    )
-                }
-
-                // Fullscreen gallery
-                selectedPhotoIndex?.let { index ->
-                    FullscreenGalleryDialog(
-                        photos = state.photos,
-                        initialIndex = index,
-                        onDismiss = { selectedPhotoIndex = null }
+                        onDismiss = { showDeleteMultipleDialog = false }
                     )
                 }
             }
@@ -256,7 +269,6 @@ fun ExcursionDetailScreen(
 private fun ExcursionDetailContent(
     excursion: com.asociacionciguena.app.domain.model.Excursion,
     photos: List<Photo>,
-    isAdmin: Boolean,
     selectionMode: Boolean,
     selectedPhotos: Set<String>,
     onPhotoClick: (Int) -> Unit,
@@ -268,7 +280,6 @@ private fun ExcursionDetailContent(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Título y fecha
         Text(
             text = excursion.title,
             style = MaterialTheme.typography.headlineSmall
@@ -318,16 +329,12 @@ private fun ExcursionDetailContent(
                 }
             }
         } else {
-            // Grid de fotos (3 columnas)
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(
-                    items = photos,
-                    key = { it.id }
-                ) { photo ->
+                items(items = photos, key = { it.id }) { photo ->
                     val index = photos.indexOf(photo)
                     PhotoGridItem(
                         photo = photo,
@@ -352,13 +359,8 @@ private fun PhotoGridItem(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier
-            .aspectRatio(1f),
-        border = if (isSelected) {
-            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        } else {
-            null
-        }
+        modifier = modifier.aspectRatio(1f),
+        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
     ) {
         Box(
             modifier = Modifier
@@ -372,8 +374,7 @@ private fun PhotoGridItem(
 
             if (selectionMode) {
                 Surface(
-                    modifier = Modifier
-                        .fillMaxSize(),
+                    modifier = Modifier.fillMaxSize(),
                     color = if (isSelected) {
                         MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
                     } else {
@@ -424,90 +425,19 @@ private fun PhotoGridItem(
         }
     }
 }
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun FullscreenGalleryDialog(
-    photos: List<Photo>,
-    initialIndex: Int,
-    onDismiss: () -> Unit
-) {
-    val pagerState = rememberPagerState(
-        initialPage = initialIndex,
-        pageCount = { photos.size }
-    )
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
+private fun openFullscreenMedia(
+    context: Context,
+    excursionId: String,
+    photoId: String
+) {
+    context.startActivity(
+        FullscreenMediaActivity.createIntent(
+            context = context,
+            excursionId = excursionId,
+            photoId = photoId
         )
-    ) {
-        Scaffold(
-            containerColor = Color.Black,
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text("${pagerState.currentPage + 1} / ${photos.size}")
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                Icons.Default.Close,
-                                "Cerrar",
-                                tint = Color.White
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Black.copy(alpha = 0.7f),
-                        titleContentColor = Color.White,
-                        navigationIconContentColor = Color.White
-                    )
-                )
-            }
-        ) { paddingValues ->
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) { page ->
-                val photo = photos[page]
-
-                // ✅ Usar PhotoFullscreenDialog para cada página
-                PhotoFullscreenContent(
-                    photo = photo,
-                    onDismiss = {}  // No cerrar al hacer swipe
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PhotoFullscreenContent(
-    photo: Photo,
-    onDismiss: () -> Unit
-) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (photo.mediaType == "video") {
-            AllowLandscapeOrientation()
-            // ✅ Asegurar que la URL tiene el formato correcto para streaming
-            val videoUrl = ensureVideoUrlFormat(photo.imageUrl)
-
-            VideoPlayer(
-                videoUrl = videoUrl,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            ZoomableImage(
-                imageUrl = photo.imageUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Fit
-            )
-        }
-    }
+    )
 }
 
 @Composable
@@ -528,7 +458,7 @@ private fun DetailMediaPreview(
 
     val videoUrl = remember(photo.imageUrl) { ensureVideoUrlFormat(photo.imageUrl) }
     val generatedThumbnail by produceState<Bitmap?>(initialValue = null, videoUrl) {
-        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        value = withContext(Dispatchers.IO) {
             runCatching {
                 val retriever = MediaMetadataRetriever()
                 try {
@@ -550,6 +480,7 @@ private fun DetailMediaPreview(
                 contentScale = ContentScale.Crop
             )
         }
+
         !photo.thumbnailUrl.isNullOrBlank() -> {
             SubcomposeAsyncImage(
                 model = photo.thumbnailUrl,
@@ -559,6 +490,7 @@ private fun DetailMediaPreview(
                 loading = { ImageLoadingPlaceholder() }
             )
         }
+
         else -> {
             SubcomposeAsyncImage(
                 model = photo.imageUrl,
@@ -567,20 +499,6 @@ private fun DetailMediaPreview(
                 contentScale = ContentScale.Crop,
                 loading = { ImageLoadingPlaceholder() }
             )
-        }
-    }
-}
-
-@Composable
-private fun AllowLandscapeOrientation() {
-    val activity = LocalContext.current as? Activity ?: return
-
-    DisposableEffect(activity) {
-        val previousOrientation = activity.requestedOrientation
-        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-
-        onDispose {
-            activity.requestedOrientation = previousOrientation
         }
     }
 }
@@ -644,55 +562,10 @@ private fun formatDate(date: kotlinx.datetime.LocalDateTime): String {
     return "${date.dayOfMonth} ${monthNames[date.monthNumber - 1]} ${date.year}"
 }
 
-@Composable
-private fun VideoPlayer(
-    videoUrl: String,
-    modifier: Modifier = Modifier
-) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-
-    val exoPlayer = remember(videoUrl) {
-        androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
-            setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
-            prepare()
-            playWhenReady = true
-            repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
-        }
-    }
-
-    DisposableEffect(videoUrl) {
-        onDispose {
-            exoPlayer.release()
-        }
-    }
-
-    androidx.compose.ui.viewinterop.AndroidView(
-        factory = { ctx ->
-            androidx.media3.ui.PlayerView(ctx).apply {
-                player = exoPlayer
-                useController = true
-                layoutParams = android.widget.FrameLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                )
-            }
-        },
-        modifier = modifier
-    )
-}
-
-// ✅ Función auxiliar para formatear URL de vídeo para streaming
 private fun ensureVideoUrlFormat(url: String): String {
-    // Si la URL ya tiene alt=media, devolverla tal cual
-    if (url.contains("alt=media")) {
-        return url
-    }
-
-    // Si es una URL de Firebase Storage, añadir alt=media
+    if (url.contains("alt=media")) return url
     if (url.contains("firebasestorage.googleapis.com")) {
         return "${url}${if (url.contains("?")) "&" else "?"}alt=media"
     }
-
-    // Devolver URL original si no es de Firebase
     return url
 }

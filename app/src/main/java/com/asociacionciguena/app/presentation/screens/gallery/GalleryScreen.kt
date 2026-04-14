@@ -18,6 +18,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.imageLoader
+import coil.request.ImageRequest
 import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.ErrorMessage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
@@ -77,6 +79,26 @@ private fun GalleryContent(
     onExcursionClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    LaunchedEffect(excursions) {
+        excursions.forEach { excursion ->
+            listOfNotNull(
+                excursion.firstPhotoThumbnailUrl,
+                excursion.firstPhotoUrl,
+                excursion.excursion.imageUrl
+            ).distinct().forEach { url ->
+                context.imageLoader.enqueue(
+                    ImageRequest.Builder(context)
+                        .data(url)
+                        .memoryCacheKey(url)
+                        .diskCacheKey(url)
+                        .build()
+                )
+            }
+        }
+    }
+
     if (excursions.isEmpty()) {
         Box(
             modifier = modifier.fillMaxSize(),

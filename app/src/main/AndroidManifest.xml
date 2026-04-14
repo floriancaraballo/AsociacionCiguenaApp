@@ -2,39 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ========================================
-         PERMISOS
-         ======================================== -->
-
-    <!-- Obligatorios para Firebase -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
-    <!-- Para descargar/ver fotos de excursiones -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-
-    <!-- Para Android 12 y anteriores (fallback) -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-
-    <!-- Permisos para acceder a fotos -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-    <!-- Permisos para notificaciones -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Para subir fotos (solo admin) - opcional -->
-    <!-- <uses-permission android:name="android.permission.CAMERA" /> -->
     <queries>
-        <!-- Required for Google Play Services -->
         <package android:name="com.google.android.gms" />
-
-        <!-- Optional: Also query Play Store -->
         <package android:name="com.android.vending" />
     </queries>
 
@@ -47,20 +27,14 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AsociacionCigueña"
+        android:theme="@style/Theme.AsociacionCiguena"
         android:enableOnBackInvokedCallback="true"
         tools:targetApi="tiramisu">
 
-        <!-- ========================================
-             ACTIVIDAD PRINCIPAL
-             ======================================== -->
         <activity
             android:name=".presentation.MainActivity"
             android:exported="true"
-            android:screenOrientation="portrait"
-            android:theme="@style/Theme.AsociacionCigueña">
-
-            <!-- Splash Screen theme -->
+            android:theme="@style/Theme.AsociacionCiguena">
             <meta-data
                 android:name="android.app.lib_name"
                 android:value="" />
@@ -71,16 +45,20 @@
             </intent-filter>
         </activity>
 
-        <!-- Firebase Messaging Service -->
+        <activity
+            android:name=".presentation.screens.gallery.detail.FullscreenMediaActivity"
+            android:exported="false"
+            android:screenOrientation="fullSensor"
+            android:theme="@style/Theme.AsociacionCiguena" />
+
         <service
             android:name=".data.service.FirebaseMessagingService"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT"/>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
 
-        <!-- Notificaciones por defecto -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_notification" />
@@ -90,11 +68,6 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="@string/default_notification_channel_id" />
-
-        <!-- ========================================
-             CONFIGURACIÓN DE FIREBASE
-             (Se añadirá automáticamente al conectar Firebase)
-             ======================================== -->
     </application>
 
 </manifest>
