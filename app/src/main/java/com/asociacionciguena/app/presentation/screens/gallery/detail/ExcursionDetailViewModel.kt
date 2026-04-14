@@ -148,7 +148,9 @@ class ExcursionDetailViewModel @Inject constructor(
                                         .toLocalDateTime(TimeZone.currentSystemDefault())
                                 } ?: now,
                                 authorizedUsers = (doc.get("authorizedUsers") as? List<*>)
-                                    ?.filterIsInstance<String>() ?: emptyList()
+                                    ?.filterIsInstance<String>() ?: emptyList(),
+                                mediaType = doc.getString("mediaType") ?: "image",
+                                thumbnailUrl = doc.getString("thumbnailUrl")
                             )
                         } catch (e: Exception) {
                             null

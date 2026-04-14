@@ -15,5 +15,7 @@ data class Photo(
     val uploadedBy: String = "",
     val uploadedAt: LocalDateTime = kotlinx.datetime.Clock.System.now()
         .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()),
-    val authorizedUsers: List<String> = emptyList()
+    val authorizedUsers: List<String> = emptyList(),
+    val mediaType: String = "image",  // ← NUEVO: "image" o "video"
+    val thumbnailUrl: String? = null   // ← NUEVO: miniatura para vídeos
 )

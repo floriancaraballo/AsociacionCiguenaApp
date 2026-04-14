@@ -12,7 +12,9 @@ data class PhotoDto(
     val storagePath: String = "",
     val uploadedBy: String = "",
     val uploadedAt: Timestamp? = null,
-    val authorizedUsers: List<String> = emptyList()  // UIDs con permiso
+    val authorizedUsers: List<String> = emptyList(),  // UIDs con permiso
+    val mediaType: String = "image",
+    val thumbnailUrl: String? = null
 ) {
-    constructor() : this("", "", "", "", "", null, emptyList())
+    constructor() : this("", "", "", "", "", null, emptyList(), "image", null)
 }

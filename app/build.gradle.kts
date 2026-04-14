@@ -196,6 +196,11 @@ dependencies {
     // ✅ WebView para pagos
     implementation("com.google.accompanist:accompanist-webview:0.34.0")
 
+    // Media3 (ExoPlayer) para reproducción de vídeo
+    implementation("androidx.media3:media3-exoplayer:1.2.1")
+    implementation("androidx.media3:media3-ui:1.2.1")
+    implementation("androidx.media3:media3-common:1.2.1")
+
     // ========================================
     // TESTING
     // ========================================

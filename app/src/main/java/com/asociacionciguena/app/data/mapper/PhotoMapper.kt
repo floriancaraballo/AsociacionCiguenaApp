@@ -16,6 +16,8 @@ fun PhotoDto.toDomain(): Photo {
         uploadedBy = uploadedBy,
         uploadedAt = uploadedAt?.toLocalDateTime()
             ?: Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()),
-        authorizedUsers = authorizedUsers
+        authorizedUsers = authorizedUsers,
+        mediaType = mediaType,
+        thumbnailUrl = thumbnailUrl
     )
 }

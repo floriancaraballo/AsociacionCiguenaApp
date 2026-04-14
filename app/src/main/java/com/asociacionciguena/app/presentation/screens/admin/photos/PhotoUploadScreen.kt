@@ -58,7 +58,7 @@ fun PhotoUploadScreen(
         contract = PickMultipleVisualMedia(maxItems = 20)
     ) { uris ->
         if (uris.isNotEmpty()) {
-            viewModel.onPhotosSelected(uris)
+            viewModel.onMediaSelected(uris)
         }
     }
 
@@ -121,12 +121,12 @@ fun PhotoUploadScreen(
             onRequestPermission = { permissionState?.launchPermissionRequest() },
             onSelectPhotos = {
                 multiplePhotoPickerLauncher.launch(
-                    PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageAndVideo)
                 )
             },
             onAddMorePhotos = {
                 addMorePhotosLauncher.launch(
-                    PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageAndVideo)
                 )
             },
             onRemovePhoto = viewModel::removePhoto,
@@ -247,7 +247,7 @@ private fun PhotoUploadContent(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Seleccionar Fotos",
+                        text = "Seleccionar Fotos/Vídeos",
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(

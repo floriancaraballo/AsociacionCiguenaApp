@@ -22,7 +22,6 @@ import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.domain.model.Photo
 import com.asociacionciguena.app.presentation.components.ErrorMessage
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -356,8 +355,12 @@ private fun PhotoGridItem(
             )
     ) {
         Box {
+            // ✅ Mostrar thumbnail para vídeos, imagen normal para fotos
             SubcomposeAsyncImage(
-                model = photo.imageUrl,
+                model = if (photo.mediaType == "video")
+                    photo.thumbnailUrl ?: photo.imageUrl
+                else
+                    photo.imageUrl,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
@@ -366,32 +369,20 @@ private fun PhotoGridItem(
                 }
             )
 
-            // Indicador de selección
-            if (selectionMode) {
+            // ✅ Icono de reproducción para vídeos
+            if (photo.mediaType == "video") {
                 Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp),
+                    modifier = Modifier.align(Alignment.Center),
                     shape = MaterialTheme.shapes.small,
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-                    }
+                    color = Color.Black.copy(alpha = 0.6f)
                 ) {
                     Icon(
-                        imageVector = if (isSelected) {
-                            Icons.Default.CheckCircle
-                        } else {
-                            Icons.Default.RadioButtonUnchecked
-                        },
-                        contentDescription = null,
-                        modifier = Modifier.padding(4.dp),
-                        tint = if (isSelected) {
-                            MaterialTheme.colorScheme.onPrimary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Vídeo",
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .size(32.dp),
+                        tint = Color.White
                     )
                 }
             }
@@ -405,8 +396,6 @@ private fun FullscreenGalleryDialog(
     initialIndex: Int,
     onDismiss: () -> Unit
 ) {
-    var isZoomed by remember { mutableStateOf(false) }
-
     val pagerState = rememberPagerState(
         initialPage = initialIndex,
         pageCount = { photos.size }
@@ -447,18 +436,40 @@ private fun FullscreenGalleryDialog(
                 state = pagerState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues),
-                userScrollEnabled = !isZoomed
+                    .padding(paddingValues)
             ) { page ->
-                ZoomableImage(
-                    imageUrl = photos[page].imageUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    onScaleChange = { scale ->
-                        isZoomed = scale > 1f  // ← Actualizar estado de zoom
-                    }
+                val photo = photos[page]
+
+                // ✅ Usar PhotoFullscreenDialog para cada página
+                PhotoFullscreenContent(
+                    photo = photo,
+                    onDismiss = {}  // No cerrar al hacer swipe
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun PhotoFullscreenContent(
+    photo: Photo,
+    onDismiss: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (photo.mediaType == "video") {
+            // ✅ Asegurar que la URL tiene el formato correcto para streaming
+            val videoUrl = ensureVideoUrlFormat(photo.imageUrl)
+
+            VideoPlayer(
+                videoUrl = videoUrl,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            ZoomableImage(
+                imageUrl = photo.imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Fit
+            )
         }
     }
 }
@@ -520,4 +531,57 @@ private fun formatDate(date: kotlinx.datetime.LocalDateTime): String {
         "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
     )
     return "${date.dayOfMonth} ${monthNames[date.monthNumber - 1]} ${date.year}"
+}
+
+@Composable
+private fun VideoPlayer(
+    videoUrl: String,
+    modifier: Modifier = Modifier
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val exoPlayer = remember(videoUrl) {
+        androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+            setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
+            prepare()
+            playWhenReady = true
+            repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+        }
+    }
+
+    DisposableEffect(videoUrl) {
+        onDispose {
+            exoPlayer.release()
+        }
+    }
+
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { ctx ->
+            androidx.media3.ui.PlayerView(ctx).apply {
+                player = exoPlayer
+                useController = true
+                layoutParams = android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            }
+        },
+        modifier = modifier
+    )
+}
+
+// ✅ Función auxiliar para formatear URL de vídeo para streaming
+private fun ensureVideoUrlFormat(url: String): String {
+    // Si la URL ya tiene alt=media, devolverla tal cual
+    if (url.contains("alt=media")) {
+        return url
+    }
+
+    // Si es una URL de Firebase Storage, añadir alt=media
+    if (url.contains("firebasestorage.googleapis.com")) {
+        return "${url}${if (url.contains("?")) "&" else "?"}alt=media"
+    }
+
+    // Devolver URL original si no es de Firebase
+    return url
 }

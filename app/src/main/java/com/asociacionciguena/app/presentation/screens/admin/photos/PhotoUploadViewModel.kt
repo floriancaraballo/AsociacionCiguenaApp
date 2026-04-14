@@ -20,6 +20,7 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.asociacionciguena.app.util.ImageCompressor
 import com.asociacionciguena.app.util.NetworkMonitor
+import com.google.firebase.storage.StorageMetadata
 
 @HiltViewModel
 class PhotoUploadViewModel @Inject constructor(
@@ -122,7 +123,7 @@ class PhotoUploadViewModel @Inject constructor(
     /**
      * Usuario selecciona MÚLTIPLES fotos
      */
-    fun onPhotosSelected(uris: List<Uri>) {
+    fun onMediaSelected(uris: List<Uri>) {
         _uiState.value = PhotoUploadUiState.PhotosSelected(
             uris = uris,
             selectedExcursionId = preselectedExcursionId
@@ -225,7 +226,7 @@ class PhotoUploadViewModel @Inject constructor(
                     .set(batchData)
                     .await()
 
-                // Subir cada foto
+                // Subir cada media (foto o vídeo)
                 currentState.uris.forEachIndexed { index, uri ->
                     _uiState.value = PhotoUploadUiState.Uploading(
                         progress = index.toFloat() / totalPhotos,
@@ -233,25 +234,122 @@ class PhotoUploadViewModel @Inject constructor(
                         totalPhotos = totalPhotos
                     )
 
+                    // ✅ Detectar tipo de media
+                    val mimeType = context.contentResolver.getType(uri) ?: ""
+                    val isVideo = mimeType.startsWith("video/")
+
+                    android.util.Log.d("MEDIA_UPLOAD", "URI: $uri, MIME: $mimeType, isVideo: $isVideo")
+
                     // Generar nombre único
                     val photoId = UUID.randomUUID().toString()
-                    val fileName = "$photoId.jpg"
+                    val extension = if (isVideo) "mp4" else "jpg"
+                    val fileName = "$photoId.$extension"
                     val storagePath = "excursions/${currentState.selectedExcursionId}/$fileName"
 
-                    // COMPRIMIR antes de subir
-                    val compressedFile = ImageCompressor.compressPhoto(context, uri)
+                    android.util.Log.d("UPLOAD_DEBUG", "════════════════════════════════")
+                    android.util.Log.d("UPLOAD_DEBUG", "📤 Intentando subir media")
+                    android.util.Log.d("UPLOAD_DEBUG", "   photoId: $photoId")
+                    android.util.Log.d("UPLOAD_DEBUG", "   extension: $extension")
+                    android.util.Log.d("UPLOAD_DEBUG", "   fileName: $fileName")
+                    android.util.Log.d("UPLOAD_DEBUG", "   storagePath: $storagePath")
+                    android.util.Log.d("UPLOAD_DEBUG", "   excursionId: ${currentState.selectedExcursionId}")
+                    android.util.Log.d("UPLOAD_DEBUG", "   mimeType: $mimeType")
+                    android.util.Log.d("UPLOAD_DEBUG", "   isVideo: $isVideo")
+                    android.util.Log.d("UPLOAD_DEBUG", "════════════════════════════════")
 
-// Subir a Storage
-                    val storageRef = storage.reference.child(storagePath)
-                    storageRef.putFile(Uri.fromFile(compressedFile)).await()
+                    val downloadUrl: String
+                    val thumbnailUrl: String?
 
-// Obtener URL
-                    val downloadUrl = storageRef.downloadUrl.await().toString()
+                    if (isVideo) {
 
-// Limpiar archivo temporal
-                    compressedFile.delete()
+                        // ✅ PROCESAR VÍDEO
+                        // Subir vídeo directamente (sin compresión por ahora)
 
-                    // Guardar en Firestore
+                        android.util.Log.d("UPLOAD_DEBUG", "🎬 Subiendo vídeo...")
+                        android.util.Log.d("UPLOAD_DEBUG", "   Full path: ${storage.reference.child(storagePath).path}")
+
+                        // ✅ Log para debuggear permisos
+                        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                        android.util.Log.d("UPLOAD_DEBUG", "🔐 Usuario actual: ${currentUser?.uid ?: "null"}")
+                        android.util.Log.d("UPLOAD_DEBUG", "🔐 Email: ${currentUser?.email ?: "null"}")
+
+                        // En PhotoUploadViewModel.kt, justo antes de storageRef.putFile():
+
+                        val mimeType = context.contentResolver.getType(uri) ?: ""
+                        val fileSize = context.contentResolver.openInputStream(uri)?.use { it.available() } ?: 0
+                        val sizeInMB = fileSize / (1024 * 1024)
+
+                        android.util.Log.d("UPLOAD_DEBUG", "🔍 MIME type: '$mimeType'")
+                        android.util.Log.d("UPLOAD_DEBUG", "🔍 Tamaño: $sizeInMB MB")
+
+                        // Validaciones explícitas
+                        if (!mimeType.matches(Regex("image/.*|video/.*"))) {
+                            _uiState.value = PhotoUploadUiState.Error("Tipo de archivo no soportado: $mimeType")
+                            return@launch
+                        }
+
+                        if (sizeInMB > 100) {
+                            _uiState.value = PhotoUploadUiState.Error("El archivo supera el límite de 100MB")
+                            return@launch
+                        }
+
+                        val storageRef = storage.reference.child(storagePath)
+
+                        // ✅ NUEVO: Configurar metadata para vídeo
+                        val metadata = StorageMetadata.Builder()
+                            .setContentType("video/mp4")  // ← ¡CRUCIAL para que se reproduzca!
+                            .setCacheControl("public, max-age=31536000")  // ← Opcional: caching
+                            .build()
+
+                        storageRef.putFile(uri,metadata).await()
+
+                        android.util.Log.d("UPLOAD_DEBUG", "✅ Vídeo subido correctamente")
+                        downloadUrl = storageRef.downloadUrl.await().toString()
+
+                        // ✅ GENERAR MINIATURA DEL VÍDEO (CORREGIDO)
+                        thumbnailUrl = try {
+                            // ✅ PASO 1: Convertir Uri a String path
+                            val uriPath = uri.toString()
+
+                            // ✅ PASO 2: Usar la sobrecarga que acepta String
+                            val thumbnailBitmap = android.media.ThumbnailUtils.createVideoThumbnail(
+                                uriPath,  // ← ✅ String path (NO Uri)
+                                android.provider.MediaStore.Video.Thumbnails.MINI_KIND
+                            )
+
+                            if (thumbnailBitmap != null) {
+                                // Guardar miniatura en Storage
+                                val thumbnailPath = "excursions/${currentState.selectedExcursionId}/thumbnails/$photoId.jpg"
+                                val thumbnailRef = storage.reference.child(thumbnailPath)
+
+                                val baos = java.io.ByteArrayOutputStream()
+                                thumbnailBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, baos)
+                                val thumbnailBytes = baos.toByteArray()
+
+                                thumbnailRef.putBytes(thumbnailBytes).await()
+                                thumbnailRef.downloadUrl.await().toString()
+                            } else {
+                                android.util.Log.w("THUMBNAIL", "⚠️ thumbnailBitmap es null")
+                                null
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("THUMBNAIL", "❌ Error generando miniatura: ${e.message}", e)
+                            null
+                        }
+
+                    } else {
+                        // ✅ PROCESAR IMAGEN (como antes)
+                        val compressedFile = ImageCompressor.compressPhoto(context, uri)
+
+                        val storageRef = storage.reference.child(storagePath)
+                        storageRef.putFile(Uri.fromFile(compressedFile)).await()
+
+                        downloadUrl = storageRef.downloadUrl.await().toString()
+                        compressedFile.delete()
+                        thumbnailUrl = null  // Las imágenes no necesitan thumbnail separado
+                    }
+
+                    // ✅ Guardar en Firestore con mediaType
                     val photoData = hashMapOf(
                         "id" to photoId,
                         "excursionId" to currentState.selectedExcursionId,
@@ -260,7 +358,9 @@ class PhotoUploadViewModel @Inject constructor(
                         "uploadedBy" to "admin",
                         "uploadedAt" to Timestamp.now(),
                         "authorizedUsers" to emptyList<String>(),
-                        "batchId" to batchId  // ← NUEVO: Asociar con batch
+                        "batchId" to batchId,
+                        "mediaType" to if (isVideo) "video" else "image",  // ✅ NUEVO
+                        "thumbnailUrl" to thumbnailUrl  // ✅ NUEVO
                     )
 
                     firestore.collection("photos")
