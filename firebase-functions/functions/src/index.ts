@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import {randomBytes} from "node:crypto";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
@@ -21,6 +22,386 @@ interface PendingUserDocument {
   needsRegistration: boolean;
 }
 
+interface InvitationUserData {
+  email: string;
+  displayName: string;
+  role: string;
+  createdAt?: admin.firestore.Timestamp;
+}
+
+const HOSTING_BASE_URL = "https://asociacion-ciguena-188da.web.app";
+const CUSTOM_AUTH_ACTION_URL = `${HOSTING_BASE_URL}/auth/action`;
+
+function generateTemporaryPassword(): string {
+  return `${randomBytes(18).toString("base64url")}Aa1!`;
+}
+
+function buildCustomAuthActionLink(rawLink: string): string {
+  try {
+    const parsedUrl = new URL(rawLink);
+    const customUrl = new URL(CUSTOM_AUTH_ACTION_URL);
+
+    customUrl.search = parsedUrl.search;
+    return customUrl.toString();
+  } catch (error) {
+    console.error("No se pudo transformar el enlace de acción:", error);
+    return rawLink;
+  }
+}
+
+function buildInvitationEmail(userData: InvitationUserData, actionLink: string) {
+  const roleLabel = userData.role === "admin" ? "Administrador" : "Socio";
+  const emailSubject = "Configura tu acceso a Asociación Cigüeña";
+  const emailText = [
+    `Hola ${userData.displayName},`,
+    "",
+    "Ya tienes acceso a Asociación Cigüeña.",
+    `Email: ${userData.email}`,
+    `Rol: ${roleLabel}`,
+    "",
+    "Para crear tu contraseña de acceso, abre este enlace seguro:",
+    actionLink,
+    "",
+    "Si el enlace ha caducado, solicita uno nuevo al equipo administrador.",
+    "",
+    "Este es un correo transaccional automático. No es necesario responderlo.",
+  ].join("\n");
+
+  const emailHtml = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Configura tu acceso</title>
+      <style>
+        body {
+          margin: 0;
+          padding: 0;
+          background: #f4f7fb;
+          color: #16324f;
+          font-family: Arial, sans-serif;
+        }
+        .wrapper {
+          width: 100%;
+          padding: 24px 12px;
+          box-sizing: border-box;
+        }
+        .card {
+          max-width: 560px;
+          margin: 0 auto;
+          background: #ffffff;
+          border: 1px solid #d7e2ee;
+          border-radius: 20px;
+          overflow: hidden;
+          box-shadow: 0 16px 40px rgba(22, 50, 79, 0.08);
+        }
+        .hero {
+          background: linear-gradient(135deg, #0f4c81 0%, #1976d2 100%);
+          color: #ffffff;
+          padding: 32px 32px 24px;
+        }
+        .hero h1 {
+          margin: 0 0 8px;
+          font-size: 26px;
+          line-height: 1.2;
+        }
+        .hero p {
+          margin: 0;
+          font-size: 15px;
+          line-height: 1.6;
+          opacity: 0.94;
+        }
+        .content {
+          padding: 32px;
+        }
+        .content h2 {
+          margin: 0 0 12px;
+          font-size: 22px;
+          line-height: 1.3;
+        }
+        .content p {
+          margin: 0 0 16px;
+          font-size: 15px;
+          line-height: 1.7;
+          color: #35506b;
+        }
+        .details {
+          background: #f7fafd;
+          border: 1px solid #dce7f3;
+          border-radius: 14px;
+          padding: 16px 18px;
+          margin: 24px 0;
+        }
+        .details strong {
+          color: #16324f;
+        }
+        .button {
+          display: inline-block;
+          padding: 14px 24px;
+          background: #1976d2;
+          color: #ffffff !important;
+          text-decoration: none;
+          border-radius: 999px;
+          font-size: 15px;
+          font-weight: bold;
+        }
+        .support {
+          margin-top: 24px;
+          font-size: 13px;
+          color: #5d7288;
+        }
+        .footer {
+          padding: 0 32px 28px;
+          font-size: 12px;
+          line-height: 1.6;
+          color: #7b8da1;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="card">
+          <div class="hero">
+            <h1>Asociación Cigüeña</h1>
+            <p>Acceso seguro a tu cuenta</p>
+          </div>
+          <div class="content">
+            <h2>Hola ${userData.displayName}</h2>
+            <p>Tu cuenta ya está preparada. Solo falta que crees una contraseña para poder acceder.</p>
+            <div class="details">
+              <strong>Email:</strong> ${userData.email}<br>
+              <strong>Rol:</strong> ${roleLabel}
+            </div>
+            <p>Usa este enlace seguro para crear tu contraseña:</p>
+            <p>
+              <a href="${actionLink}" class="button">Crear contraseña</a>
+            </p>
+            <p class="support">
+              Si el enlace ha caducado, solicita uno nuevo al equipo administrador.
+            </p>
+          </div>
+          <div class="footer">
+            Este es un correo transaccional automático de Asociación Cigüeña. No es necesario responderlo.
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return {
+    emailSubject,
+    emailText,
+    emailHtml,
+  };
+}
+
+function buildPasswordResetEmail(email: string, actionLink: string) {
+  const emailSubject = "Restablece tu contraseña de Asociación Cigüeña";
+  const emailText = [
+    "Hola,",
+    "",
+    "Hemos recibido una solicitud para restablecer la contraseña de tu cuenta.",
+    "",
+    "Abre este enlace seguro para definir una nueva contraseña:",
+    actionLink,
+    "",
+    "Si no has solicitado este cambio, puedes ignorar este correo.",
+    "",
+    "Este es un correo transaccional automático. No es necesario responderlo.",
+  ].join("\n");
+
+  const emailHtml = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Restablece tu contraseña</title>
+      <style>
+        body {
+          margin: 0;
+          padding: 0;
+          background: #f4f7fb;
+          color: #16324f;
+          font-family: Arial, sans-serif;
+        }
+        .wrapper {
+          width: 100%;
+          padding: 24px 12px;
+          box-sizing: border-box;
+        }
+        .card {
+          max-width: 560px;
+          margin: 0 auto;
+          background: #ffffff;
+          border: 1px solid #d7e2ee;
+          border-radius: 20px;
+          overflow: hidden;
+          box-shadow: 0 16px 40px rgba(22, 50, 79, 0.08);
+        }
+        .hero {
+          background: linear-gradient(135deg, #0f4c81 0%, #1976d2 100%);
+          color: #ffffff;
+          padding: 32px 32px 24px;
+        }
+        .hero h1 {
+          margin: 0 0 8px;
+          font-size: 26px;
+          line-height: 1.2;
+        }
+        .hero p {
+          margin: 0;
+          font-size: 15px;
+          line-height: 1.6;
+          opacity: 0.94;
+        }
+        .content {
+          padding: 32px;
+        }
+        .content h2 {
+          margin: 0 0 12px;
+          font-size: 22px;
+          line-height: 1.3;
+        }
+        .content p {
+          margin: 0 0 16px;
+          font-size: 15px;
+          line-height: 1.7;
+          color: #35506b;
+        }
+        .details {
+          background: #f7fafd;
+          border: 1px solid #dce7f3;
+          border-radius: 14px;
+          padding: 16px 18px;
+          margin: 24px 0;
+        }
+        .details strong {
+          color: #16324f;
+        }
+        .button {
+          display: inline-block;
+          padding: 14px 24px;
+          background: #1976d2;
+          color: #ffffff !important;
+          text-decoration: none;
+          border-radius: 999px;
+          font-size: 15px;
+          font-weight: bold;
+        }
+        .support {
+          margin-top: 24px;
+          font-size: 13px;
+          color: #5d7288;
+        }
+        .footer {
+          padding: 0 32px 28px;
+          font-size: 12px;
+          line-height: 1.6;
+          color: #7b8da1;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="card">
+          <div class="hero">
+            <h1>Asociación Cigüeña</h1>
+            <p>Restablecimiento seguro de contraseña</p>
+          </div>
+          <div class="content">
+            <h2>Recupera el acceso a tu cuenta</h2>
+            <p>Hemos recibido una solicitud para cambiar la contraseña de tu cuenta.</p>
+            <div class="details">
+              <strong>Cuenta:</strong> ${email}
+            </div>
+            <p>Usa este enlace seguro para definir una nueva contraseña:</p>
+            <p>
+              <a href="${actionLink}" class="button">Restablecer contraseña</a>
+            </p>
+            <p class="support">
+              Si no has solicitado este cambio, puedes ignorar este correo sin hacer nada más.
+            </p>
+          </div>
+          <div class="footer">
+            Este es un correo transaccional automático de Asociación Cigüeña. No es necesario responderlo.
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return {
+    emailSubject,
+    emailText,
+    emailHtml,
+  };
+}
+
+async function ensureAuthUser(userData: InvitationUserData) {
+  try {
+    const authUser = await admin.auth().createUser({
+      email: userData.email,
+      password: generateTemporaryPassword(),
+      displayName: userData.displayName,
+      emailVerified: false,
+    });
+
+    console.log(`Usuario creado en Auth con UID: ${authUser.uid}`);
+    return authUser;
+  } catch (authError: any) {
+    if (authError.code === "auth/email-already-exists") {
+      const existingUser = await admin.auth().getUserByEmail(userData.email);
+      console.log(`Usuario ya existe en Auth con UID: ${existingUser.uid}`);
+      return existingUser;
+    }
+
+    throw authError;
+  }
+}
+
+async function sendInvitationEmail(authUid: string, userData: InvitationUserData) {
+  const rawLink = await admin.auth().generatePasswordResetLink(userData.email);
+  const actionLink = buildCustomAuthActionLink(rawLink);
+  const emailTemplate = buildInvitationEmail(userData, actionLink);
+
+  await admin.firestore().collection("mail").add({
+    to: userData.email,
+    message: {
+      subject: emailTemplate.emailSubject,
+      text: emailTemplate.emailText,
+      html: emailTemplate.emailHtml,
+    },
+  });
+
+  await admin.firestore()
+    .collection("users")
+    .doc(authUid)
+    .set({
+      invitationSent: true,
+      invitationSentAt: admin.firestore.FieldValue.serverTimestamp(),
+      invitationError: admin.firestore.FieldValue.delete(),
+    }, {merge: true});
+}
+
+async function sendPasswordResetEmail(email: string) {
+  const rawLink = await admin.auth().generatePasswordResetLink(email);
+  const actionLink = buildCustomAuthActionLink(rawLink);
+  const emailTemplate = buildPasswordResetEmail(email, actionLink);
+
+  await admin.firestore().collection("mail").add({
+    to: email,
+    message: {
+      subject: emailTemplate.emailSubject,
+      text: emailTemplate.emailText,
+      html: emailTemplate.emailHtml,
+    },
+  });
+}
+
 export const onPendingUserCreated = onDocumentCreated({
   document: "pendingUsers/{pendingUserId}",
   region: "europe-southwest1",
@@ -40,28 +421,7 @@ export const onPendingUserCreated = onDocumentCreated({
   }
 
   try {
-    const tempPassword = Math.random().toString(36).slice(-12) + "Aa1!";
-
-    let authUser;
-    try {
-      authUser = await admin.auth().createUser({
-        email: userData.email,
-        password: tempPassword,
-        displayName: userData.displayName,
-        emailVerified: false,
-      });
-
-      console.log(`Usuario creado en Auth con UID: ${authUser.uid}`);
-    } catch (authError: any) {
-      if (authError.code === "auth/email-already-exists") {
-        const existingUser = await admin.auth()
-          .getUserByEmail(userData.email);
-        authUser = existingUser;
-        console.log(`Usuario ya existe en Auth con UID: ${authUser.uid}`);
-      } else {
-        throw authError;
-      }
-    }
+    const authUser = await ensureAuthUser(userData);
 
     const userDocData = {
       email: userData.email,
@@ -80,7 +440,8 @@ export const onPendingUserCreated = onDocumentCreated({
 
     console.log(`Documento creado en users/${authUser.uid}`);
 
-    const link = await admin.auth().generatePasswordResetLink(userData.email);
+    await sendInvitationEmail(authUser.uid, userData);
+    /*
 
     const emailSubject = "Bienvenido a Asociación Cigüeña";
     const emailBody = `
@@ -188,6 +549,7 @@ export const onPendingUserCreated = onDocumentCreated({
         invitationSent: true,
         invitationSentAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+    */
 
     await snapshot.ref.delete();
 
@@ -240,12 +602,54 @@ export const resendInvitation = onCall({
     throw new HttpsError("not-found", "Usuario no encontrado");
   }
 
-  await userDoc.ref.update({
+  const userData = userDoc.data() as InvitationUserData | undefined;
+  if (!userData?.email || !userData.displayName || !userData.role) {
+    throw new HttpsError(
+      "failed-precondition",
+      "El usuario no tiene datos suficientes para reenviar la invitación"
+    );
+  }
+
+  const authUser = await ensureAuthUser(userData);
+
+  await userDoc.ref.set({
     needsRegistration: true,
     invitationSent: false,
-  });
+  }, {merge: true});
+
+  await sendInvitationEmail(authUser.uid, userData);
 
   return {success: true, message: "Invitación reenviada"};
+});
+
+export const requestPasswordReset = onCall({
+  region: "europe-west1",
+}, async (request) => {
+  const email = String(request.data?.email ?? "").trim().toLowerCase();
+
+  if (!email) {
+    throw new HttpsError("invalid-argument", "El email es obligatorio");
+  }
+
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailPattern.test(email)) {
+    throw new HttpsError("invalid-argument", "El email no es válido");
+  }
+
+  try {
+    await admin.auth().getUserByEmail(email);
+    await sendPasswordResetEmail(email);
+  } catch (error: any) {
+    if (error?.code !== "auth/user-not-found") {
+      console.error("Error al procesar requestPasswordReset:", error);
+      throw new HttpsError("internal", "No se pudo procesar la solicitud");
+    }
+  }
+
+  return {
+    success: true,
+    message: "Si existe una cuenta asociada, recibirás un correo con instrucciones.",
+  };
 });
 
 /**

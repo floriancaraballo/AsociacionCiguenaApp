@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.functions.FirebaseFunctions
 import com.asociacionciguena.app.util.NetworkMonitor
 import com.google.firebase.messaging.FirebaseMessaging
 
@@ -25,6 +26,7 @@ class AuthViewModel @Inject constructor(
     private val getCurrentUserUseCase: GetCurrentUserUseCase,
     private val fcmTokenManager: FCMTokenManager,
     private val auth: FirebaseAuth,  // ← AÑADIDO
+    private val functions: FirebaseFunctions,
     private val networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
@@ -164,14 +166,17 @@ class AuthViewModel @Inject constructor(
             }
 
             try {
-                auth.sendPasswordResetEmail(email).await()
+                functions
+                    .getHttpsCallable("requestPasswordReset")
+                    .call(mapOf("email" to email.trim()))
+                    .await()
                 _resetPasswordState.value = ResetPasswordState.Success
             } catch (e: Exception) {
                 _resetPasswordState.value = ResetPasswordState.Error(
                     when {
-                        e.message?.contains("user-not-found") == true -> "No existe una cuenta con este email"
                         e.message?.contains("invalid-email") == true -> "Email inválido"
-                        else -> "Error al enviar email: ${e.message}"
+                        e.message?.contains("invalid-argument") == true -> "Email invÃ¡lido"
+                        else -> "No se pudo procesar la solicitud. IntÃ©ntalo de nuevo."
                     }
                 )
             }

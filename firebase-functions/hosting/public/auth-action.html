@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crear contraseña | Asociación Cigüeña</title>
+  <meta name="description" content="Crea o restablece tu contraseña de acceso a Asociación Cigüeña.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/auth-action.css">
+</head>
+<body>
+  <main class="page-shell">
+    <section class="hero-panel">
+      <div class="hero-badge">Acceso seguro</div>
+      <h1>Asociación Cigüeña</h1>
+      <p class="hero-copy">
+        Configura tu contraseña en una página segura antes de iniciar sesión en la app.
+      </p>
+      <ul class="hero-points">
+        <li>El enlace se valida antes de mostrar el formulario.</li>
+        <li>La contraseña no se guarda en el navegador.</li>
+        <li>Al terminar, podrás volver a la app e iniciar sesión.</li>
+      </ul>
+    </section>
+
+    <section class="card-panel">
+      <div class="card-header">
+        <p class="eyebrow">Gestión de cuenta</p>
+        <h2 id="title">Verificando enlace…</h2>
+        <p id="subtitle" class="subtitle">
+          Estamos comprobando que el enlace sea válido antes de continuar.
+        </p>
+      </div>
+
+      <div id="banner" class="banner hidden" role="status" aria-live="polite"></div>
+
+      <div id="loadingState" class="state-block">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Validando solicitud segura…</p>
+      </div>
+
+      <form id="resetForm" class="hidden" novalidate>
+        <div class="account-chip">
+          <span class="chip-label">Cuenta</span>
+          <strong id="accountEmail">-</strong>
+        </div>
+
+        <label class="field">
+          <span>Nueva contraseña</span>
+          <div class="input-wrap">
+            <input id="password" name="password" type="password" autocomplete="new-password" required>
+            <button id="togglePassword" class="toggle-button" type="button" aria-label="Mostrar contraseña">Mostrar</button>
+          </div>
+        </label>
+
+        <label class="field">
+          <span>Confirmar contraseña</span>
+          <div class="input-wrap">
+            <input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" required>
+            <button id="toggleConfirmPassword" class="toggle-button" type="button" aria-label="Mostrar confirmación">Mostrar</button>
+          </div>
+        </label>
+
+        <div class="requirements">
+          <p class="requirements-title">Requisitos recomendados</p>
+          <ul id="requirementsList">
+            <li data-rule="length">Al menos 10 caracteres</li>
+            <li data-rule="upper">Una letra mayúscula</li>
+            <li data-rule="lower">Una letra minúscula</li>
+            <li data-rule="number">Un número</li>
+          </ul>
+        </div>
+
+        <p id="formError" class="form-error hidden" role="alert"></p>
+
+        <button id="submitButton" class="primary-button" type="submit">
+          Guardar contraseña
+        </button>
+      </form>
+
+      <div id="successState" class="state-block hidden">
+        <div class="success-mark" aria-hidden="true">✓</div>
+        <p class="state-title">Contraseña actualizada</p>
+        <p class="state-copy">
+          Ya puedes volver a la app e iniciar sesión con tu email y la nueva contraseña.
+        </p>
+      </div>
+
+      <div id="errorState" class="state-block hidden">
+        <p class="state-title">No se puede usar este enlace</p>
+        <p id="errorCopy" class="state-copy">
+          El enlace es inválido o ha caducado. Solicita uno nuevo al equipo administrador.
+        </p>
+      </div>
+
+      <div class="card-footer">
+        <p>Si este enlace ha expirado, solicita una nueva invitación o un nuevo correo de recuperación.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/assets/auth-action.js"></script>
+</body>
+</html>

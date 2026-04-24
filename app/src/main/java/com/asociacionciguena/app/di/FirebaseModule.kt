@@ -56,7 +56,7 @@ object FirebaseModule {
     @Provides
     @Singleton
     fun provideFunctions(): FirebaseFunctions {
-        return FirebaseFunctions.getInstance()
+        return FirebaseFunctions.getInstance("europe-west1")
         // O si usas una región específica:
         // return FirebaseFunctions.getInstance("europe-west1")
     }
