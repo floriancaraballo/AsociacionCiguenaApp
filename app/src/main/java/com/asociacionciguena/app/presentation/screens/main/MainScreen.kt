@@ -56,7 +56,7 @@ import com.asociacionciguena.app.presentation.screens.payment.PaymentScreen
 
 @Composable
 fun MainScreen(
-    viewModel: MainViewModel = hiltViewModel(),
+    viewModel: MainViewModel,
     onNavigateToNewsDetail: (String) -> Unit = {},
     themeViewModel: ThemeViewModel, // ← NUEVO
     notificationType: String? = null,  // ← NUEVO
@@ -82,9 +82,6 @@ fun MainScreen(
             LaunchedEffect(notificationType, itemId) {
                 if (!notificationType.isNullOrEmpty() && !itemId.isNullOrEmpty()) {
                     android.util.Log.d("DEEP_LINK_MAIN", "MainScreen - Type: $notificationType, ID: $itemId")
-
-                    // Esperar a que NavHost interno esté listo
-                    kotlinx.coroutines.delay(1000)
 
                     when (notificationType) {
                         "excursion" -> {

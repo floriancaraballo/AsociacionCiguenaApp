@@ -25,8 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.ErrorMessage
+import com.asociacionciguena.app.presentation.components.CachedSubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.ImageLoadingPlaceholder
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import com.asociacionciguena.app.presentation.components.ZoomableImage
@@ -144,26 +144,14 @@ private fun NewsDetailContent(
                     },
                 shape = MaterialTheme.shapes.large
             ) {
-                SubcomposeAsyncImage(
-                    model = news.imageUrl,
+                CachedSubcomposeAsyncImage(
+                    imageUrl = news.imageUrl,
                     contentDescription = news.title,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(300.dp),
                     contentScale = ContentScale.Crop,
-                    loading = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(300.dp)
-                        ) {
-                            ZoomableImage(
-                                imageUrl = news.imageUrl,
-                                contentDescription = news.title,
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
+                    loading = { ImageLoadingPlaceholder() }
                 )
             }
         }
@@ -262,14 +250,12 @@ private fun PhotoCarousel(
                     .fillMaxWidth()
                     .clickable { onPhotoClick(page) }
             ) {
-                SubcomposeAsyncImage(
-                    model = photos[page],
+                CachedSubcomposeAsyncImage(
+                    imageUrl = photos[page],
                     contentDescription = "Foto ${page + 1}",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                    loading = {
-                        ImageLoadingPlaceholder()
-                    }
+                    loading = { ImageLoadingPlaceholder() }
                 )
             }
         }

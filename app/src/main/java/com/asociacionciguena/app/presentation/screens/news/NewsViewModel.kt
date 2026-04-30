@@ -75,10 +75,6 @@ class NewsViewModel @Inject constructor(
             _isRefreshing.value = true
             android.util.Log.d("NewsVM", "🟡 [2] _isRefreshing.value = true EJECUTADO")
 
-            // ✅ Registrar cuándo iniciamos para garantizar tiempo mínimo
-            val startTime = System.currentTimeMillis()
-            val MIN_REFRESH_TIME = 200L  // ← 200ms mínimo para que la animación sea visible
-
             var finished = false
 
             getNewsUseCase().collect { result ->
@@ -100,15 +96,6 @@ class NewsViewModel @Inject constructor(
                             NewsUiState.Error(message = result.message)
                         }
                         is Result.Loading -> _uiState.value
-                    }
-
-                    // ✅ Calcular cuánto tiempo ha pasado
-                    val elapsed = System.currentTimeMillis() - startTime
-
-                    // ✅ Si cargó muy rápido, esperar para que el spinner tenga tiempo de animarse
-                    if (elapsed < MIN_REFRESH_TIME) {
-                        android.util.Log.d("NewsVM", "⏳ Esperando ${MIN_REFRESH_TIME - elapsed}ms para animación")
-                        kotlinx.coroutines.delay(MIN_REFRESH_TIME - elapsed)
                     }
 
                     // ✅ Ocultar spinner

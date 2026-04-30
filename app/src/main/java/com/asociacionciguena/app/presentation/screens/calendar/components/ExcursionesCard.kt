@@ -10,9 +10,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.asociacionciguena.app.domain.model.Excursion
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toJavaLocalDateTime
@@ -29,6 +31,8 @@ fun ExcursionCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -39,7 +43,7 @@ fun ExcursionCard(
             // Imagen de la excursión (si existe)
             excursion.imageUrl?.let { imageUrl ->
                 AsyncImage(
-                    model = imageUrl,
+                    model = preloadedImageRequest(context, imageUrl),
                     contentDescription = excursion.title,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -121,4 +125,16 @@ private fun formatDate(date: kotlinx.datetime.LocalDateTime): String {
     val javaDate = date.toJavaLocalDateTime()
     val formatter = DateTimeFormatter.ofPattern("EEEE, dd 'de' MMMM 'de' yyyy", Locale("es", "ES"))
     return javaDate.format(formatter).replaceFirstChar { it.uppercase() }
+}
+
+private fun preloadedImageRequest(
+    context: android.content.Context,
+    imageUrl: String
+): ImageRequest {
+    return ImageRequest.Builder(context)
+        .data(imageUrl)
+        .memoryCacheKey(imageUrl)
+        .diskCacheKey(imageUrl)
+        .crossfade(false)
+        .build()
 }

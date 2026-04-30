@@ -2,23 +2,17 @@ package com.asociacionciguena.app.presentation.screens.news.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.domain.model.News
-import com.asociacionciguena.app.presentation.components.ImageLoadingPlaceholder
-import kotlinx.datetime.TimeZone
+import com.asociacionciguena.app.presentation.components.CachedSubcomposeAsyncImage
 import kotlinx.datetime.toJavaLocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
 
 /**
  * Card que muestra una noticia
@@ -39,16 +33,13 @@ fun NewsCard(
         Column {
             // Imagen de la noticia (si existe)
             news.imageUrl?.let { imageUrl ->
-                SubcomposeAsyncImage(
-                    model = imageUrl,
+                CachedSubcomposeAsyncImage(
+                    imageUrl = imageUrl,
                     contentDescription = news.title,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(200.dp),
-                    contentScale = ContentScale.Crop,
-                    loading = {
-                        ImageLoadingPlaceholder()
-                    }
+                    contentScale = ContentScale.Crop
                 )
             }
 

@@ -15,7 +15,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import coil.compose.SubcomposeAsyncImage
 import kotlinx.coroutines.launch
 
 @Composable
@@ -136,8 +135,8 @@ fun ZoomableImage(
                 }
             }
     ) {
-        SubcomposeAsyncImage(
-            model = imageUrl,
+        CachedSubcomposeAsyncImage(
+            imageUrl = imageUrl,
             contentDescription = contentDescription,
             modifier = Modifier
                 .fillMaxSize()
@@ -148,9 +147,7 @@ fun ZoomableImage(
                     translationY = animatedOffsetY.value
                 ),
             contentScale = contentScale,
-            loading = {
-                ImageLoadingPlaceholderLarge()  // ← Usar versión grande
-            }
+            loading = { ImageLoadingPlaceholderLarge() }
         )
     }
 }

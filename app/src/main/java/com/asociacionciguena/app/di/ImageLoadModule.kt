@@ -40,9 +40,6 @@ object ImageLoaderModule {
             .diskCachePolicy(CachePolicy.ENABLED)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .networkCachePolicy(CachePolicy.ENABLED)
-            // Configuración adicional
-            .crossfade(true) // Animación suave al cargar
-            .crossfade(300) // 300ms
             .build()
     }
 }

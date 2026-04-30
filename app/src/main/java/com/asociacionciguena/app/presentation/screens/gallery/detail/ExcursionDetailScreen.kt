@@ -59,8 +59,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.domain.model.Photo
+import com.asociacionciguena.app.presentation.components.CachedSubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.ErrorMessage
 import com.asociacionciguena.app.presentation.components.ImageLoadingPlaceholder
 import kotlinx.coroutines.Dispatchers
@@ -446,12 +446,11 @@ private fun DetailMediaPreview(
     modifier: Modifier = Modifier
 ) {
     if (photo.mediaType != "video") {
-        SubcomposeAsyncImage(
-            model = photo.imageUrl,
+        CachedSubcomposeAsyncImage(
+            imageUrl = photo.imageUrl,
             contentDescription = null,
             modifier = modifier,
-            contentScale = ContentScale.Crop,
-            loading = { ImageLoadingPlaceholder() }
+            contentScale = ContentScale.Crop
         )
         return
     }
@@ -482,22 +481,20 @@ private fun DetailMediaPreview(
         }
 
         !photo.thumbnailUrl.isNullOrBlank() -> {
-            SubcomposeAsyncImage(
-                model = photo.thumbnailUrl,
+            CachedSubcomposeAsyncImage(
+                imageUrl = photo.thumbnailUrl,
                 contentDescription = null,
                 modifier = modifier,
-                contentScale = ContentScale.Crop,
-                loading = { ImageLoadingPlaceholder() }
+                contentScale = ContentScale.Crop
             )
         }
 
         else -> {
-            SubcomposeAsyncImage(
-                model = photo.imageUrl,
+            CachedSubcomposeAsyncImage(
+                imageUrl = photo.imageUrl,
                 contentDescription = null,
                 modifier = modifier,
-                contentScale = ContentScale.Crop,
-                loading = { ImageLoadingPlaceholder() }
+                contentScale = ContentScale.Crop
             )
         }
     }

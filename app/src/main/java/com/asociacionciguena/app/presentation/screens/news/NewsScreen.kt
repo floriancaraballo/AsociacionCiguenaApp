@@ -8,9 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.presentation.components.EmptyState
@@ -23,14 +21,8 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.Color
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import com.asociacionciguena.app.presentation.screens.news.components.NewsCardSkeleton
-import androidx.compose.ui.platform.LocalContext
-import android.content.Context
-import android.content.Intent
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 
@@ -75,7 +67,7 @@ fun NewsScreen(
             // Contenido: mismo que tenías
             when (val state = uiState) {
                 is NewsUiState.Loading -> {
-                    NewsSkeletonContent(modifier = Modifier.fillMaxSize())
+                    LoadingIndicator(modifier = Modifier.fillMaxSize())
                 }
                 is NewsUiState.Success -> {
                     if (state.news.isEmpty()) {
@@ -189,20 +181,3 @@ private fun NewsTopBar(
     )
 }
 
-/**
- * Contenido skeleton mientras carga
- */
-@Composable
-private fun NewsSkeletonContent(
-    modifier: Modifier = Modifier
-) {
-    LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = modifier.fillMaxSize()
-    ) {
-        items(4) { // Mostrar 4 skeletons
-            NewsCardSkeleton()
-        }
-    }
-}

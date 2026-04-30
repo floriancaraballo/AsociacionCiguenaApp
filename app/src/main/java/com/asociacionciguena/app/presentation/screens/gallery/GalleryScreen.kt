@@ -19,14 +19,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.imageLoader
-import coil.request.ImageRequest
-import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.ErrorMessage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import kotlinx.datetime.LocalDateTime
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.CalendarToday
-import com.asociacionciguena.app.presentation.components.ImageLoadingPlaceholder
+import com.asociacionciguena.app.presentation.components.CachedSubcomposeAsyncImage
+import com.asociacionciguena.app.presentation.components.preloadedImageRequest
 import com.asociacionciguena.app.presentation.screens.gallery.components.GalleryCardSkeleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -89,11 +88,7 @@ private fun GalleryContent(
                 excursion.excursion.imageUrl
             ).distinct().forEach { url ->
                 context.imageLoader.enqueue(
-                    ImageRequest.Builder(context)
-                        .data(url)
-                        .memoryCacheKey(url)
-                        .diskCacheKey(url)
-                        .build()
+                    preloadedImageRequest(context, url)
                 )
             }
         }
@@ -287,31 +282,28 @@ private fun GalleryMediaPreview(
                 )
             }
             !thumbnailUrl.isNullOrBlank() -> {
-                SubcomposeAsyncImage(
-                    model = thumbnailUrl,
+                CachedSubcomposeAsyncImage(
+                    imageUrl = thumbnailUrl,
                     contentDescription = null,
                     modifier = modifier,
-                    contentScale = ContentScale.Crop,
-                    loading = { ImageLoadingPlaceholder() }
+                    contentScale = ContentScale.Crop
                 )
             }
             else -> {
-                SubcomposeAsyncImage(
-                    model = mediaUrl,
+                CachedSubcomposeAsyncImage(
+                    imageUrl = mediaUrl,
                     contentDescription = null,
                     modifier = modifier,
-                    contentScale = ContentScale.Crop,
-                    loading = { ImageLoadingPlaceholder() }
+                    contentScale = ContentScale.Crop
                 )
             }
         }
     } else {
-        SubcomposeAsyncImage(
-            model = mediaUrl,
+        CachedSubcomposeAsyncImage(
+            imageUrl = mediaUrl,
             contentDescription = null,
             modifier = modifier,
-            contentScale = ContentScale.Crop,
-            loading = { ImageLoadingPlaceholder() }
+            contentScale = ContentScale.Crop
         )
     }
 }

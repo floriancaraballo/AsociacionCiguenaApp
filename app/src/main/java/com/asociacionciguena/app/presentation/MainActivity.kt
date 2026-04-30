@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -18,6 +19,7 @@ import androidx.lifecycle.lifecycleScope
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.asociacionciguena.app.presentation.navigation.AppNavigation
+import com.asociacionciguena.app.presentation.screens.main.MainViewModel
 import com.asociacionciguena.app.presentation.theme.AsociacionCiguenaTheme
 import com.asociacionciguena.app.presentation.theme.ThemeViewModel
 import com.google.firebase.auth.FirebaseAuth
@@ -39,11 +41,13 @@ class MainActivity : ComponentActivity(), ImageLoaderFactory {
     @Inject
     lateinit var imageLoader: ImageLoader
 
+    private val mainViewModel: MainViewModel by viewModels()
+
     override fun newImageLoader(): ImageLoader = imageLoader
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Instalar Splash Screen
-        val splashScreen = installSplashScreen()
+        // Mantener compatibilidad con SplashScreen API sin retener el splash nativo.
+        installSplashScreen()
 
         super.onCreate(savedInstanceState)
 
@@ -80,6 +84,7 @@ class MainActivity : ComponentActivity(), ImageLoaderFactory {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     AppNavigation(
+                        mainViewModel = mainViewModel,
                         notificationType = notificationType,
                         itemId = itemId
                     )
