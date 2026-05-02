@@ -5,6 +5,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import com.asociacionciguena.app.di.CoilImageLoaderFactory
 import dagger.hilt.android.HiltAndroidApp
 import android.app.Notification
 
@@ -13,7 +16,7 @@ import android.app.Notification
  * Anotada con @HiltAndroidApp para habilitar Hilt
  */
 @HiltAndroidApp
-class AsociacionCiguenaApp : Application() {
+class AsociacionCiguenaApp : Application(), ImageLoaderFactory {
 
     companion object {
         // ✅ Constantes compartidas para notificaciones (deben coincidir en todo el proyecto)
@@ -26,6 +29,10 @@ class AsociacionCiguenaApp : Application() {
         // ✅ Crear canal de notificaciones al inicio de la app
         // Esto garantiza que exista antes de que Firebase intente usarlo
         createNotificationChannel()
+    }
+
+    override fun newImageLoader(): ImageLoader {
+        return CoilImageLoaderFactory.create(this)
     }
 
     /**

@@ -16,8 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
-import coil.ImageLoader
-import coil.ImageLoaderFactory
 import com.asociacionciguena.app.presentation.navigation.AppNavigation
 import com.asociacionciguena.app.presentation.screens.main.MainViewModel
 import com.asociacionciguena.app.presentation.theme.AsociacionCiguenaTheme
@@ -33,17 +31,12 @@ import javax.inject.Inject
  * Punto de entrada de la UI
  */
 @AndroidEntryPoint
-class MainActivity : ComponentActivity(), ImageLoaderFactory {
+class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var auth: FirebaseAuth
 
-    @Inject
-    lateinit var imageLoader: ImageLoader
-
     private val mainViewModel: MainViewModel by viewModels()
-
-    override fun newImageLoader(): ImageLoader = imageLoader
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Mantener compatibilidad con SplashScreen API sin retener el splash nativo.

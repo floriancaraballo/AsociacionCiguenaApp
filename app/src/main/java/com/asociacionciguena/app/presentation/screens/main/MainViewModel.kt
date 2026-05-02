@@ -16,6 +16,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
@@ -50,17 +53,27 @@ class MainViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        private const val STARTUP_PRELOAD_TIMEOUT_MS = 15_000L
-        private const val NEWS_PRELOAD_LIMIT = 5L
-        private const val EXCURSION_PRELOAD_LIMIT = 5L
-        private const val GALLERY_EXCURSION_PRELOAD_LIMIT = 2
-        private const val GALLERY_EXCURSION_SCAN_LIMIT = 12L
+        private const val STARTUP_PRELOAD_TIMEOUT_MS = 25_000L
+        private const val BACKGROUND_PRELOAD_TIMEOUT_MS = 20_000L
+        private const val STARTUP_PRELOAD_REQUIRED_PERCENT = 85
+        private const val CRITICAL_PRELOAD_REQUIRED_PERCENT = 100
+        private const val NEWS_PRELOAD_LIMIT = 15L
+        private const val EXCURSION_PRELOAD_LIMIT = 50L
+        private const val GALLERY_EXCURSION_PRELOAD_LIMIT = 4
+        private const val GALLERY_EXCURSION_SCAN_LIMIT = 20L
         private const val IMAGE_PRELOAD_RETRY_COUNT = 3
         private const val IMAGE_PRELOAD_RETRY_DELAY_MS = 400L
     }
 
     private val _initState = MutableStateFlow<AppInitState>(AppInitState.Loading)
     val initState: StateFlow<AppInitState> = _initState.asStateFlow()
+
+    private data class StartupPreloadUrls(
+        val criticalUrls: List<String>,
+        val secondaryUrls: List<String>
+    ) {
+        val allUrls: List<String> = (criticalUrls + secondaryUrls).distinct()
+    }
 
     init {
         checkInitialState()
@@ -72,39 +85,128 @@ class MainViewModel @Inject constructor(
             val isOnboardingCompleted = preferencesDataSource.isOnboardingCompleted().first()
             val isUserLoggedIn = auth.currentUser != null
 
-            preloadStartupContent(auth.currentUser?.uid)
+            val remainingPreloadUrls = preloadStartupContent(auth.currentUser?.uid)
 
             _initState.value = AppInitState.Ready(
                 isOnboardingCompleted = isOnboardingCompleted,
                 isUserLoggedIn = isUserLoggedIn
             )
+
+            continuePreloadingInBackground(remainingPreloadUrls)
         }
     }
 
-    private suspend fun preloadStartupContent(currentUserId: String?) {
+    private suspend fun preloadStartupContent(currentUserId: String?): List<String> {
         val preloadUrls = withTimeoutOrNull(STARTUP_PRELOAD_TIMEOUT_MS) {
             coroutineScope {
                 val galleryExcursionIds = async {
                     fetchRecentPastExcursionIdsForGallery(currentUserId)
                 }
+                val recentNewsUrls = async { fetchRecentNewsUrls() }
+                val recentExcursionUrls = async { fetchRecentExcursionImageUrls() }
+                val galleryPhotoUrls = async {
+                    fetchGalleryPhotoUrls(galleryExcursionIds.await(), currentUserId)
+                }
 
-                listOf(
-                    async { fetchRecentNewsUrls() },
-                    async { fetchRecentExcursionImageUrls() },
-                    async { fetchGalleryPhotoUrls(galleryExcursionIds.await(), currentUserId) }
-                ).awaitAll().flatten().distinct()
+                val criticalUrls = (recentNewsUrls.await() + recentExcursionUrls.await()).distinct()
+                val secondaryUrls = galleryPhotoUrls.await()
+                    .distinct()
+                    .filterNot { it in criticalUrls }
+
+                StartupPreloadUrls(
+                    criticalUrls = criticalUrls,
+                    secondaryUrls = secondaryUrls
+                )
             }
-        } ?: emptyList()
+        } ?: StartupPreloadUrls(emptyList(), emptyList())
 
-        if (preloadUrls.isEmpty()) return
+        if (preloadUrls.allUrls.isEmpty()) return emptyList()
 
-        withTimeoutOrNull(STARTUP_PRELOAD_TIMEOUT_MS) {
-            coroutineScope {
-                preloadUrls.map { url ->
-                    async { preloadImageWithRetry(url) }
-                }.awaitAll()
+        return preloadUntilMostImagesAreCached(preloadUrls)
+    }
+
+    private suspend fun preloadUntilMostImagesAreCached(preloadUrls: StartupPreloadUrls): List<String> {
+        val criticalRemainingUrls = preloadUntilRequiredImagesAreCached(
+            urls = preloadUrls.criticalUrls,
+            requiredSuccessCount = requiredSuccessCount(
+                totalUrls = preloadUrls.criticalUrls.size,
+                requiredPercent = CRITICAL_PRELOAD_REQUIRED_PERCENT
+            )
+        )
+        val cachedCriticalCount = preloadUrls.criticalUrls.size - criticalRemainingUrls.size
+        val requiredTotalSuccessCount = requiredSuccessCount(
+            totalUrls = preloadUrls.allUrls.size,
+            requiredPercent = STARTUP_PRELOAD_REQUIRED_PERCENT
+        )
+        val requiredSecondarySuccessCount = (requiredTotalSuccessCount - cachedCriticalCount)
+            .coerceAtLeast(0)
+            .coerceAtMost(preloadUrls.secondaryUrls.size)
+
+        val secondaryRemainingUrls = preloadUntilRequiredImagesAreCached(
+            urls = preloadUrls.secondaryUrls,
+            requiredSuccessCount = requiredSecondarySuccessCount
+        )
+
+        return (criticalRemainingUrls + secondaryRemainingUrls).distinct()
+    }
+
+    private suspend fun preloadUntilRequiredImagesAreCached(
+        urls: List<String>,
+        requiredSuccessCount: Int
+    ): List<String> {
+        if (urls.isEmpty() || requiredSuccessCount <= 0) return urls
+
+        return withTimeoutOrNull(STARTUP_PRELOAD_TIMEOUT_MS) {
+            supervisorScope {
+                val remainingUrls = urls.toMutableSet()
+                val results = Channel<Pair<String, Boolean>>(Channel.UNLIMITED)
+                val jobs = urls.map { url ->
+                    launch {
+                        results.send(url to preloadImageWithRetry(url))
+                    }
+                }
+
+                var successfulPreloads = 0
+                var completedPreloads = 0
+
+                while (completedPreloads < urls.size && successfulPreloads < requiredSuccessCount) {
+                    val (url, success) = results.receive()
+                    completedPreloads++
+
+                    if (success) {
+                        successfulPreloads++
+                        remainingUrls.remove(url)
+                    }
+                }
+
+                if (successfulPreloads >= requiredSuccessCount) {
+                    jobs.filter { it.isActive }.forEach { it.cancelAndJoin() }
+                } else {
+                    jobs.forEach { it.join() }
+                }
+
+                remainingUrls.toList()
+            }
+        } ?: urls
+    }
+
+    private fun continuePreloadingInBackground(urls: List<String>) {
+        if (urls.isEmpty()) return
+
+        viewModelScope.launch {
+            withTimeoutOrNull(BACKGROUND_PRELOAD_TIMEOUT_MS) {
+                coroutineScope {
+                    urls.map { url ->
+                        async { preloadImageWithRetry(url) }
+                    }.awaitAll()
+                }
             }
         }
+    }
+
+    private fun requiredSuccessCount(totalUrls: Int, requiredPercent: Int): Int {
+        if (totalUrls <= 0) return 0
+        return ((totalUrls * requiredPercent) + 99) / 100
     }
 
     private suspend fun fetchRecentNewsUrls(): List<String> {
@@ -182,7 +284,6 @@ class MainViewModel @Inject constructor(
 
                                     if (mediaType == "video") {
                                         thumbnailUrl?.let(::add)
-                                        imageUrl?.let(::add)
                                     } else {
                                         imageUrl?.let(::add)
                                         thumbnailUrl?.let(::add)

@@ -15,8 +15,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
-import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.domain.model.PaymentStatus
+import com.asociacionciguena.app.presentation.components.CachedSubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import kotlinx.datetime.toJavaLocalDateTime
 import java.time.format.DateTimeFormatter
@@ -157,13 +157,12 @@ private fun ExcursionDetailContent(
         // Imagen de la excursión
         if (!excursion.imageUrl.isNullOrBlank()) {
             Card(modifier = Modifier.fillMaxWidth().height(250.dp)) {
-                SubcomposeAsyncImage(
-                    model = excursion.imageUrl,
+                CachedSubcomposeAsyncImage(
+                    imageUrl = excursion.imageUrl,
                     contentDescription = excursion.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                    loading = { Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } },
-                    error = { Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.Default.BrokenImage, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) } }
+                    loading = { Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
                 )
             }
         }
