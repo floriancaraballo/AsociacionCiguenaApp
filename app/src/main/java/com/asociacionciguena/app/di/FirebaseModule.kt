@@ -1,5 +1,6 @@
 package com.asociacionciguena.app.di
 
+import com.asociacionciguena.app.BuildConfig
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
@@ -40,7 +41,7 @@ object FirebaseModule {
     @Provides
     @Singleton
     fun provideFirestore(): FirebaseFirestore {
-        return FirebaseFirestore.getInstance()
+        return FirebaseFirestore.getInstance(BuildConfig.FIRESTORE_DATABASE_ID)
     }
 
     /**

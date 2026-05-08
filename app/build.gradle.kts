@@ -61,6 +61,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             isDebuggable = false  // ← Explícito: no debuggable en release
+            buildConfigField("String", "FIRESTORE_DATABASE_ID", "\"(default)\"")
 
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -75,6 +76,7 @@ android {
 
             // ✅ IMPORTANTE: Sufijo para poder tener debug y release instalados a la vez
             applicationIdSuffix = ".debug"
+            buildConfigField("String", "FIRESTORE_DATABASE_ID", "\"debug\"")
 
             // Opcional: prefijo en el nombre de la app para distinguir
             resValue("string", "app_name", "Asociación Ciguena (Debug)")

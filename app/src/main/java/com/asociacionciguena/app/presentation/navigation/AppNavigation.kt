@@ -4,6 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -18,6 +21,9 @@ import com.asociacionciguena.app.presentation.screens.main.MainViewModel
 import com.asociacionciguena.app.presentation.screens.news.NewsDetailScreen
 import com.asociacionciguena.app.presentation.screens.splash.SplashScreen
 import com.asociacionciguena.app.presentation.theme.ThemeViewModel
+import kotlinx.coroutines.delay
+
+private const val SPLASH_ART_DURATION_MILLIS = 3_000L
 
 @Composable
 fun AppNavigation(
@@ -30,9 +36,19 @@ fun AppNavigation(
     val initState by mainViewModel.initState.collectAsState()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    var isInitialSplashComplete by remember { mutableStateOf(false) }
 
-    LaunchedEffect(initState) {
-        if (initState is AppInitState.Ready && currentRoute == Screen.Splash.route) {
+    LaunchedEffect(Unit) {
+        delay(SPLASH_ART_DURATION_MILLIS)
+        isInitialSplashComplete = true
+    }
+
+    LaunchedEffect(initState, currentRoute, isInitialSplashComplete) {
+        if (
+            isInitialSplashComplete &&
+            initState is AppInitState.Ready &&
+            currentRoute == Screen.Splash.route
+        ) {
             navController.navigate(Screen.News.route) {
                 popUpTo(Screen.Splash.route) { inclusive = true }
                 launchSingleTop = true
@@ -41,7 +57,8 @@ fun AppNavigation(
     }
 
     // Deep linking - ejecutar cuando cambien los valores
-    LaunchedEffect(notificationType, itemId, initState) {
+    LaunchedEffect(notificationType, itemId, initState, isInitialSplashComplete) {
+        if (!isInitialSplashComplete) return@LaunchedEffect
         if (initState is AppInitState.Loading) return@LaunchedEffect
 
         android.util.Log.d("DEEP_LINK", "AppNavigation - Type: $notificationType, ID: $itemId")
@@ -74,7 +91,7 @@ fun AppNavigation(
     ) {
         // Splash Screen
         composable(Screen.Splash.route) {
-            SplashScreen()
+            SplashScreen(initialArtDurationMillis = SPLASH_ART_DURATION_MILLIS)
         }
 
         // Main Screen (con bottom navigation)
