@@ -66,8 +66,18 @@ class GalleryViewModel @Inject constructor(
                     }
                 }.filter { it.date < now }
 
+                val currentUserId = auth.currentUser?.uid
+                val isAdmin = currentUserId?.let { userId ->
+                    val userDoc = firestore.collection("users")
+                        .document(userId)
+                        .get()
+                        .await()
+                    val role = userDoc.getString("role")
+                    role == "admin" || role == "superadmin"
+                } ?: false
+
                 // Configurar listener en tiempo real para fotos
-                setupPhotosListener(allExcursions)
+                setupPhotosListener(allExcursions, isAdmin)
 
             } catch (e: Exception) {
                 _uiState.value = GalleryUiState.Error(
@@ -77,7 +87,7 @@ class GalleryViewModel @Inject constructor(
         }
     }
 
-    private fun setupPhotosListener(excursions: List<Excursion>) {
+    private fun setupPhotosListener(excursions: List<Excursion>, isAdmin: Boolean) {
         // Cancelar listener anterior si existe
         photosListener?.remove()
 
@@ -88,10 +98,15 @@ class GalleryViewModel @Inject constructor(
             return
         }
 
+        val query = if (isAdmin) {
+            firestore.collection("photos")
+        } else {
+            firestore.collection("photos")
+                .whereArrayContains("authorizedUsers", currentUserId)
+        }
+
         // Listener en tiempo real para cambios en fotos
-        photosListener = firestore.collection("photos")
-            .whereArrayContains("authorizedUsers", currentUserId)
-            .addSnapshotListener { snapshot, error ->
+        photosListener = query.addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     _uiState.value = GalleryUiState.Error("Error: ${error.message}")
                     return@addSnapshotListener

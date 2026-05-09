@@ -7,6 +7,7 @@ import com.asociacionciguena.app.domain.model.Result
 import com.asociacionciguena.app.domain.repository.ExcursionRepository
 import com.asociacionciguena.app.util.Constants
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
@@ -26,6 +27,8 @@ class ExcursionRepositoryImpl @Inject constructor(
                 val excursions = dtoList.map { it.toDomain() }
                 emit(Result.Success(excursions))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             emit(Result.Error(
                 message = e.message ?: "Error al cargar excursiones",

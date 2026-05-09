@@ -2,65 +2,62 @@ package com.asociacionciguena.app.presentation.screens.news
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.asociacionciguena.app.domain.model.News
 import com.asociacionciguena.app.domain.model.Result
+import com.asociacionciguena.app.domain.usecase.news.GetNewsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
-import com.asociacionciguena.app.domain.usecase.news.GetNewsUseCase
 
 /**
- * ViewModel de la pantalla de Noticias
- *
- * @HiltViewModel = Hilt inyectará las dependencias automáticamente
- * @Inject = Constructor con dependencias inyectadas
+ * ViewModel de la pantalla de Noticias.
  */
 @HiltViewModel
 class NewsViewModel @Inject constructor(
     private val getNewsUseCase: GetNewsUseCase
 ) : ViewModel() {
 
-    // Estado o (mutable) - solo el ViewModel puede modificarlo
     private val _uiState = MutableStateFlow<NewsUiState>(NewsUiState.Loading)
-
-    // Estado público (inmutable) - la UI solo puede observarlo
     val uiState: StateFlow<NewsUiState> = _uiState.asStateFlow()
 
-    // ✅ AÑADIR: Estado separado para el spinner (igual que AdminDashboard)
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    /**
-     * Init block se ejecuta al crear el ViewModel
-     * Carga las noticias automáticamente
-     */
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _allNews = MutableStateFlow<List<News>>(emptyList())
+
+    private companion object {
+        const val MIN_REFRESH_TIME_MS = 300L
+        const val REFRESH_TIMEOUT_MS = 10_000L
+    }
+
     init {
         loadNews()
     }
 
-    /**
-     * Carga las noticias desde Firebase
-     */
     fun loadNews() {
         viewModelScope.launch {
-            // Llamar al Use Case
             getNewsUseCase().collect { result ->
-                // Actualizar el estado según el resultado
-                _uiState.value = when (result) {
+                when (result) {
                     is Result.Success -> {
-                        _allNews.value = result.data  // ← NUEVO: Guardar todas
-                        filterNews(_searchQuery.value)  // ← NUEVO: Aplicar filtro actual
-                        NewsUiState.Success(news = result.data)
+                        _allNews.value = result.data
+                        filterNews(_searchQuery.value)
                     }
 
                     is Result.Error -> {
-                        NewsUiState.Error(message = result.message)
+                        _uiState.value = NewsUiState.Error(message = result.message)
                     }
 
                     is Result.Loading -> {
-                        NewsUiState.Loading
+                        _uiState.value = NewsUiState.Loading
                     }
                 }
             }
@@ -68,82 +65,65 @@ class NewsViewModel @Inject constructor(
     }
 
     fun refresh() {
+        if (_isRefreshing.value) return
+
         viewModelScope.launch {
-            android.util.Log.d("NewsVM", "🔴 [1] refresh() INICIADO")
-
-            // ✅ Activar spinner
             _isRefreshing.value = true
-            android.util.Log.d("NewsVM", "🟡 [2] _isRefreshing.value = true EJECUTADO")
+            val startTime = System.currentTimeMillis()
 
-            var finished = false
+            try {
+                val result = withTimeoutOrNull(REFRESH_TIMEOUT_MS) {
+                    getNewsUseCase().first { it !is Result.Loading }
+                }
 
-            getNewsUseCase().collect { result ->
-                android.util.Log.d("NewsVM", "🔵 [3] collect: ${result::class.simpleName}, finished=$finished")
-
-                if (!finished && result !is Result.Loading) {
-                    finished = true
-                    android.util.Log.d("NewsVM", "🟢 [4] Procesando primera emisión útil")
-
-                    _uiState.value = when (result) {
-                        is Result.Success -> {
-                            android.util.Log.d("NewsVM", "📦 [5] Success: ${result.data.size} noticias")
-                            _allNews.value = result.data
-                            filterNews(_searchQuery.value)
-                            NewsUiState.Success(news = result.data)
-                        }
-                        is Result.Error -> {
-                            android.util.Log.e("NewsVM", "❌ [5] Error: ${result.message}")
-                            NewsUiState.Error(message = result.message)
-                        }
-                        is Result.Loading -> _uiState.value
+                when (result) {
+                    is Result.Success -> {
+                        _allNews.value = result.data
+                        filterNews(_searchQuery.value)
                     }
 
-                    // ✅ Ocultar spinner
-                    _isRefreshing.value = false
-                    android.util.Log.d("NewsVM", "🟣 [6] _isRefreshing.value = false EJECUTADO")
+                    is Result.Error -> {
+                        _uiState.value = NewsUiState.Error(message = result.message)
+                    }
+
+                    is Result.Loading,
+                    null -> Unit
                 }
+            } finally {
+                val elapsed = System.currentTimeMillis() - startTime
+                if (elapsed < MIN_REFRESH_TIME_MS) {
+                    delay(MIN_REFRESH_TIME_MS - elapsed)
+                }
+                _isRefreshing.value = false
             }
         }
     }
 
-    // ← NUEVO: Estado de búsqueda
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
-
-    private val _allNews = MutableStateFlow<List<com.asociacionciguena.app.domain.model.News>>(emptyList())
-
-    // ← NUEVO: Actualizar query de búsqueda
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query
         filterNews(query)
     }
 
-    // ← NUEVO: Limpiar búsqueda
     fun clearSearch() {
         _searchQuery.value = ""
         filterNews("")
     }
 
-    // ← NUEVO: Filtrar noticias
     private fun filterNews(query: String, isRefreshing: Boolean = false) {
         val currentNews = _allNews.value
 
-        if (query.isBlank()) {
-            // Mostrar todas
-            _uiState.value = NewsUiState.Success(news = currentNews, isRefreshing = isRefreshing)
+        val filtered = if (query.isBlank()) {
+            currentNews
         } else {
-            // Filtrar por título o descripción
-            val filtered = currentNews.filter { news ->
+            currentNews.filter { news ->
                 news.title.contains(query, ignoreCase = true) ||
-                        news.shortDescription.contains(query, ignoreCase = true)
+                    news.shortDescription.contains(query, ignoreCase = true)
             }
-            _uiState.value = NewsUiState.Success(news = filtered, isRefreshing = isRefreshing)
         }
+
+        _uiState.value = NewsUiState.Success(news = filtered, isRefreshing = isRefreshing)
     }
 
-    /**
-     * Reintentar después de un error
-     */
     fun retry() {
         loadNews()
     }

@@ -5,6 +5,7 @@ import com.asociacionciguena.app.data.mapper.toDomain
 import com.asociacionciguena.app.domain.model.News
 import com.asociacionciguena.app.domain.model.Result
 import com.asociacionciguena.app.domain.repository.NewsRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -28,6 +29,8 @@ class NewsRepositoryImpl @Inject constructor(
                 val newsList = dtoList.map { it.toDomain() }
                 emit(Result.Success(newsList))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("NewsRepo", "❌ Error: ${e.message}")
             kotlinx.coroutines.currentCoroutineContext().ensureActive()

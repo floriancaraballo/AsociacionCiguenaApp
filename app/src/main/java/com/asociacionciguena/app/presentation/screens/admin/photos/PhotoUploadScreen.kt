@@ -417,13 +417,21 @@ private fun PhotosSelectedContent(
         onSelected = onExcursionSelected
     )
 
+    UserSelector(
+        users = users,
+        selectedUsers = selectedUsers,
+        onUserToggled = onUserToggled,
+        onSelectAll = onSelectAll,
+        onDeselectAll = onDeselectAll
+    )
+
     // Upload button
     Button(
         onClick = onUploadClick,
         modifier = Modifier
             .fillMaxWidth()
             .height(50.dp),
-        enabled = selectedExcursionId != null
+        enabled = selectedExcursionId != null && selectedUsers.isNotEmpty()
     ) {
         Icon(Icons.Default.CloudUpload, contentDescription = null)
         Spacer(modifier = Modifier.width(8.dp))

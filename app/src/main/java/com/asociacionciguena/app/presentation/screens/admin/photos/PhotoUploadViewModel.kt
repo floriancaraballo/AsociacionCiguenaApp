@@ -41,6 +41,7 @@ class PhotoUploadViewModel @Inject constructor(
 
     private val _users = MutableStateFlow<List<UserOption>>(emptyList())
     val users: StateFlow<List<UserOption>> = _users.asStateFlow()
+    private var userSelectionModified = false
 
     init {
         loadExcursions()
@@ -102,6 +103,7 @@ class PhotoUploadViewModel @Inject constructor(
                         null
                     }
                 }
+                preselectUsersIfNeeded()
             } catch (e: Exception) {
                 // Log error
             }
@@ -115,9 +117,11 @@ class PhotoUploadViewModel @Inject constructor(
      * Usuario selecciona UNA foto
      */
     fun onPhotoSelected(uri: Uri) {
+        userSelectionModified = false
         _uiState.value = PhotoUploadUiState.PhotosSelected(
             uris = listOf(uri),
-            selectedExcursionId = preselectedExcursionId
+            selectedExcursionId = preselectedExcursionId,
+            selectedUsers = _users.value.map { it.id }
         )
     }
 
@@ -125,9 +129,11 @@ class PhotoUploadViewModel @Inject constructor(
      * Usuario selecciona MÚLTIPLES fotos
      */
     fun onMediaSelected(uris: List<Uri>) {
+        userSelectionModified = false
         _uiState.value = PhotoUploadUiState.PhotosSelected(
             uris = uris,
-            selectedExcursionId = preselectedExcursionId
+            selectedExcursionId = preselectedExcursionId,
+            selectedUsers = _users.value.map { it.id }
         )
     }
 
@@ -174,6 +180,7 @@ class PhotoUploadViewModel @Inject constructor(
     fun onUserToggled(userId: String) {
         val currentState = _uiState.value
         if (currentState is PhotoUploadUiState.PhotosSelected) {  // ← Cambio
+            userSelectionModified = true
             val currentUsers = currentState.selectedUsers.toMutableList()
             if (userId in currentUsers) {
                 currentUsers.remove(userId)
@@ -210,6 +217,11 @@ class PhotoUploadViewModel @Inject constructor(
                     return@launch
                 }
 
+                if (currentState.selectedUsers.isEmpty()) {
+                    _uiState.value = PhotoUploadUiState.Error("Selecciona al menos un usuario autorizado")
+                    return@launch
+                }
+
                 val totalPhotos = currentState.uris.size
 
                 // ← NUEVO: Crear documento de batch
@@ -218,7 +230,7 @@ class PhotoUploadViewModel @Inject constructor(
                     "excursionId" to currentState.selectedExcursionId,
                     "photoCount" to totalPhotos,
                     "status" to "uploading",
-                    "authorizedUsers" to emptyList<String>(),
+                    "authorizedUsers" to currentState.selectedUsers,
                     "createdAt" to Timestamp.now()
                 )
 
@@ -360,7 +372,7 @@ class PhotoUploadViewModel @Inject constructor(
                         "storagePath" to storagePath,
                         "uploadedBy" to "admin",
                         "uploadedAt" to Timestamp.now(),
-                        "authorizedUsers" to emptyList<String>(),
+                        "authorizedUsers" to currentState.selectedUsers,
                         "batchId" to batchId,
                         "mediaType" to if (isVideo) "video" else "image",  // ✅ NUEVO
                         "thumbnailUrl" to thumbnailUrl  // ✅ NUEVO
@@ -405,6 +417,7 @@ class PhotoUploadViewModel @Inject constructor(
     fun selectAllUsers() {
         val currentState = _uiState.value
         if (currentState is PhotoUploadUiState.PhotosSelected) {  // ← Cambio
+            userSelectionModified = true
             val allSocioIds = _users.value.map { it.id }
             _uiState.value = currentState.copy(selectedUsers = allSocioIds)
         }
@@ -413,6 +426,7 @@ class PhotoUploadViewModel @Inject constructor(
     fun deselectAllUsers() {
         val currentState = _uiState.value
         if (currentState is PhotoUploadUiState.PhotosSelected) {  // ← Cambio
+            userSelectionModified = true
             _uiState.value = currentState.copy(selectedUsers = emptyList())
         }
     }
@@ -423,7 +437,21 @@ class PhotoUploadViewModel @Inject constructor(
     }
 
     fun reset() {
+        userSelectionModified = false
         _uiState.value = PhotoUploadUiState.Idle
+    }
+
+    private fun preselectUsersIfNeeded() {
+        val currentState = _uiState.value
+        if (
+            currentState is PhotoUploadUiState.PhotosSelected &&
+            !userSelectionModified &&
+            currentState.selectedUsers.isEmpty()
+        ) {
+            _uiState.value = currentState.copy(
+                selectedUsers = _users.value.map { it.id }
+            )
+        }
     }
 }
 
