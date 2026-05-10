@@ -53,6 +53,34 @@ export const createPaymentIntent = onCall(
       }
 
       // ✅ OBTENER CONFIGURACIÓN
+      const maxParticipants = Number(excursion?.maxParticipants || 0);
+      if (maxParticipants > 0) {
+        const activeAuthorizationStatuses = ['PENDING', 'APPROVED'];
+        const userActiveAuthorizationSnap = await admin.firestore()
+          .collection('signedAuthorizations')
+          .where('excursionId', '==', excursionId)
+          .where('userId', '==', request.auth.uid)
+          .get();
+
+        const userHasActiveAuthorization = userActiveAuthorizationSnap.docs.some((doc) =>
+          activeAuthorizationStatuses.includes(doc.get('status'))
+        );
+
+        if (!userHasActiveAuthorization) {
+          const activeAuthorizationsSnap = await admin.firestore()
+            .collection('signedAuthorizations')
+            .where('excursionId', '==', excursionId)
+            .get();
+          const activeAuthorizationsCount = activeAuthorizationsSnap.docs.filter((doc) =>
+            activeAuthorizationStatuses.includes(doc.get('status'))
+          ).length;
+
+          if (activeAuthorizationsCount >= maxParticipants) {
+            throw new HttpsError('failed-precondition', 'No quedan plazas disponibles para esta excursión');
+          }
+        }
+      }
+
       const config = getPaymentConfig('test');
       
 	  // 🔍 LOG PARA DEBUG: Verificar clave secreta

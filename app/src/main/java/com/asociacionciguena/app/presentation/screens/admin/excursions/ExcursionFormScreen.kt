@@ -36,6 +36,7 @@ fun ExcursionFormScreen(
     val description by viewModel.description.collectAsState()
     val location by viewModel.location.collectAsState()
     val price by viewModel.price.collectAsState()
+    val maxParticipants by viewModel.maxParticipants.collectAsState()
     val imageUrl by viewModel.imageUrl.collectAsState()
     val imageUploadState by viewModel.imageUploadState.collectAsState()
     val date by viewModel.date.collectAsState()
@@ -114,6 +115,7 @@ fun ExcursionFormScreen(
                     description = description,
                     location = location,
                     price = price,  // ← NUEVO
+                    maxParticipants = maxParticipants,
                     imageUrl = imageUrl,
                     date = date,
                     authorizationPdfUrl = authorizationPdfUrl,
@@ -125,6 +127,7 @@ fun ExcursionFormScreen(
                     onDescriptionChange = viewModel::onDescriptionChange,
                     onLocationChange = viewModel::onLocationChange,
                     onPriceChange = viewModel::onPriceChange,
+                    onMaxParticipantsChange = viewModel::onMaxParticipantsChange,
                     onImageUrlChange = viewModel::onImageUrlChange,
                     onDatePickerClick = { showDatePicker = true },
                     onUploadImageClick = { imagePickerLauncher.launch("image/*") },  // ← NUEVO
@@ -201,6 +204,7 @@ private fun ExcursionFormContent(
     description: String,
     location: String,
     price: String,  // ← AÑADIR
+    maxParticipants: String,
     imageUrl: String,
     date: LocalDateTime?,
     authorizationPdfUrl: String?,
@@ -212,6 +216,7 @@ private fun ExcursionFormContent(
     onDescriptionChange: (String) -> Unit,
     onLocationChange: (String) -> Unit,
     onPriceChange: (String) -> Unit,  // ← NUEVO
+    onMaxParticipantsChange: (String) -> Unit,
     onImageUrlChange: (String) -> Unit,
     onDatePickerClick: () -> Unit,
     onUploadImageClick: () -> Unit,  // ← NUEVO
@@ -307,6 +312,24 @@ private fun ExcursionFormContent(
                 keyboardType = KeyboardType.Decimal
             ),
             singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = maxParticipants,
+            onValueChange = onMaxParticipantsChange,
+            label = { Text("Máximo de participantes *") },
+            leadingIcon = {
+                Icon(Icons.Default.Groups, contentDescription = null)
+            },
+            supportingText = {
+                Text("Cuenta autorizaciones pendientes y aprobadas")
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number
+            ),
+            singleLine = true,
+            enabled = !isSaving,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -647,6 +670,7 @@ private fun ExcursionFormContent(
                     title.isNotBlank() &&
                     description.isNotBlank() &&
                     location.isNotBlank() &&
+                    maxParticipants.toIntOrNull()?.let { it > 0 } == true &&
                     date != null &&
                     pdfUploadState !is PdfUploadState.Uploading &&
                     imageUploadState !is ImageUploadState.Uploading  // ← AÑADIDO

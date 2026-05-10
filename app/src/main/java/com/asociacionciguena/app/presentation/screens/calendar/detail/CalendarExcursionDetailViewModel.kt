@@ -89,7 +89,8 @@ class CalendarExcursionDetailViewModel @Inject constructor(
                     location = excursionDoc.getString("location") ?: "",
                     imageUrl = excursionDoc.getString("imageUrl"),
                     authorizationPdfUrl = excursionDoc.getString("authorizationPdfUrl"),
-                    price = excursionDoc.getDouble("price")  // ← NUEVO
+                    price = excursionDoc.getDouble("price"),  // ← NUEVO
+                    maxParticipants = excursionDoc.getLong("maxParticipants")?.toInt() ?: 0
                 )
 
                 // Verificar si es admin
@@ -215,6 +216,10 @@ class CalendarExcursionDetailViewModel @Inject constructor(
         }
     }
 
+    fun getActiveAuthorizationCount(): Flow<Int> {
+        return signedAuthorizationRepository.getActiveAuthorizationCount(excursionId)
+    }
+
     /**
      * Firmar autorización
      */
@@ -232,6 +237,11 @@ class CalendarExcursionDetailViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
+                if (!signedAuthorizationRepository.hasAvailableCapacity(excursionId, requestedParticipants = 1)) {
+                    onError("No quedan plazas disponibles para esta excursión")
+                    return@launch
+                }
+
                 val result = signedAuthorizationRepository.signAuthorization(
                     excursionId = excursionId,
                     excursionTitle = excursionTitle,
@@ -275,6 +285,12 @@ class CalendarExcursionDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val authorizationIds = mutableListOf<String>()
+                val requestedParticipants = minors.size
+
+                if (!signedAuthorizationRepository.hasAvailableCapacity(excursionId, requestedParticipants)) {
+                    onError("No quedan plazas disponibles para ${requestedParticipants} participante(s)")
+                    return@launch
+                }
 
                 // 1. Firmar cada autorización CON isBatchEmail = true
                 for (minor in minors) {

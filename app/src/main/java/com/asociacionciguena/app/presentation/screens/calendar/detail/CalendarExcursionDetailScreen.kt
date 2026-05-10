@@ -149,6 +149,15 @@ private fun ExcursionDetailContent(
     onDownloadPdf: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val activeAuthorizationCount by viewModel.getActiveAuthorizationCount().collectAsState(initial = 0)
+    val hasParticipantLimit = excursion.maxParticipants > 0
+    val isCapacityFull = hasParticipantLimit && activeAuthorizationCount >= excursion.maxParticipants
+    val remainingPlaces = if (hasParticipantLimit) {
+        (excursion.maxParticipants - activeAuthorizationCount).coerceAtLeast(0)
+    } else {
+        null
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -197,10 +206,44 @@ private fun ExcursionDetailContent(
             Text("Descripción", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             Text(excursion.description, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
 
+            if (hasParticipantLimit) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isCapacityFull) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isCapacityFull) Icons.Default.Block else Icons.Default.Groups,
+                            contentDescription = null,
+                            tint = if (isCapacityFull) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Column {
+                            Text(
+                                text = if (isCapacityFull) "Plazas completas" else "Plazas disponibles",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = if (isCapacityFull) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                text = "$activeAuthorizationCount/${excursion.maxParticipants} participantes. ${remainingPlaces ?: 0} plaza(s) libres.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isCapacityFull) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+
             // Sección de pago
             excursion.price?.let { price ->
                 val currentUser by viewModel.currentUser.collectAsState()
                 val paymentStatus by viewModel.getPaymentStatus(currentUser?.id ?: "").collectAsState(initial = null)
+                val hasSignedForPayment by viewModel.hasUserSignedAuthorization(currentUser?.id ?: "").collectAsState(initial = false)
+                val isPaymentBlockedByCapacity = isCapacityFull && !hasSignedForPayment
                 var showPaymentSheet by remember { mutableStateOf(false) }
 
                 Divider(modifier = Modifier.padding(vertical = 16.dp))
@@ -229,10 +272,16 @@ private fun ExcursionDetailContent(
                             PaymentStatus.PENDING -> Text("Tu comprobante está pendiente de validación", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                             PaymentStatus.REJECTED -> {
                                 Text("Comprobante rechazado. Contacta con un administrador.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
-                                Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Intentar de nuevo") }
+                                if (isPaymentBlockedByCapacity) {
+                                    Text("No se puede reintentar el pago porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                                } else {
+                                    Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Intentar de nuevo") }
+                                }
                             }
                             null -> {
-                                if (currentUser != null) {
+                                if (isPaymentBlockedByCapacity) {
+                                    Text("No se puede pagar porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                } else if (currentUser != null) {
                                     Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Pagar excursión") }
                                 } else {
                                     Text("Inicia sesión para pagar", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -305,7 +354,9 @@ private fun ExcursionDetailContent(
                                 Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("Para participar en esta excursión necesitas firmar la autorización digitalmente.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            if (currentUser != null) {
+                            if (isCapacityFull) {
+                                Text("No se puede firmar la autorización porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } else if (currentUser != null) {
                                 // ✅ NAVEGACIÓN: En lugar de mostrar SignatureScreen, navega a la ruta
                                 Button(
                                     onClick = { navController.navigate(Screen.Signature.createRoute(excursion.id)) },

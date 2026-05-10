@@ -77,6 +77,10 @@ class PaymentRepository @Inject constructor(
 
             val userName = auth.currentUser?.displayName ?: "Usuario"
 
+            if (!canUserStartPayment(excursionId, userId)) {
+                return Result.failure(Exception("No quedan plazas disponibles para esta excursión"))
+            }
+
             // 1. Subir imagen a Storage
             val imageId = UUID.randomUUID().toString()
             val storageRef = storage.reference
@@ -122,6 +126,36 @@ class PaymentRepository @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private suspend fun canUserStartPayment(excursionId: String, userId: String): Boolean {
+        val excursionDoc = firestore.collection("excursions")
+            .document(excursionId)
+            .get()
+            .await()
+
+        val maxParticipants = excursionDoc.getLong("maxParticipants")?.toInt() ?: 0
+        if (maxParticipants <= 0) return true
+
+        val activeStatuses = listOf("PENDING", "APPROVED")
+        val userActiveAuthorization = firestore.collection("signedAuthorizations")
+            .whereEqualTo("excursionId", excursionId)
+            .whereEqualTo("userId", userId)
+            .get()
+            .await()
+
+        if (userActiveAuthorization.documents.any { doc -> doc.getString("status") in activeStatuses }) {
+            return true
+        }
+
+        val activeCount = firestore.collection("signedAuthorizations")
+            .whereEqualTo("excursionId", excursionId)
+            .get()
+            .await()
+            .documents
+            .count { doc -> doc.getString("status") in activeStatuses }
+
+        return activeCount < maxParticipants
     }
 
     /**

@@ -27,6 +27,10 @@ class SignedAuthorizationRepository @Inject constructor(
     private val auth: FirebaseAuth,
     @ApplicationContext private val context: Context
 ) {
+    private val activeAuthorizationStatuses = listOf(
+        AuthorizationStatus.PENDING.name,
+        AuthorizationStatus.APPROVED.name
+    )
 
     /**
      * Firmar autorización
@@ -49,6 +53,10 @@ class SignedAuthorizationRepository @Inject constructor(
         return try {
             val userId = auth.currentUser?.uid
                 ?: return Result.failure(Exception("Usuario no autenticado"))
+
+            if (!hasAvailableCapacity(excursionId, requestedParticipants = 1)) {
+                return Result.failure(Exception("No quedan plazas disponibles para esta excursión"))
+            }
 
             android.util.Log.d("SignAuth", "🚀 Inicio firma - UserID: $userId, ExcursionID: $excursionId")
 
@@ -191,6 +199,42 @@ class SignedAuthorizationRepository @Inject constructor(
         } catch (e: Exception) {
             false
         }
+    }
+
+    suspend fun hasAvailableCapacity(excursionId: String, requestedParticipants: Int): Boolean {
+        if (requestedParticipants <= 0) return true
+
+        return try {
+            val excursionDoc = firestore.collection("excursions")
+                .document(excursionId)
+                .get()
+                .await()
+
+            val maxParticipants = excursionDoc.getLong("maxParticipants")?.toInt() ?: 0
+            if (maxParticipants <= 0) return true
+
+            val activeCount = firestore.collection("signedAuthorizations")
+                .whereEqualTo("excursionId", excursionId)
+                .get()
+                .await()
+                .documents
+                .count { doc -> doc.getString("status") in activeAuthorizationStatuses }
+
+            activeCount + requestedParticipants <= maxParticipants
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun getActiveAuthorizationCount(excursionId: String): Flow<Int> {
+        return firestore.collection("signedAuthorizations")
+            .whereEqualTo("excursionId", excursionId)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.documents.count { doc ->
+                    doc.getString("status") in activeAuthorizationStatuses
+                }
+            }
     }
 
     /**

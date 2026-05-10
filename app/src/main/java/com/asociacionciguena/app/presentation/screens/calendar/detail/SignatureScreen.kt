@@ -51,6 +51,51 @@ fun SignatureScreen(
     val excursion = (uiState as? CalendarExcursionDetailUiState.Success)?.excursion
     val excursionTitle = excursion?.title ?: "Cargando..."
     val excursionDate = excursion?.date?.let { formatDate(it) } ?: ""
+    val activeAuthorizationCount by viewModel.getActiveAuthorizationCount().collectAsState(initial = 0)
+    val isCapacityFull = excursion?.let {
+        it.maxParticipants > 0 && activeAuthorizationCount >= it.maxParticipants
+    } ?: false
+
+    if (isCapacityFull) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                tonalElevation = 4.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Text("Firmar Autorización", style = MaterialTheme.typography.titleLarge)
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar")
+                    }
+                }
+            }
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Block, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                    Column {
+                        Text("Plazas completas", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                        Text("No se pueden rellenar más autorizaciones para esta excursión.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                    }
+                }
+            }
+        }
+        return
+    }
 
     // Pre-rellenar datos del tutor cuando se cargue el usuario
     LaunchedEffect(currentUser) {

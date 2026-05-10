@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,6 +29,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 @HiltViewModel
 class ExcursionFormViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
+    private val auth: FirebaseAuth,
     private val storage: FirebaseStorage,  // ← AÑADIDO
     savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context,
@@ -50,6 +52,9 @@ class ExcursionFormViewModel @Inject constructor(
 
     private val _price = MutableStateFlow("")
     val price: StateFlow<String> = _price.asStateFlow()
+
+    private val _maxParticipants = MutableStateFlow("")
+    val maxParticipants: StateFlow<String> = _maxParticipants.asStateFlow()
 
     private val _imageUrl = MutableStateFlow("")
     val imageUrl: StateFlow<String> = _imageUrl.asStateFlow()
@@ -95,6 +100,7 @@ class ExcursionFormViewModel @Inject constructor(
                     _description.value = doc.getString("description") ?: ""
                     _location.value = doc.getString("location") ?: ""
                     _price.value = doc.getDouble("price")?.toString() ?: ""
+                    _maxParticipants.value = doc.getLong("maxParticipants")?.toString() ?: ""
                     _imageUrl.value = doc.getString("imageUrl") ?: ""
                     _authorizationPdfUrl.value = doc.getString("authorizationPdfUrl")  // ← NUEVO
 
@@ -135,6 +141,12 @@ class ExcursionFormViewModel @Inject constructor(
 
     fun onImageUrlChange(newUrl: String) {
         _imageUrl.value = newUrl
+    }
+
+    fun onMaxParticipantsChange(newMaxParticipants: String) {
+        if (newMaxParticipants.isEmpty() || newMaxParticipants.matches(Regex("^\\d{0,4}$"))) {
+            _maxParticipants.value = newMaxParticipants
+        }
     }
 
     fun onDateChange(newDate: LocalDateTime) {
@@ -209,6 +221,11 @@ class ExcursionFormViewModel @Inject constructor(
                     return@launch
                 }
 
+                if (!isCurrentUserAdmin()) {
+                    _uiState.value = ExcursionFormUiState.Error("Solo administradores pueden guardar excursiones")
+                    return@launch
+                }
+
                 if (_title.value.isBlank()) {
                     _uiState.value = ExcursionFormUiState.Error("El título es obligatorio")
                     return@launch
@@ -226,6 +243,12 @@ class ExcursionFormViewModel @Inject constructor(
 
                 if (_date.value == null) {
                     _uiState.value = ExcursionFormUiState.Error("La fecha es obligatoria")
+                    return@launch
+                }
+
+                val maxParticipantsValue = _maxParticipants.value.toIntOrNull()
+                if (maxParticipantsValue == null || maxParticipantsValue <= 0) {
+                    _uiState.value = ExcursionFormUiState.Error("El máximo de participantes debe ser mayor que 0")
                     return@launch
                 }
 
@@ -247,7 +270,8 @@ class ExcursionFormViewModel @Inject constructor(
                     "location" to _location.value,
                     "date" to timestamp,
                     "imageUrl" to _imageUrl.value.ifBlank { null },
-                    "authorizationPdfUrl" to _authorizationPdfUrl.value
+                    "authorizationPdfUrl" to _authorizationPdfUrl.value,
+                    "maxParticipants" to maxParticipantsValue
                 )
 
 // Solo añadir precio si tiene valor
@@ -328,6 +352,13 @@ class ExcursionFormViewModel @Inject constructor(
         if (_uiState.value is ExcursionFormUiState.Error) {
             _uiState.value = ExcursionFormUiState.Idle
         }
+    }
+
+    private suspend fun isCurrentUserAdmin(): Boolean {
+        val uid = auth.currentUser?.uid ?: return false
+        val userDoc = firestore.collection("users").document(uid).get().await()
+        val role = userDoc.getString("role")
+        return role == "admin" || role == "superadmin"
     }
 }
 

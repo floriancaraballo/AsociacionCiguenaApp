@@ -10,5 +10,6 @@ data class Excursion(
     val location: String,
     val imageUrl: String?,
     val authorizationPdfUrl: String? = null,
-    val price: Double? = null
+    val price: Double? = null,
+    val maxParticipants: Int = 0
 )
