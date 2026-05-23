@@ -10,6 +10,8 @@ data class Payment(
     val amount: Double = 0.0,
     val status: PaymentStatus = PaymentStatus.PENDING,
     val paymentProofUrl: String? = null,  // URL del comprobante
+    val paymentProofContentType: String? = null,
+    val paymentProofFileName: String? = null,
     val createdAt: LocalDateTime? = null,
     val validatedAt: LocalDateTime? = null,
     val validatedBy: String? = null  // UID del admin que validó

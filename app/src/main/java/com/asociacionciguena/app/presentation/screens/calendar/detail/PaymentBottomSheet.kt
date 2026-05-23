@@ -1,5 +1,6 @@
 package com.asociacionciguena.app.presentation.screens.calendar.detail
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -13,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.asociacionciguena.app.util.BankingUtils
-import androidx.compose.ui.res.painterResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,11 +31,18 @@ fun PaymentBottomSheet(
 
     var showBankingDetails by remember { mutableStateOf(false) }
 
-    // Photo picker para comprobante
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
+    val proofPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+                // El permiso temporal del selector sigue siendo suficiente para subirlo al momento.
+            }
             onUploadProof(it)
             onDismiss()
         }
@@ -88,44 +95,6 @@ fun PaymentBottomSheet(
                     )
                 }
             }
-
-            Divider()
-
-            // ✅ NUEVA SECCIÓN: Pago con tarjeta (Redsys)
-            Text(
-                text = "Pago con tarjeta",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Button(
-                onClick = {
-                    // ✅ AÑADIR ESTE LOG
-                    android.util.Log.d("PAYMENT_DEBUG", "🔘 Botón 'Pagar con tarjeta' PULSADO")
-                    android.util.Log.d("PAYMENT_DEBUG", "   excursionId: $excursionId")
-                    android.util.Log.d("PAYMENT_DEBUG", "   amount: $amount")
-                    // ✅ Navegar a WebView de Redsys
-                    onNavigateToPayment(excursionId, amount)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(
-                    painter = painterResource(id = com.asociacionciguena.app.R.drawable.ic_payment), // O el icono que tengas
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Pagar con tarjeta (TPV Seguro)")
-            }
-
-            Text(
-                text = "Pago seguro mediante pasarela de Cajasur. Tus datos están protegidos.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
 
             Divider()
 
@@ -265,9 +234,12 @@ fun PaymentBottomSheet(
 
             FilledTonalButton(
                 onClick = {
-                    photoPickerLauncher.launch(
-                        androidx.activity.result.PickVisualMediaRequest(
-                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                    proofPickerLauncher.launch(
+                        arrayOf(
+                            "image/*",
+                            "application/pdf",
+                            "application/msword",
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                         )
                     )
                 },
@@ -279,7 +251,7 @@ fun PaymentBottomSheet(
             }
 
             Text(
-                text = "Sube una captura o foto del justificante. Un administrador lo validará.",
+                text = "Sube una captura, PDF o documento del justificante. Un administrador lo validará.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

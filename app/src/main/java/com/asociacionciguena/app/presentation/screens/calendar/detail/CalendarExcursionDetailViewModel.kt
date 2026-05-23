@@ -51,6 +51,9 @@ class CalendarExcursionDetailViewModel @Inject constructor(
     private val _showAuthSuccess = MutableStateFlow(false)
     val showAuthSuccess: StateFlow<Boolean> = _showAuthSuccess.asStateFlow()
 
+    private val _isUploadingPaymentProof = MutableStateFlow(false)
+    val isUploadingPaymentProof: StateFlow<Boolean> = _isUploadingPaymentProof.asStateFlow()
+
     fun dismissAuthSuccess() {
         _showAuthSuccess.value = false
     }
@@ -124,7 +127,7 @@ class CalendarExcursionDetailViewModel @Inject constructor(
      */
     fun getPaymentStatus(userId: String): Flow<Payment?> {
         return if (userId.isNotEmpty() && excursionId.isNotEmpty()) {
-            paymentRepository.getPaymentStatus(excursionId, userId)
+            paymentRepository.observePaymentStatus(excursionId, userId)
         } else {
             flow { emit(null) }
         }
@@ -140,8 +143,7 @@ class CalendarExcursionDetailViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
-                // Mantener el estado actual mientras se sube
-                val currentState = _uiState.value
+                _isUploadingPaymentProof.value = true
 
                 val result = paymentRepository.uploadPaymentProof(
                     excursionId = excursionId,
@@ -162,6 +164,8 @@ class CalendarExcursionDetailViewModel @Inject constructor(
                 _uiState.value = CalendarExcursionDetailUiState.Error(
                     "Error: ${e.message}"
                 )
+            } finally {
+                _isUploadingPaymentProof.value = false
             }
         }
     }

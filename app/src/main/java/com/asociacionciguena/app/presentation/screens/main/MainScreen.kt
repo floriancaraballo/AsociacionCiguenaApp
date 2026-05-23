@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import com.asociacionciguena.app.presentation.screens.admin.authorizations.AuthorizationsListScreen
+import com.asociacionciguena.app.presentation.screens.admin.payments.PaymentsListScreen
 import android.net.Uri
 import com.asociacionciguena.app.presentation.screens.calendar.detail.CalendarExcursionDetailViewModel
 import com.asociacionciguena.app.presentation.screens.calendar.detail.SignatureScreen
@@ -62,7 +63,6 @@ fun MainScreen(
     notificationType: String? = null,  // ← NUEVO
     itemId: String? = null
 ) {
-    val navController = rememberNavController()
     val initState by viewModel.initState.collectAsState()
 
     // Mostrar splash mientras carga
@@ -78,30 +78,33 @@ fun MainScreen(
                 Screen.Onboarding.route
             }
 
-            // Deep linking interno (para excursiones y fotos)
-            LaunchedEffect(notificationType, itemId) {
-                if (!notificationType.isNullOrEmpty() && !itemId.isNullOrEmpty()) {
-                    android.util.Log.d("DEEP_LINK_MAIN", "MainScreen - Type: $notificationType, ID: $itemId")
+            key(state.currentUserId) {
+                val navController = rememberNavController()
 
-                    when (notificationType) {
-                        "excursion" -> {
-                            android.util.Log.d("DEEP_LINK_MAIN", "Navegando a CalendarExcursionDetail: $itemId")
-                            navController.navigate(Screen.CalendarExcursionDetail.createRoute(itemId))
-                        }
-                        "photo" -> {
-                            android.util.Log.d("DEEP_LINK_MAIN", "Navegando a ExcursionDetail: $itemId")
-                            if (state.isUserLoggedIn) {
-                                navController.navigate(Screen.ExcursionDetail.createRoute(itemId))
-                            } else {
-                                navController.navigate(Screen.Login.createRoute(returnTo = "gallery"))
+                // Deep linking interno (para excursiones y fotos)
+                LaunchedEffect(notificationType, itemId) {
+                    if (!notificationType.isNullOrEmpty() && !itemId.isNullOrEmpty()) {
+                        android.util.Log.d("DEEP_LINK_MAIN", "MainScreen - Type: $notificationType, ID: $itemId")
+
+                        when (notificationType) {
+                            "excursion" -> {
+                                android.util.Log.d("DEEP_LINK_MAIN", "Navegando a CalendarExcursionDetail: $itemId")
+                                navController.navigate(Screen.CalendarExcursionDetail.createRoute(itemId))
+                            }
+                            "photo" -> {
+                                android.util.Log.d("DEEP_LINK_MAIN", "Navegando a ExcursionDetail: $itemId")
+                                if (state.isUserLoggedIn) {
+                                    navController.navigate(Screen.ExcursionDetail.createRoute(itemId))
+                                } else {
+                                    navController.navigate(Screen.Login.createRoute(returnTo = "gallery"))
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            Scaffold(
-                topBar = {
+                Scaffold(
+                    topBar = {
                     // Banner de sin conexión
                     val networkMonitor: com.asociacionciguena.app.util.NetworkMonitor = hiltViewModel<MainViewModel>().networkMonitor
                     val isOnline by networkMonitor.isOnline.collectAsState(initial = true)
@@ -136,8 +139,8 @@ fun MainScreen(
                             }
                         }
                     }
-                },
-                bottomBar = {
+                    },
+                    bottomBar = {
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStackEntry?.destination?.route
 
@@ -147,13 +150,13 @@ fun MainScreen(
                             isUserLoggedIn = state.isUserLoggedIn
                         )
                     }
-                }
-            ) { paddingValues ->
-                NavHost(
-                    navController = navController,
-                    startDestination = startDestination,
-                    modifier = Modifier.padding(paddingValues)
-                ) {
+                    }
+                ) { paddingValues ->
+                    NavHost(
+                        navController = navController,
+                        startDestination = startDestination,
+                        modifier = Modifier.padding(paddingValues)
+                    ) {
                     // NUEVO: Onboarding
                     composable(Screen.Onboarding.route) {
                         OnboardingScreen(
@@ -223,6 +226,9 @@ fun MainScreen(
                             },
                             onNavigateToAuthorizations = { excursionId, excursionTitle ->
                                 navController.navigate(Screen.AuthorizationsList.createRoute(excursionId, excursionTitle))
+                            },
+                            onNavigateToPayments = { excursionId, excursionTitle ->
+                                navController.navigate(Screen.PaymentsList.createRoute(excursionId, excursionTitle))
                             }
                         )
                     }
@@ -306,6 +312,23 @@ fun MainScreen(
                         val excursionTitle = backStackEntry.arguments?.getString("excursionTitle") ?: return@composable
 
                         AuthorizationsListScreen(
+                            excursionId = excursionId,
+                            excursionTitle = Uri.decode(excursionTitle),
+                            onNavigateBack = { navController.navigateUp() }
+                        )
+                    }
+
+                    composable(
+                        route = Screen.PaymentsList.route,
+                        arguments = listOf(
+                            navArgument("excursionId") { type = NavType.StringType },
+                            navArgument("excursionTitle") { type = NavType.StringType }
+                        )
+                    ) { backStackEntry ->
+                        val excursionId = backStackEntry.arguments?.getString("excursionId") ?: return@composable
+                        val excursionTitle = backStackEntry.arguments?.getString("excursionTitle") ?: return@composable
+
+                        PaymentsListScreen(
                             excursionId = excursionId,
                             excursionTitle = Uri.decode(excursionTitle),
                             onNavigateBack = { navController.navigateUp() }
@@ -467,6 +490,7 @@ fun MainScreen(
                                 }
                             }
                         }
+                    }
                     }
                 }
             }

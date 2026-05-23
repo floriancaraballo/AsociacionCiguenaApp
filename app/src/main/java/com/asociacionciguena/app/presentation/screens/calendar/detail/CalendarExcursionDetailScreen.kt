@@ -31,7 +31,8 @@ fun CalendarExcursionDetailScreen(
     viewModel: CalendarExcursionDetailViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
     onNavigateToEditExcursion: (String) -> Unit,
-    onNavigateToAuthorizations: (String, String) -> Unit = { _, _ -> }
+    onNavigateToAuthorizations: (String, String) -> Unit = { _, _ -> },
+    onNavigateToPayments: (String, String) -> Unit = { _, _ -> }
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -54,6 +55,13 @@ fun CalendarExcursionDetailScreen(
                                     onNavigateToAuthorizations(state.excursion.id, state.excursion.title)
                                 }) {
                                     Icon(Icons.Default.Description, "Ver Autorizaciones")
+                                }
+                            }
+                            if (state.excursion.price != null) {
+                                IconButton(onClick = {
+                                    onNavigateToPayments(state.excursion.id, state.excursion.title)
+                                }) {
+                                    Icon(Icons.Default.ReceiptLong, "Ver Comprobantes")
                                 }
                             }
                             IconButton(onClick = {
@@ -243,15 +251,17 @@ private fun ExcursionDetailContent(
                 val currentUser by viewModel.currentUser.collectAsState()
                 val paymentStatus by viewModel.getPaymentStatus(currentUser?.id ?: "").collectAsState(initial = null)
                 val hasSignedForPayment by viewModel.hasUserSignedAuthorization(currentUser?.id ?: "").collectAsState(initial = false)
+                val isUploadingPaymentProof by viewModel.isUploadingPaymentProof.collectAsState()
                 val isPaymentBlockedByCapacity = isCapacityFull && !hasSignedForPayment
                 var showPaymentSheet by remember { mutableStateOf(false) }
 
                 Divider(modifier = Modifier.padding(vertical = 16.dp))
 
-                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = when(paymentStatus?.status) {
-                    PaymentStatus.PAID -> MaterialTheme.colorScheme.primaryContainer
-                    PaymentStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
-                    PaymentStatus.REJECTED -> MaterialTheme.colorScheme.errorContainer
+                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = when {
+                    isUploadingPaymentProof -> MaterialTheme.colorScheme.secondaryContainer
+                    paymentStatus?.status == PaymentStatus.PAID -> MaterialTheme.colorScheme.primaryContainer
+                    paymentStatus?.status == PaymentStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
+                    paymentStatus?.status == PaymentStatus.REJECTED -> MaterialTheme.colorScheme.errorContainer
                     else -> MaterialTheme.colorScheme.surfaceVariant
                 })) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -260,31 +270,41 @@ private fun ExcursionDetailContent(
                                 Text("Precio", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(String.format("%.2f€", price), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
                             }
-                            when(paymentStatus?.status) {
-                                PaymentStatus.PAID -> AssistChip(onClick = {}, label = { Text("Pagado") }, leadingIcon = { Icon(Icons.Default.CheckCircle, null) }, colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.primary, labelColor = MaterialTheme.colorScheme.onPrimary))
-                                PaymentStatus.PENDING -> AssistChip(onClick = {}, label = { Text("Pendiente") }, leadingIcon = { Icon(Icons.Default.Schedule, null) })
-                                PaymentStatus.REJECTED -> AssistChip(onClick = {}, label = { Text("Rechazado") }, leadingIcon = { Icon(Icons.Default.Cancel, null) }, colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.error, labelColor = MaterialTheme.colorScheme.onError))
-                                null -> {}
+                            if (isUploadingPaymentProof) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(28.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                paymentStatus?.status?.let { PaymentStatusBadge(it) }
                             }
                         }
-                        when(paymentStatus?.status) {
-                            PaymentStatus.PAID -> Text("✓ Pago confirmado", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            PaymentStatus.PENDING -> Text("Tu comprobante está pendiente de validación", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                            PaymentStatus.REJECTED -> {
-                                Text("Comprobante rechazado. Contacta con un administrador.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
-                                if (isPaymentBlockedByCapacity) {
-                                    Text("No se puede reintentar el pago porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
-                                } else {
-                                    Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Intentar de nuevo") }
+                        if (isUploadingPaymentProof) {
+                            Text(
+                                "Subiendo comprobante...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        } else {
+                            when(paymentStatus?.status) {
+                                PaymentStatus.PAID -> Text("✓ Pago confirmado", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                PaymentStatus.PENDING -> Text("Tu comprobante está pendiente de validación", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                PaymentStatus.REJECTED -> {
+                                    Text("Comprobante rechazado. Contacta con un administrador.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                                    if (isPaymentBlockedByCapacity) {
+                                        Text("No se puede reintentar el pago porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                                    } else {
+                                        Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Intentar de nuevo") }
+                                    }
                                 }
-                            }
-                            null -> {
-                                if (isPaymentBlockedByCapacity) {
-                                    Text("No se puede pagar porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                } else if (currentUser != null) {
-                                    Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Pagar excursión") }
-                                } else {
-                                    Text("Inicia sesión para pagar", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                null -> {
+                                    if (isPaymentBlockedByCapacity) {
+                                        Text("No se puede pagar porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    } else if (currentUser != null) {
+                                        Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Pagar excursión") }
+                                    } else {
+                                        Text("Inicia sesión para pagar", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 }
                             }
                         }
@@ -393,6 +413,43 @@ private fun ErrorMessage(
             Icon(Icons.Default.Error, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.error)
             Text(message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
             Button(onClick = onRetry) { Text("Reintentar") }
+        }
+    }
+}
+
+@Composable
+private fun PaymentStatusBadge(status: PaymentStatus) {
+    val containerColor = when (status) {
+        PaymentStatus.PAID -> MaterialTheme.colorScheme.primary
+        PaymentStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
+        PaymentStatus.REJECTED -> MaterialTheme.colorScheme.error
+    }
+    val contentColor = when (status) {
+        PaymentStatus.PAID -> MaterialTheme.colorScheme.onPrimary
+        PaymentStatus.PENDING -> MaterialTheme.colorScheme.onSecondaryContainer
+        PaymentStatus.REJECTED -> MaterialTheme.colorScheme.onError
+    }
+    val label = when (status) {
+        PaymentStatus.PAID -> "Pagado"
+        PaymentStatus.PENDING -> "Pendiente"
+        PaymentStatus.REJECTED -> "Rechazado"
+    }
+
+    Surface(
+        color = containerColor,
+        contentColor = contentColor,
+        shape = MaterialTheme.shapes.small
+    ) {
+        Box(
+            modifier = Modifier
+                .defaultMinSize(minWidth = 92.dp, minHeight = 32.dp)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge
+            )
         }
     }
 }

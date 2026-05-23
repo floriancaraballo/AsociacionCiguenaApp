@@ -1,13 +1,19 @@
 package com.asociacionciguena.app.data.repository
 
+import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import com.asociacionciguena.app.domain.model.Payment
 import com.asociacionciguena.app.domain.model.PaymentStatus
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
@@ -20,7 +26,8 @@ import kotlinx.coroutines.tasks.await  // ← Ya deberías tenerlo
 class PaymentRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    @ApplicationContext private val context: Context
    // private val functions: FirebaseFunctions  // ← AÑADIR ESTE PARÁMETRO
 ) {
 
@@ -31,36 +38,45 @@ class PaymentRepository @Inject constructor(
     /**
      * Obtener estado de pago de un usuario para una excursión
      */
-    fun getPaymentStatus(excursionId: String, userId: String): Flow<Payment?> = flow {
-        try {
-            val snapshot = firestore.collection("payments")
-                .whereEqualTo("excursionId", excursionId)
-                .whereEqualTo("userId", userId)
-                .limit(1)
-                .get()
-                .await()
+    fun getPaymentStatus(excursionId: String, userId: String): Flow<Payment?> {
+        return observePaymentStatus(excursionId, userId)
+    }
 
-            if (snapshot.documents.isNotEmpty()) {
-                val doc = snapshot.documents[0]
-                val payment = Payment(
-                    id = doc.id,
-                    excursionId = doc.getString("excursionId") ?: "",
-                    userId = doc.getString("userId") ?: "",
-                    userName = doc.getString("userName") ?: "",
-                    amount = doc.getDouble("amount") ?: 0.0,
-                    status = PaymentStatus.valueOf(
-                        doc.getString("status") ?: "PENDING"
-                    ),
-                    paymentProofUrl = doc.getString("paymentProofUrl"),
-                    validatedBy = doc.getString("validatedBy")
-                )
-                emit(payment)
-            } else {
-                emit(null)
+    fun observePaymentStatus(excursionId: String, userId: String): Flow<Payment?> = callbackFlow {
+        val listener = firestore.collection("payments")
+            .whereEqualTo("excursionId", excursionId)
+            .whereEqualTo("userId", userId)
+            .limit(1)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(null)
+                    return@addSnapshotListener
+                }
+
+                val doc = snapshot?.documents?.firstOrNull()
+                if (doc == null) {
+                    trySend(null)
+                } else {
+                    trySend(
+                        Payment(
+                            id = doc.id,
+                            excursionId = doc.getString("excursionId") ?: "",
+                            userId = doc.getString("userId") ?: "",
+                            userName = doc.getString("userName") ?: "",
+                            amount = doc.getDouble("amount") ?: 0.0,
+                            status = PaymentStatus.valueOf(
+                                doc.getString("status") ?: PaymentStatus.PENDING.name
+                            ),
+                            paymentProofUrl = doc.getString("paymentProofUrl"),
+                            paymentProofContentType = doc.getString("paymentProofContentType"),
+                            paymentProofFileName = doc.getString("paymentProofFileName"),
+                            validatedBy = doc.getString("validatedBy")
+                        )
+                    )
+                }
             }
-        } catch (e: Exception) {
-            emit(null)
-        }
+
+        awaitClose { listener.remove() }
     }
 
     /**
@@ -81,12 +97,26 @@ class PaymentRepository @Inject constructor(
                 return Result.failure(Exception("No quedan plazas disponibles para esta excursión"))
             }
 
-            // 1. Subir imagen a Storage
-            val imageId = UUID.randomUUID().toString()
-            val storageRef = storage.reference
-                .child("payments/${excursionId}/${userId}_${imageId}.jpg")
+            val contentType = context.contentResolver.getType(photoUri)
+                ?: return Result.failure(Exception("No se pudo identificar el tipo de archivo"))
 
-            storageRef.putFile(photoUri).await()
+            if (!isAllowedPaymentProofType(contentType)) {
+                return Result.failure(Exception("Formato no permitido. Sube una imagen, PDF o documento Word"))
+            }
+
+            val fileName = getDisplayName(photoUri)
+                ?: "comprobante_${UUID.randomUUID()}.${extensionForContentType(contentType)}"
+
+            // 1. Subir comprobante a Storage
+            val proofId = UUID.randomUUID().toString()
+            val storageRef = storage.reference
+                .child("payments/${excursionId}/${userId}_${proofId}.${extensionForContentType(contentType)}")
+
+            val metadata = StorageMetadata.Builder()
+                .setContentType(contentType)
+                .build()
+
+            storageRef.putFile(photoUri, metadata).await()
             val downloadUrl = storageRef.downloadUrl.await().toString()
 
             // 2. Verificar si ya existe un pago
@@ -104,15 +134,24 @@ class PaymentRepository @Inject constructor(
                 "amount" to amount,
                 "status" to PaymentStatus.PENDING.name,
                 "paymentProofUrl" to downloadUrl,
+                "paymentProofContentType" to contentType,
+                "paymentProofFileName" to fileName,
                 "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )
 
             if (existingPayment.documents.isNotEmpty()) {
-                // Actualizar existente
+                val paymentUpdateData = hashMapOf(
+                    "status" to PaymentStatus.PENDING.name,
+                    "paymentProofUrl" to downloadUrl,
+                    "paymentProofContentType" to contentType,
+                    "paymentProofFileName" to fileName,
+                    "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                )
+
                 val docId = existingPayment.documents[0].id
                 firestore.collection("payments")
                     .document(docId)
-                    .update(paymentData)
+                    .update(paymentUpdateData)
                     .await()
             } else {
                 // Crear nuevo
@@ -128,14 +167,42 @@ class PaymentRepository @Inject constructor(
         }
     }
 
+    private fun isAllowedPaymentProofType(contentType: String): Boolean {
+        return contentType.startsWith("image/") ||
+                contentType == "application/pdf" ||
+                contentType == "application/msword" ||
+                contentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    }
+
+    private fun extensionForContentType(contentType: String): String {
+        return when {
+            contentType == "application/pdf" -> "pdf"
+            contentType == "application/msword" -> "doc"
+            contentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
+            contentType == "image/png" -> "png"
+            contentType == "image/webp" -> "webp"
+            else -> "jpg"
+        }
+    }
+
+    private fun getDisplayName(uri: Uri): String? {
+        return context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameIndex >= 0 && cursor.moveToFirst()) {
+                cursor.getString(nameIndex)
+            } else {
+                null
+            }
+        }
+    }
+
     private suspend fun canUserStartPayment(excursionId: String, userId: String): Boolean {
         val excursionDoc = firestore.collection("excursions")
             .document(excursionId)
             .get()
             .await()
 
-        val maxParticipants = excursionDoc.getLong("maxParticipants")?.toInt() ?: 0
-        if (maxParticipants <= 0) return true
+        if (!excursionDoc.exists()) return false
 
         val activeStatuses = listOf("PENDING", "APPROVED")
         val userActiveAuthorization = firestore.collection("signedAuthorizations")
@@ -148,14 +215,7 @@ class PaymentRepository @Inject constructor(
             return true
         }
 
-        val activeCount = firestore.collection("signedAuthorizations")
-            .whereEqualTo("excursionId", excursionId)
-            .get()
-            .await()
-            .documents
-            .count { doc -> doc.getString("status") in activeStatuses }
-
-        return activeCount < maxParticipants
+        return true
     }
 
     /**
@@ -180,10 +240,55 @@ class PaymentRepository @Inject constructor(
                         status = PaymentStatus.valueOf(
                             doc.getString("status") ?: "PENDING"
                         ),
-                        paymentProofUrl = doc.getString("paymentProofUrl")
+                        paymentProofUrl = doc.getString("paymentProofUrl"),
+                        paymentProofContentType = doc.getString("paymentProofContentType"),
+                        paymentProofFileName = doc.getString("paymentProofFileName")
                     )
                 } catch (e: Exception) {
                     null
+                }
+            }
+
+            emit(payments)
+        } catch (e: Exception) {
+            emit(emptyList())
+        }
+    }
+
+    /**
+     * Obtener los pagos de una excursion (para admin)
+     */
+    fun getExcursionPayments(excursionId: String): Flow<List<Payment>> = flow {
+        try {
+            val snapshot = firestore.collection("payments")
+                .whereEqualTo("excursionId", excursionId)
+                .get()
+                .await()
+
+            val payments = snapshot.documents.mapNotNull { doc ->
+                try {
+                    Payment(
+                        id = doc.id,
+                        excursionId = doc.getString("excursionId") ?: "",
+                        userId = doc.getString("userId") ?: "",
+                        userName = doc.getString("userName") ?: "",
+                        amount = doc.getDouble("amount") ?: 0.0,
+                        status = PaymentStatus.valueOf(
+                            doc.getString("status") ?: PaymentStatus.PENDING.name
+                        ),
+                        paymentProofUrl = doc.getString("paymentProofUrl"),
+                        paymentProofContentType = doc.getString("paymentProofContentType"),
+                        paymentProofFileName = doc.getString("paymentProofFileName"),
+                        validatedBy = doc.getString("validatedBy")
+                    )
+                } catch (e: Exception) {
+                    null
+                }
+            }.sortedBy { payment ->
+                when (payment.status) {
+                    PaymentStatus.PENDING -> 0
+                    PaymentStatus.REJECTED -> 1
+                    PaymentStatus.PAID -> 2
                 }
             }
 

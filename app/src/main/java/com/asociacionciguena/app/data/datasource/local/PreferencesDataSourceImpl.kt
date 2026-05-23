@@ -45,7 +45,11 @@ class PreferencesDataSourceImpl @Inject constructor(
     }
 
     override suspend fun clear() {
-        dataStore.edit { it.clear() }
+        dataStore.edit { preferences ->
+            val onboardingCompleted = preferences[KEY_ONBOARDING_COMPLETED] ?: false
+            preferences.clear()
+            preferences[KEY_ONBOARDING_COMPLETED] = onboardingCompleted
+        }
     }
 
     // ← NUEVOS MÉTODOS

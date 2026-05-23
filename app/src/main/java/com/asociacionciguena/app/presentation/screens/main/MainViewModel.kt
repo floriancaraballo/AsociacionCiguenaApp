@@ -38,7 +38,8 @@ sealed class AppInitState {
     object Loading : AppInitState()
     data class Ready(
         val isOnboardingCompleted: Boolean,
-        val isUserLoggedIn: Boolean
+        val isUserLoggedIn: Boolean,
+        val currentUserId: String?
     ) : AppInitState()
 }
 
@@ -89,7 +90,8 @@ class MainViewModel @Inject constructor(
 
             _initState.value = AppInitState.Ready(
                 isOnboardingCompleted = isOnboardingCompleted,
-                isUserLoggedIn = isUserLoggedIn
+                isUserLoggedIn = isUserLoggedIn,
+                currentUserId = auth.currentUser?.uid
             )
 
             continuePreloadingInBackground(remainingPreloadUrls)
@@ -330,10 +332,15 @@ class MainViewModel @Inject constructor(
             val currentState = _initState.value
             if (currentState is AppInitState.Ready) {
                 val isUserLoggedIn = firebaseAuth.currentUser != null
+                val currentUserId = firebaseAuth.currentUser?.uid
 
-                if (currentState.isUserLoggedIn != isUserLoggedIn) {
+                if (
+                    currentState.isUserLoggedIn != isUserLoggedIn ||
+                    currentState.currentUserId != currentUserId
+                ) {
                     _initState.value = currentState.copy(
-                        isUserLoggedIn = isUserLoggedIn
+                        isUserLoggedIn = isUserLoggedIn,
+                        currentUserId = currentUserId
                     )
                 }
             }
