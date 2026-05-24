@@ -64,9 +64,7 @@ class PaymentRepository @Inject constructor(
                             userId = doc.getString("userId") ?: "",
                             userName = doc.getString("userName") ?: "",
                             amount = doc.getDouble("amount") ?: 0.0,
-                            status = PaymentStatus.valueOf(
-                                doc.getString("status") ?: PaymentStatus.PENDING.name
-                            ),
+                            status = PaymentStatus.fromFirestoreValue(doc.getString("status")),
                             paymentProofUrl = doc.getString("paymentProofUrl"),
                             paymentProofContentType = doc.getString("paymentProofContentType"),
                             paymentProofFileName = doc.getString("paymentProofFileName"),
@@ -224,7 +222,7 @@ class PaymentRepository @Inject constructor(
     fun getPendingPayments(): Flow<List<Payment>> = flow {
         try {
             val snapshot = firestore.collection("payments")
-                .whereEqualTo("status", PaymentStatus.PENDING.name)
+                .whereIn("status", listOf(PaymentStatus.PENDING.name, PaymentStatus.PENDING.name.lowercase()))
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .get()
                 .await()
@@ -237,9 +235,7 @@ class PaymentRepository @Inject constructor(
                         userId = doc.getString("userId") ?: "",
                         userName = doc.getString("userName") ?: "",
                         amount = doc.getDouble("amount") ?: 0.0,
-                        status = PaymentStatus.valueOf(
-                            doc.getString("status") ?: "PENDING"
-                        ),
+                        status = PaymentStatus.fromFirestoreValue(doc.getString("status")),
                         paymentProofUrl = doc.getString("paymentProofUrl"),
                         paymentProofContentType = doc.getString("paymentProofContentType"),
                         paymentProofFileName = doc.getString("paymentProofFileName")
@@ -273,9 +269,7 @@ class PaymentRepository @Inject constructor(
                         userId = doc.getString("userId") ?: "",
                         userName = doc.getString("userName") ?: "",
                         amount = doc.getDouble("amount") ?: 0.0,
-                        status = PaymentStatus.valueOf(
-                            doc.getString("status") ?: PaymentStatus.PENDING.name
-                        ),
+                        status = PaymentStatus.fromFirestoreValue(doc.getString("status")),
                         paymentProofUrl = doc.getString("paymentProofUrl"),
                         paymentProofContentType = doc.getString("paymentProofContentType"),
                         paymentProofFileName = doc.getString("paymentProofFileName"),

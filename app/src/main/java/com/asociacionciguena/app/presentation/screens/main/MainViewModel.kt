@@ -22,6 +22,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -78,6 +79,7 @@ class MainViewModel @Inject constructor(
 
     init {
         checkInitialState()
+        observeOnboardingCompletion()
         observeAuthChanges()
     }
 
@@ -344,6 +346,24 @@ class MainViewModel @Inject constructor(
                     )
                 }
             }
+        }
+    }
+
+    private fun observeOnboardingCompletion() {
+        viewModelScope.launch {
+            preferencesDataSource.isOnboardingCompleted()
+                .distinctUntilChanged()
+                .collect { isOnboardingCompleted ->
+                    val currentState = _initState.value
+                    if (
+                        currentState is AppInitState.Ready &&
+                        currentState.isOnboardingCompleted != isOnboardingCompleted
+                    ) {
+                        _initState.value = currentState.copy(
+                            isOnboardingCompleted = isOnboardingCompleted
+                        )
+                    }
+                }
         }
     }
 }

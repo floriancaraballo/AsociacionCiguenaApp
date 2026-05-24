@@ -20,5 +20,13 @@ data class Payment(
 enum class PaymentStatus {
     PENDING,     // Pendiente de pago/validación
     PAID,        // Pagado y validado
-    REJECTED     // Rechazado por admin
+    REJECTED;    // Rechazado por admin
+
+    companion object {
+        fun fromFirestoreValue(value: String?): PaymentStatus {
+            return entries.firstOrNull { status ->
+                status.name.equals(value?.trim(), ignoreCase = true)
+            } ?: PENDING
+        }
+    }
 }
