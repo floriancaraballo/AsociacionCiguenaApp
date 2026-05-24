@@ -10,6 +10,7 @@ import coil.request.SuccessResult
 import com.asociacionciguena.app.data.datasource.local.PreferencesDataSource
 import com.asociacionciguena.app.util.NetworkMonitor
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -245,6 +246,13 @@ class MainViewModel @Inject constructor(
 
         return runCatching {
             val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+            val userDoc = firestore.collection("users")
+                .document(currentUserId)
+                .get()
+                .await()
+            val role = userDoc.getString("role")
+            val isAdmin = role == "admin" || role == "superadmin"
+            val registrationYear = userDoc.registrationYear()
 
             firestore.collection("excursions")
                 .orderBy("date", Query.Direction.DESCENDING)
@@ -258,7 +266,9 @@ class MainViewModel @Inject constructor(
                         .fromEpochMilliseconds(dateMillis)
                         .toLocalDateTime(TimeZone.currentSystemDefault())
 
-                    doc.id.takeIf { excursionDate < now }
+                    doc.id.takeIf {
+                        excursionDate < now && (isAdmin || excursionDate.year == registrationYear)
+                    }
                 }
                 .take(GALLERY_EXCURSION_PRELOAD_LIMIT)
         }.getOrDefault(emptyList())
@@ -276,7 +286,6 @@ class MainViewModel @Inject constructor(
                     runCatching {
                         firestore.collection("photos")
                             .whereEqualTo("excursionId", excursionId)
-                            .whereArrayContains("authorizedUsers", currentUserId)
                             .get()
                             .await()
                             .documents
@@ -297,6 +306,18 @@ class MainViewModel @Inject constructor(
                     }.getOrDefault(emptyList())
                 }
             }.awaitAll().flatten()
+        }
+    }
+
+    private fun DocumentSnapshot.registrationYear(): Int? {
+        return getTimestamp("createdAt")?.let {
+            Instant.fromEpochMilliseconds(it.toDate().time)
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+                .year
+        } ?: auth.currentUser?.metadata?.creationTimestamp?.let {
+            Instant.fromEpochMilliseconds(it)
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+                .year
         }
     }
 

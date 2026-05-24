@@ -9,7 +9,7 @@ import javax.inject.Inject
 /**
  * Use Case: Obtener fotos de una excursión
  *
- * IMPORTANTE: Solo devuelve fotos autorizadas para el usuario
+ * La pantalla que invoca este caso de uso debe validar la visibilidad de la excursion.
  */
 class GetPhotosUseCase @Inject constructor(
     private val repository: PhotoRepository

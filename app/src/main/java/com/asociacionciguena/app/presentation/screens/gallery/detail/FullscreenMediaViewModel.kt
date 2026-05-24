@@ -5,8 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.asociacionciguena.app.domain.model.Photo
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +17,6 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import javax.inject.Inject
 
 sealed class FullscreenMediaUiState {
     object Loading : FullscreenMediaUiState()
@@ -54,7 +55,7 @@ class FullscreenMediaViewModel @Inject constructor(
 
                 val currentUserUid = auth.currentUser?.uid
                 if (currentUserUid == null) {
-                    _uiState.value = FullscreenMediaUiState.Error("Debes iniciar sesión")
+                    _uiState.value = FullscreenMediaUiState.Error("Debes iniciar sesion")
                     return@launch
                 }
 
@@ -63,62 +64,83 @@ class FullscreenMediaViewModel @Inject constructor(
                     .get()
                     .await()
 
+                val excursionDoc = firestore.collection("excursions")
+                    .document(excursionId)
+                    .get()
+                    .await()
+
                 val role = userDoc.getString("role")
                 val isAdmin = role == "admin" || role == "superadmin"
-
-                val query = if (isAdmin) {
-                    firestore.collection("photos")
-                        .whereEqualTo("excursionId", excursionId)
-                } else {
-                    firestore.collection("photos")
-                        .whereEqualTo("excursionId", excursionId)
-                        .whereArrayContains("authorizedUsers", currentUserUid)
+                val registrationYear = userDoc.registrationYear()
+                val excursionYear = excursionDoc.getTimestamp("date")?.let {
+                    kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
+                        .toLocalDateTime(TimeZone.currentSystemDefault())
+                        .year
                 }
 
-                query.addSnapshotListener { snapshot, error ->
-                    if (error != null) {
-                        _uiState.value = FullscreenMediaUiState.Error(
-                            error.message ?: "Error al cargar archivos multimedia"
-                        )
-                        return@addSnapshotListener
-                    }
+                if (!isAdmin && excursionYear != registrationYear) {
+                    _uiState.value = FullscreenMediaUiState.Error("No tienes permiso para ver estas fotos")
+                    return@launch
+                }
 
-                    val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
-                    val photos = snapshot?.documents?.mapNotNull { doc ->
-                        try {
-                            Photo(
-                                id = doc.id,
-                                excursionId = doc.getString("excursionId") ?: "",
-                                imageUrl = doc.getString("imageUrl") ?: "",
-                                storagePath = doc.getString("storagePath") ?: "",
-                                uploadedBy = doc.getString("uploadedBy") ?: "",
-                                uploadedAt = doc.getTimestamp("uploadedAt")?.let {
-                                    kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
-                                        .toLocalDateTime(TimeZone.currentSystemDefault())
-                                } ?: now,
-                                authorizedUsers = (doc.get("authorizedUsers") as? List<*>)
-                                    ?.filterIsInstance<String>() ?: emptyList(),
-                                mediaType = doc.getString("mediaType") ?: "image",
-                                thumbnailUrl = doc.getString("thumbnailUrl")
+                firestore.collection("photos")
+                    .whereEqualTo("excursionId", excursionId)
+                    .addSnapshotListener { snapshot, error ->
+                        if (error != null) {
+                            _uiState.value = FullscreenMediaUiState.Error(
+                                error.message ?: "Error al cargar archivos multimedia"
                             )
-                        } catch (_: Exception) {
-                            null
+                            return@addSnapshotListener
                         }
-                    } ?: emptyList()
 
-                    val initialIndex = photos.indexOfFirst { it.id == initialPhotoId }
-                        .takeIf { it >= 0 } ?: 0
+                        val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+                        val photos = snapshot?.documents?.mapNotNull { doc ->
+                            try {
+                                Photo(
+                                    id = doc.id,
+                                    excursionId = doc.getString("excursionId") ?: "",
+                                    imageUrl = doc.getString("imageUrl") ?: "",
+                                    storagePath = doc.getString("storagePath") ?: "",
+                                    uploadedBy = doc.getString("uploadedBy") ?: "",
+                                    uploadedAt = doc.getTimestamp("uploadedAt")?.let {
+                                        kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
+                                            .toLocalDateTime(TimeZone.currentSystemDefault())
+                                    } ?: now,
+                                    authorizedUsers = (doc.get("authorizedUsers") as? List<*>)
+                                        ?.filterIsInstance<String>() ?: emptyList(),
+                                    mediaType = doc.getString("mediaType") ?: "image",
+                                    thumbnailUrl = doc.getString("thumbnailUrl")
+                                )
+                            } catch (_: Exception) {
+                                null
+                            }
+                        } ?: emptyList()
 
-                    _uiState.value = FullscreenMediaUiState.Success(
-                        photos = photos,
-                        initialIndex = initialIndex
-                    )
-                }
+                        val initialIndex = photos.indexOfFirst { it.id == initialPhotoId }
+                            .takeIf { it >= 0 } ?: 0
+
+                        _uiState.value = FullscreenMediaUiState.Success(
+                            photos = photos,
+                            initialIndex = initialIndex
+                        )
+                    }
             } catch (e: Exception) {
                 _uiState.value = FullscreenMediaUiState.Error(
                     e.message ?: "Error al cargar archivos multimedia"
                 )
             }
+        }
+    }
+
+    private fun DocumentSnapshot.registrationYear(): Int? {
+        return getTimestamp("createdAt")?.let {
+            kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+                .year
+        } ?: auth.currentUser?.metadata?.creationTimestamp?.let {
+            kotlinx.datetime.Instant.fromEpochMilliseconds(it)
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+                .year
         }
     }
 }

@@ -2,20 +2,21 @@ package com.asociacionciguena.app.presentation.screens.gallery
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.asociacionciguena.app.domain.model.Excursion
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
-import com.asociacionciguena.app.domain.model.Excursion
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import com.google.firebase.auth.FirebaseAuth
 
 @HiltViewModel
 class GalleryViewModel @Inject constructor(
@@ -26,7 +27,6 @@ class GalleryViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<GalleryUiState>(GalleryUiState.Loading)
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()
 
-    // Listener para actualizaciones en tiempo real
     private var photosListener: ListenerRegistration? = null
 
     init {
@@ -38,16 +38,28 @@ class GalleryViewModel @Inject constructor(
             try {
                 _uiState.value = GalleryUiState.Loading
 
+                val currentUserId = auth.currentUser?.uid
+                if (currentUserId == null) {
+                    _uiState.value = GalleryUiState.Success(emptyList())
+                    return@launch
+                }
+
+                val userDoc = firestore.collection("users")
+                    .document(currentUserId)
+                    .get()
+                    .await()
+
+                val isAdmin = userDoc.isAdmin()
+                val registrationYear = userDoc.registrationYear()
+
                 val now = Clock.System.now()
                     .toLocalDateTime(TimeZone.currentSystemDefault())
 
-                // Obtener TODAS las excursiones
                 val excursionsSnapshot = firestore.collection("excursions")
                     .get()
                     .await()
 
-                // Filtrar solo excursiones PASADAS
-                val allExcursions = excursionsSnapshot.documents.mapNotNull { doc ->
+                val pastExcursions = excursionsSnapshot.documents.mapNotNull { doc ->
                     try {
                         Excursion(
                             id = doc.id,
@@ -61,52 +73,38 @@ class GalleryViewModel @Inject constructor(
                             imageUrl = doc.getString("imageUrl"),
                             authorizationPdfUrl = doc.getString("authorizationPdfUrl")
                         )
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         null
                     }
                 }.filter { it.date < now }
 
-                val currentUserId = auth.currentUser?.uid
-                val isAdmin = currentUserId?.let { userId ->
-                    val userDoc = firestore.collection("users")
-                        .document(userId)
-                        .get()
-                        .await()
-                    val role = userDoc.getString("role")
-                    role == "admin" || role == "superadmin"
-                } ?: false
+                val visibleExcursions = if (isAdmin) {
+                    pastExcursions
+                } else {
+                    registrationYear?.let { year ->
+                        pastExcursions.filter { it.date.year == year }
+                    } ?: emptyList()
+                }
 
-                // Configurar listener en tiempo real para fotos
-                setupPhotosListener(allExcursions, isAdmin)
-
+                setupPhotosListener(visibleExcursions)
             } catch (e: Exception) {
                 _uiState.value = GalleryUiState.Error(
-                    message = "Error al cargar galería: ${e.message}"
+                    message = "Error al cargar galeria: ${e.message}"
                 )
             }
         }
     }
 
-    private fun setupPhotosListener(excursions: List<Excursion>, isAdmin: Boolean) {
-        // Cancelar listener anterior si existe
+    private fun setupPhotosListener(excursions: List<Excursion>) {
         photosListener?.remove()
 
-        val currentUserId = auth.currentUser?.uid
-
-        if (currentUserId == null) {
+        if (excursions.isEmpty()) {
             _uiState.value = GalleryUiState.Success(emptyList())
             return
         }
 
-        val query = if (isAdmin) {
-            firestore.collection("photos")
-        } else {
-            firestore.collection("photos")
-                .whereArrayContains("authorizedUsers", currentUserId)
-        }
-
-        // Listener en tiempo real para cambios en fotos
-        photosListener = query.addSnapshotListener { snapshot, error ->
+        photosListener = firestore.collection("photos")
+            .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     _uiState.value = GalleryUiState.Error("Error: ${error.message}")
                     return@addSnapshotListener
@@ -114,41 +112,50 @@ class GalleryViewModel @Inject constructor(
 
                 viewModelScope.launch {
                     try {
-                        // Agrupar fotos por excursión
                         val photosByExcursion = snapshot?.documents
                             ?.groupBy { it.getString("excursionId") ?: "" }
                             ?: emptyMap()
 
-                        // Mapear excursiones con sus fotos
-                        // Mapear TODAS las excursiones con sus fotos (incluidas las que tienen 0)
                         val excursionsWithPhotos = excursions.map { excursion ->
                             val photos = photosByExcursion[excursion.id] ?: emptyList()
-                            val photoCount = photos.size
                             val firstPhoto = photos.firstOrNull()
-                            val firstPhotoUrl = firstPhoto?.getString("imageUrl")
-                            val firstPhotoThumbnailUrl = firstPhoto?.getString("thumbnailUrl")
-                            val firstPhotoMediaType = firstPhoto?.getString("mediaType") ?: "image"
 
                             ExcursionWithPhotos(
                                 excursion = excursion,
-                                photoCount = photoCount,
-                                firstPhotoUrl = firstPhotoUrl ?: excursion.imageUrl,
-                                firstPhotoThumbnailUrl = firstPhotoThumbnailUrl,
-                                firstPhotoMediaType = firstPhotoMediaType
+                                photoCount = photos.size,
+                                firstPhotoUrl = firstPhoto?.getString("imageUrl")
+                                    ?: excursion.imageUrl,
+                                firstPhotoThumbnailUrl = firstPhoto?.getString("thumbnailUrl"),
+                                firstPhotoMediaType = firstPhoto?.getString("mediaType")
+                                    ?: "image"
                             )
                         }
 
-                        // Ordenar por fecha (más recientes primero)
-                        val sortedExcursions = excursionsWithPhotos
-                            .sortedByDescending { it.excursion.date }
-
-                        _uiState.value = GalleryUiState.Success(sortedExcursions)
-
+                        _uiState.value = GalleryUiState.Success(
+                            excursionsWithPhotos.sortedByDescending { it.excursion.date }
+                        )
                     } catch (e: Exception) {
                         _uiState.value = GalleryUiState.Error("Error: ${e.message}")
                     }
                 }
             }
+    }
+
+    private fun DocumentSnapshot.isAdmin(): Boolean {
+        val role = getString("role")
+        return role == "admin" || role == "superadmin"
+    }
+
+    private fun DocumentSnapshot.registrationYear(): Int? {
+        return getTimestamp("createdAt")?.let {
+            kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+                .year
+        } ?: auth.currentUser?.metadata?.creationTimestamp?.let {
+            kotlinx.datetime.Instant.fromEpochMilliseconds(it)
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+                .year
+        }
     }
 
     fun retry() {
@@ -157,7 +164,6 @@ class GalleryViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        // Cancelar listener al destruir el ViewModel
         photosListener?.remove()
     }
 }

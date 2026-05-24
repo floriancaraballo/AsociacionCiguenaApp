@@ -6,20 +6,21 @@ import androidx.lifecycle.viewModelScope
 import com.asociacionciguena.app.domain.model.Excursion
 import com.asociacionciguena.app.domain.model.Photo
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageException
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import com.google.firebase.storage.FirebaseStorage
 
 @HiltViewModel
 class ExcursionDetailViewModel @Inject constructor(
@@ -36,7 +37,6 @@ class ExcursionDetailViewModel @Inject constructor(
     )
     val uiState: StateFlow<ExcursionDetailUiState> = _uiState.asStateFlow()
 
-    // Listener en tiempo real
     private var photosListener: ListenerRegistration? = null
 
     init {
@@ -57,7 +57,7 @@ class ExcursionDetailViewModel @Inject constructor(
                     .await()
 
                 if (!excursionDoc.exists()) {
-                    _uiState.value = ExcursionDetailUiState.Error("Excursión no encontrada")
+                    _uiState.value = ExcursionDetailUiState.Error("Excursion no encontrada")
                     return@launch
                 }
 
@@ -75,22 +75,25 @@ class ExcursionDetailViewModel @Inject constructor(
                 )
 
                 val currentUserUid = auth.currentUser?.uid
-
-                // Verificar si es admin
-                val isAdmin = if (currentUserUid != null) {
-                    val userDoc = firestore.collection("users")
-                        .document(currentUserUid)
+                val userDoc = currentUserUid?.let {
+                    firestore.collection("users")
+                        .document(it)
                         .get()
                         .await()
-                    val role = userDoc.getString("role")
-                    role == "admin" || role == "superadmin"
-                } else {
-                    false
+                }
+                val isAdmin = userDoc?.isAdmin() ?: false
+                val registrationYear = userDoc?.registrationYear()
+
+                if (!isAdmin && excursion.date.year != registrationYear) {
+                    _uiState.value = ExcursionDetailUiState.Success(
+                        excursion = excursion,
+                        photos = emptyList(),
+                        isAdmin = false
+                    )
+                    return@launch
                 }
 
-                // Configurar listener en tiempo real
                 setupPhotosListener(excursion, isAdmin, currentUserUid)
-
             } catch (e: Exception) {
                 _uiState.value = ExcursionDetailUiState.Error(
                     "Error al cargar detalles: ${e.message}"
@@ -100,7 +103,6 @@ class ExcursionDetailViewModel @Inject constructor(
     }
 
     private fun setupPhotosListener(excursion: Excursion, isAdmin: Boolean, currentUserUid: String?) {
-        // Cancelar listener anterior si existe
         photosListener?.remove()
 
         if (currentUserUid == null) {
@@ -115,60 +117,48 @@ class ExcursionDetailViewModel @Inject constructor(
         val now = Clock.System.now()
             .toLocalDateTime(TimeZone.currentSystemDefault())
 
-        // Query según permisos
-        val query = if (isAdmin) {
-            // Admins ven TODAS las fotos
-            firestore.collection("photos")
-                .whereEqualTo("excursionId", excursionId)
-        } else {
-            // Socios ven SOLO fotos autorizadas
-            firestore.collection("photos")
-                .whereEqualTo("excursionId", excursionId)
-                .whereArrayContains("authorizedUsers", currentUserUid)
-        }
+        photosListener = firestore.collection("photos")
+            .whereEqualTo("excursionId", excursionId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    _uiState.value = ExcursionDetailUiState.Error("Error: ${error.message}")
+                    return@addSnapshotListener
+                }
 
-        // Listener en tiempo real
-        photosListener = query.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                _uiState.value = ExcursionDetailUiState.Error("Error: ${error.message}")
-                return@addSnapshotListener
-            }
+                viewModelScope.launch {
+                    try {
+                        val photos = snapshot?.documents?.mapNotNull { doc ->
+                            try {
+                                Photo(
+                                    id = doc.id,
+                                    excursionId = doc.getString("excursionId") ?: "",
+                                    imageUrl = doc.getString("imageUrl") ?: "",
+                                    storagePath = doc.getString("storagePath") ?: "",
+                                    uploadedBy = doc.getString("uploadedBy") ?: "",
+                                    uploadedAt = doc.getTimestamp("uploadedAt")?.let {
+                                        kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
+                                            .toLocalDateTime(TimeZone.currentSystemDefault())
+                                    } ?: now,
+                                    authorizedUsers = (doc.get("authorizedUsers") as? List<*>)
+                                        ?.filterIsInstance<String>() ?: emptyList(),
+                                    mediaType = doc.getString("mediaType") ?: "image",
+                                    thumbnailUrl = doc.getString("thumbnailUrl")
+                                )
+                            } catch (_: Exception) {
+                                null
+                            }
+                        } ?: emptyList()
 
-            viewModelScope.launch {
-                try {
-                    val photos = snapshot?.documents?.mapNotNull { doc ->
-                        try {
-                            Photo(
-                                id = doc.id,
-                                excursionId = doc.getString("excursionId") ?: "",
-                                imageUrl = doc.getString("imageUrl") ?: "",
-                                storagePath = doc.getString("storagePath") ?: "",
-                                uploadedBy = doc.getString("uploadedBy") ?: "",
-                                uploadedAt = doc.getTimestamp("uploadedAt")?.let {
-                                    kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
-                                        .toLocalDateTime(TimeZone.currentSystemDefault())
-                                } ?: now,
-                                authorizedUsers = (doc.get("authorizedUsers") as? List<*>)
-                                    ?.filterIsInstance<String>() ?: emptyList(),
-                                mediaType = doc.getString("mediaType") ?: "image",
-                                thumbnailUrl = doc.getString("thumbnailUrl")
-                            )
-                        } catch (e: Exception) {
-                            null
-                        }
-                    } ?: emptyList()
-
-                    _uiState.value = ExcursionDetailUiState.Success(
-                        excursion = excursion,
-                        photos = photos,
-                        isAdmin = isAdmin
-                    )
-
-                } catch (e: Exception) {
-                    _uiState.value = ExcursionDetailUiState.Error("Error: ${e.message}")
+                        _uiState.value = ExcursionDetailUiState.Success(
+                            excursion = excursion,
+                            photos = photos,
+                            isAdmin = isAdmin
+                        )
+                    } catch (e: Exception) {
+                        _uiState.value = ExcursionDetailUiState.Error("Error: ${e.message}")
+                    }
                 }
             }
-        }
     }
 
     fun deletePhoto(photo: Photo, onSuccess: () -> Unit, onError: (String) -> Unit) {
@@ -183,8 +173,6 @@ class ExcursionDetailViewModel @Inject constructor(
                     .await()
 
                 onSuccess()
-                // El listener actualizará automáticamente
-
             } catch (e: Exception) {
                 onError("Error al eliminar: ${e.message}")
             }
@@ -204,8 +192,6 @@ class ExcursionDetailViewModel @Inject constructor(
                 }
 
                 onSuccess()
-                // El listener actualizará automáticamente
-
             } catch (e: Exception) {
                 onError("Error al eliminar elementos: ${e.message}")
             }
@@ -220,7 +206,7 @@ class ExcursionDetailViewModel @Inject constructor(
         } catch (e: Exception) {
             if (e !is StorageException || e.errorCode != StorageException.ERROR_OBJECT_NOT_FOUND) {
                 throw IllegalStateException(
-                    "Storage denegó el borrado de '$storagePath': ${e.message}",
+                    "Storage denego el borrado de '$storagePath': ${e.message}",
                     e
                 )
             }
@@ -235,10 +221,27 @@ class ExcursionDetailViewModel @Inject constructor(
         } catch (e: Exception) {
             if (e !is StorageException || e.errorCode != StorageException.ERROR_OBJECT_NOT_FOUND) {
                 throw IllegalStateException(
-                    "Storage denegó el borrado de la miniatura '$url': ${e.message}",
+                    "Storage denego el borrado de la miniatura '$url': ${e.message}",
                     e
                 )
             }
+        }
+    }
+
+    private fun DocumentSnapshot.isAdmin(): Boolean {
+        val role = getString("role")
+        return role == "admin" || role == "superadmin"
+    }
+
+    private fun DocumentSnapshot.registrationYear(): Int? {
+        return getTimestamp("createdAt")?.let {
+            kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+                .year
+        } ?: auth.currentUser?.metadata?.creationTimestamp?.let {
+            kotlinx.datetime.Instant.fromEpochMilliseconds(it)
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+                .year
         }
     }
 
@@ -248,7 +251,6 @@ class ExcursionDetailViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        // Cancelar listener al destruir el ViewModel
         photosListener?.remove()
     }
 }

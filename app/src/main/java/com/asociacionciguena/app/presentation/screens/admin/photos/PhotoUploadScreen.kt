@@ -40,7 +40,6 @@ fun PhotoUploadScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val excursions by viewModel.excursions.collectAsState()
-    val users by viewModel.users.collectAsState()
     // Bloquear navegación mientras se sube
     val isUploading = uiState is PhotoUploadUiState.Uploading
 
@@ -118,7 +117,6 @@ fun PhotoUploadScreen(
         PhotoUploadContent(
             uiState = uiState,
             excursions = excursions,
-            users = users,
             permissionGranted = permissionState?.status?.isGranted ?: true,  // ← Android 13+ siempre true
             shouldShowRationale = permissionState?.status?.shouldShowRationale ?: false,
             onRequestPermission = { permissionState?.launchPermissionRequest() },
@@ -134,9 +132,6 @@ fun PhotoUploadScreen(
             },
             onRemovePhoto = viewModel::removePhoto,
             onExcursionSelected = viewModel::onExcursionSelected,
-            onUserToggled = viewModel::onUserToggled,
-            onSelectAll = viewModel::selectAllUsers,
-            onDeselectAll = viewModel::deselectAllUsers,
             onUploadClick = { viewModel.uploadPhotos {} },
             onClearError = viewModel::clearError,
             modifier = Modifier.padding(paddingValues)
@@ -148,7 +143,6 @@ fun PhotoUploadScreen(
 private fun PhotoUploadContent(
     uiState: PhotoUploadUiState,
     excursions: List<ExcursionOption>,
-    users: List<UserOption>,
     permissionGranted: Boolean,
     shouldShowRationale: Boolean,
     onRequestPermission: () -> Unit,
@@ -156,9 +150,6 @@ private fun PhotoUploadContent(
     onAddMorePhotos: () -> Unit,  // ← NUEVO
     onRemovePhoto: (Uri) -> Unit,  // ← NUEVO
     onExcursionSelected: (String) -> Unit,
-    onUserToggled: (String) -> Unit,
-    onSelectAll: () -> Unit,
-    onDeselectAll: () -> Unit,
     onUploadClick: () -> Unit,
     onClearError: () -> Unit,
     modifier: Modifier = Modifier
@@ -267,13 +258,8 @@ private fun PhotoUploadContent(
             PhotosSelectedContent(
                 uris = uiState.uris,
                 excursions = excursions,
-                users = users,
                 selectedExcursionId = uiState.selectedExcursionId,
-                selectedUsers = uiState.selectedUsers,
                 onExcursionSelected = onExcursionSelected,
-                onUserToggled = onUserToggled,
-                onSelectAll = onSelectAll,
-                onDeselectAll = onDeselectAll,
                 onUploadClick = onUploadClick,
                 onAddMore = onAddMorePhotos,
                 onRemove = onRemovePhoto
@@ -340,13 +326,8 @@ private fun PermissionRequestCard(
 private fun PhotosSelectedContent(
     uris: List<Uri>,
     excursions: List<ExcursionOption>,
-    users: List<UserOption>,
     selectedExcursionId: String?,
-    selectedUsers: List<String>,
     onExcursionSelected: (String) -> Unit,
-    onUserToggled: (String) -> Unit,
-    onSelectAll: () -> Unit,
-    onDeselectAll: () -> Unit,
     onUploadClick: () -> Unit,
     onAddMore: () -> Unit,
     onRemove: (Uri) -> Unit
@@ -417,21 +398,13 @@ private fun PhotosSelectedContent(
         onSelected = onExcursionSelected
     )
 
-    UserSelector(
-        users = users,
-        selectedUsers = selectedUsers,
-        onUserToggled = onUserToggled,
-        onSelectAll = onSelectAll,
-        onDeselectAll = onDeselectAll
-    )
-
     // Upload button
     Button(
         onClick = onUploadClick,
         modifier = Modifier
             .fillMaxWidth()
             .height(50.dp),
-        enabled = selectedExcursionId != null && selectedUsers.isNotEmpty()
+        enabled = selectedExcursionId != null
     ) {
         Icon(Icons.Default.CloudUpload, contentDescription = null)
         Spacer(modifier = Modifier.width(8.dp))
@@ -582,67 +555,6 @@ private fun ExcursionSelector(
                                 onSelected(excursion.id)
                                 expanded = false
                             }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-@Composable
-private fun UserSelector(
-    users: List<UserOption>,
-    selectedUsers: List<String>,
-    onUserToggled: (String) -> Unit,
-    onSelectAll: () -> Unit,  // NUEVO
-    onDeselectAll: () -> Unit  // NUEVO
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Usuarios autorizados * (${selectedUsers.size})",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = onSelectAll) {
-                        Text("Todos", style = MaterialTheme.typography.labelSmall)
-                    }
-                    TextButton(onClick = onDeselectAll) {
-                        Text("Ninguno", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            users.forEach { user ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = user.id in selectedUsers,
-                        onCheckedChange = { onUserToggled(user.id) }
-                    )
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = user.displayName,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            text = user.email,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

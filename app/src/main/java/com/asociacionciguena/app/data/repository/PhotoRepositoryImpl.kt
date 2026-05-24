@@ -22,11 +22,7 @@ class PhotoRepositoryImpl @Inject constructor(
     ): Flow<Result<List<Photo>>> = flow {
         try {
             remoteDataSource.getPhotosByExcursion(excursionId).collect { dtoList ->
-                val authorizedPhotos = dtoList
-                    .filter { it.authorizedUsers.contains(userId) }
-                    .map { it.toDomain() }
-
-                emit(Result.Success(authorizedPhotos))
+                emit(Result.Success(dtoList.map { it.toDomain() }))
             }
         } catch (e: Exception) {
             emit(Result.Error(
@@ -41,11 +37,7 @@ class PhotoRepositoryImpl @Inject constructor(
             val photoDto = remoteDataSource.getPhotoById(photoId)
 
             if (photoDto != null) {
-                if (photoDto.authorizedUsers.contains(userId)) {
-                    Result.Success(photoDto.toDomain())
-                } else {
-                    Result.Error("No tienes permiso para ver esta foto")
-                }
+                Result.Success(photoDto.toDomain())
             } else {
                 Result.Error("Foto no encontrada")
             }
