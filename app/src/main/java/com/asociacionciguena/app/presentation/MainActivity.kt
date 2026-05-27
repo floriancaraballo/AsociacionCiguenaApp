@@ -59,9 +59,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Extraer datos de notificación
-        val notificationType = intent?.getStringExtra("notification_type")
-        val itemId = intent?.getStringExtra("item_id")
+        // Extraer datos de notificación (soportando tanto foreground como background FCM payloads)
+        val notificationType = intent?.getStringExtra("notification_type") ?: intent?.getStringExtra("type")
+        val itemId = intent?.getStringExtra("item_id") ?: intent?.getStringExtra("itemId")
 
         android.util.Log.d("DEEP_LINK", "onCreate - Type: $notificationType, ID: $itemId")
 
@@ -92,8 +92,8 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
 
-        val notificationType = intent.getStringExtra("notification_type")
-        val itemId = intent.getStringExtra("item_id")
+        val notificationType = intent.getStringExtra("notification_type") ?: intent.getStringExtra("type")
+        val itemId = intent.getStringExtra("item_id") ?: intent.getStringExtra("itemId")
 
         android.util.Log.d("DEEP_LINK", "onNewIntent - Type: $notificationType, ID: $itemId")
 

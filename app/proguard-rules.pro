@@ -158,6 +158,7 @@
 -dontwarn com.itextpdf.barcodes.**
 -dontwarn com.itextpdf.io.image.AwtImageDataFactory
 -dontwarn com.itextpdf.kernel.pdf.xobject.PdfImageXObject
+-keep class com.itextpdf.** { *; }
 
 # ───────── JAVA AWT/IMAGEIO (no existen en Android) ─────────
 -dontwarn java.awt.**
