@@ -26,7 +26,7 @@ class GetExcursionsUseCase @Inject constructor(
                 is Result.Success -> {
                     // Filtrar solo excursiones futuras
                     val futureExcursions = result.data.filter { excursion ->
-                        excursion.date >= now
+                        (excursion.endDate ?: excursion.date) >= now
                     }
                     Result.Success(futureExcursions)
                 }

@@ -13,10 +13,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.presentation.components.SignatureCanvas
+import com.asociacionciguena.app.util.formatDateRange
 import kotlinx.coroutines.launch
-import kotlinx.datetime.toJavaLocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 // Modelo para cada menor en autorización múltiple
 data class MinorAuth(
@@ -50,7 +48,7 @@ fun SignatureScreen(
     // Datos de la excursión
     val excursion = (uiState as? CalendarExcursionDetailUiState.Success)?.excursion
     val excursionTitle = excursion?.title ?: "Cargando..."
-    val excursionDate = excursion?.date?.let { formatDate(it) } ?: ""
+    val excursionDate = excursion?.let { formatDateRange(it.date, it.endDate) } ?: ""
     val activeAuthorizationCount by viewModel.getActiveAuthorizationCount().collectAsState(initial = 0)
     val isCapacityFull = excursion?.let {
         it.maxParticipants > 0 && activeAuthorizationCount >= it.maxParticipants
@@ -600,10 +598,4 @@ private fun isValidDni(dni: String): Boolean {
 
 private fun isValidPhone(phone: String): Boolean {
     return phone.replace(" ", "").matches(Regex("^[6-9][0-9]{8}$"))
-}
-
-private fun formatDate(date: kotlinx.datetime.LocalDateTime): String {
-    val javaDate = date.toJavaLocalDateTime()
-    val formatter = DateTimeFormatter.ofPattern("EEEE, dd 'de' MMMM 'de' yyyy", Locale("es", "ES"))
-    return javaDate.format(formatter).replaceFirstChar { it.uppercase() }
 }

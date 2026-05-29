@@ -1,0 +1,184 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ========================================
+    // FUNCIONES AUXILIARES
+    // ========================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getRole(userId) {
+      let userDoc = firestore.get(
+        /databases/(default)/documents/users/$(userId)
+      );
+      return userDoc.data.role != null ? userDoc.data.role : "none";
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+             getRole(request.auth.uid) in ['admin', 'superadmin'];
+    }
+
+    function isServiceAccount() {
+      return request.auth != null &&
+             request.auth.token.email.matches(".*@gserviceaccount.com$");
+    }
+
+    function isValidImageSize() {
+      return request.resource.size < 10 * 1024 * 1024; // 10MB
+    }
+
+    function isValidVideoSize() {
+      return request.resource.size < 100 * 1024 * 1024; // 100MB
+    }
+
+    function isImageOrVideo() {
+      return request.resource.contentType.matches('image/.*') ||
+             request.resource.contentType.matches('video/.*');
+    }
+
+    function isValidMediaSize() {
+      return (request.resource.contentType.matches('image/.*') && isValidImageSize()) ||
+             (request.resource.contentType.matches('video/.*') && isValidVideoSize());
+    }
+
+    // ========================================
+    // FOTOS DE PERFIL DE USUARIOS
+    // ========================================
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() &&
+                            request.auth.uid == userId &&
+                            request.resource.contentType.matches('image/.*') &&
+                            isValidImageSize();
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ========================================
+    // IMÁGENES DE NOTICIAS
+    // ========================================
+    match /news/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isAdmin() &&
+                            request.resource.contentType.matches('image/.*') &&
+                            isValidImageSize();
+      allow delete: if isAdmin();
+    }
+
+    // ========================================
+    // FOTOS Y VÍDEOS DE EXCURSIONES
+    // Solo admin y superadmin pueden subir, editar y borrar
+    // ========================================
+    match /excursions/{excursionId}/{mediaId} {
+      allow read: if true;
+      allow create, update: if isAdmin() &&
+                            isImageOrVideo() &&
+                            isValidMediaSize();
+      allow delete: if isAdmin();
+    }
+
+    // ========================================
+    // MINIATURAS DE VÍDEOS
+    // ========================================
+    match /excursions/{excursionId}/thumbnails/{thumbnailId} {
+      allow read: if true;
+      allow create, update: if isAdmin() &&
+                            request.resource.contentType.matches('image/.*') &&
+                            isValidImageSize();
+      allow delete: if isAdmin();
+    }
+
+    // ========================================
+    // IMÁGENES DE PORTADA DE EXCURSIONES
+    // ========================================
+    match /excursions/images/{imageId} {
+      allow read: if true;
+      allow create, update: if isAdmin() &&
+                            request.resource.contentType.matches('image/.*') &&
+                            isValidImageSize();
+      allow delete: if isAdmin();
+    }
+
+    // ========================================
+    // PDFs DE AUTORIZACIÓN (PLANTILLAS)
+    // ========================================
+    match /excursions/authorizations/{authId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() &&
+                            request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
+    // ========================================
+    // AUTORIZACIONES PDF - FIRMADAS POR USUARIOS
+    // ========================================
+    match /authorizations/signed/{excursionId}/{fileName} {
+      allow read: if isAuthenticated() || isServiceAccount();
+      allow create, update: if isAuthenticated() || isServiceAccount();
+      allow delete: if isAdmin() || isServiceAccount();
+    }
+
+    // ========================================
+    // AUTORIZACIONES - FIRMAS COMO IMAGEN (PNG)
+    // ========================================
+    match /authorizations/signatures/{excursionId}/{fileName} {
+      allow read: if isAuthenticated() || isServiceAccount();
+      allow create, update: if isAuthenticated() || isServiceAccount();
+      allow delete: if isAdmin() || isServiceAccount();
+    }
+
+    // ========================================
+    // AUTORIZACIONES PDF - PLANTILLAS
+    // ========================================
+    match /authorizations/templates/{fileName} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() || isServiceAccount();
+      allow delete: if isAdmin() || isServiceAccount();
+    }
+
+    // ========================================
+    // COMPROBANTES DE PAGO
+    // ========================================
+    function isPaymentProof() {
+      return request.resource.contentType.matches('image/.*') ||
+             request.resource.contentType == 'application/pdf' ||
+             request.resource.contentType == 'application/msword' ||
+             request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+
+    function isValidPaymentProofSize() {
+      return request.resource.size < 10 * 1024 * 1024;
+    }
+
+    function hasApprovedAuthorizationForPayment(excursionId) {
+      return request.resource.metadata.authorizationId is string &&
+             firestore.exists(/databases/(default)/documents/signedAuthorizations/$(request.resource.metadata.authorizationId)) &&
+             firestore.get(/databases/(default)/documents/signedAuthorizations/$(request.resource.metadata.authorizationId)).data.userId == request.auth.uid &&
+             firestore.get(/databases/(default)/documents/signedAuthorizations/$(request.resource.metadata.authorizationId)).data.excursionId == excursionId &&
+             firestore.get(/databases/(default)/documents/signedAuthorizations/$(request.resource.metadata.authorizationId)).data.status == 'APPROVED';
+    }
+
+    match /payments/{excursionId}/{paymentId} {
+      allow read: if isAdmin() ||
+                  (isAuthenticated() && paymentId.matches(request.auth.uid + "_.*"));
+
+      allow create, update: if isAuthenticated() &&
+                            paymentId.matches(request.auth.uid + "_.*") &&
+                            hasApprovedAuthorizationForPayment(excursionId) &&
+                            isPaymentProof() &&
+                            isValidPaymentProofSize();
+
+      allow delete: if isAdmin();
+    }
+
+    // ========================================
+    // REGLA POR DEFECTO
+    // ========================================
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

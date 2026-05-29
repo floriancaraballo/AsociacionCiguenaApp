@@ -40,11 +40,13 @@ fun ExcursionFormScreen(
     val imageUrl by viewModel.imageUrl.collectAsState()
     val imageUploadState by viewModel.imageUploadState.collectAsState()
     val date by viewModel.date.collectAsState()
+    val endDate by viewModel.endDate.collectAsState()
     val authorizationPdfUrl by viewModel.authorizationPdfUrl.collectAsState()
     val pdfUploadState by viewModel.pdfUploadState.collectAsState()
 
     var showExitDialog by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
 
     // Launcher para seleccionar PDF
     val pdfPickerLauncher = rememberLauncherForActivityResult(
@@ -75,9 +77,17 @@ fun ExcursionFormScreen(
         }
     }
 
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = date?.toInstant(TimeZone.currentSystemDefault())?.toEpochMilliseconds()
-    )
+    val datePickerState = key(date) {
+        rememberDatePickerState(
+            initialSelectedDateMillis = date?.toInstant(TimeZone.currentSystemDefault())?.toEpochMilliseconds()
+        )
+    }
+
+    val endDatePickerState = key(endDate) {
+        rememberDatePickerState(
+            initialSelectedDateMillis = endDate?.toInstant(TimeZone.currentSystemDefault())?.toEpochMilliseconds()
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -114,13 +124,14 @@ fun ExcursionFormScreen(
                     title = title,
                     description = description,
                     location = location,
-                    price = price,  // ← NUEVO
+                    price = price,
                     maxParticipants = maxParticipants,
                     imageUrl = imageUrl,
                     date = date,
+                    endDate = endDate,
                     authorizationPdfUrl = authorizationPdfUrl,
                     pdfUploadState = pdfUploadState,
-                    imageUploadState = imageUploadState,  // ← NUEVO
+                    imageUploadState = imageUploadState,
                     isSaving = uiState is ExcursionFormUiState.Saving,
                     errorMessage = (uiState as? ExcursionFormUiState.Error)?.message,
                     onTitleChange = viewModel::onTitleChange,
@@ -130,9 +141,10 @@ fun ExcursionFormScreen(
                     onMaxParticipantsChange = viewModel::onMaxParticipantsChange,
                     onImageUrlChange = viewModel::onImageUrlChange,
                     onDatePickerClick = { showDatePicker = true },
-                    onUploadImageClick = { imagePickerLauncher.launch("image/*") },  // ← NUEVO
-                    onRemoveImageClick = viewModel::removeExcursionImage,  // ← NUEVO
-                    onClearImageError = viewModel::clearImageUploadError,  // ← NUEVO
+                    onEndDatePickerClick = { showEndDatePicker = true },
+                    onUploadImageClick = { imagePickerLauncher.launch("image/*") },
+                    onRemoveImageClick = viewModel::removeExcursionImage,
+                    onClearImageError = viewModel::clearImageUploadError,
                     onUploadPdfClick = { pdfPickerLauncher.launch("application/pdf") },
                     onRemovePdfClick = viewModel::removeAuthorizationPdf,
                     onClearPdfError = viewModel::clearPdfUploadError,
@@ -167,6 +179,33 @@ fun ExcursionFormScreen(
                 }
             ) {
                 DatePicker(state = datePickerState)
+            }
+        }
+
+        if (showEndDatePicker) {
+            DatePickerDialog(
+                onDismissRequest = { showEndDatePicker = false },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            endDatePickerState.selectedDateMillis?.let { millis ->
+                                val instant = Instant.fromEpochMilliseconds(millis)
+                                val localDate = instant.toLocalDateTime(TimeZone.UTC)
+                                viewModel.onEndDateChange(localDate)
+                            }
+                            showEndDatePicker = false
+                        }
+                    ) {
+                        Text("Aceptar")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEndDatePicker = false }) {
+                        Text("Cancelar")
+                    }
+                }
+            ) {
+                DatePicker(state = endDatePickerState)
             }
         }
 
@@ -207,6 +246,7 @@ private fun ExcursionFormContent(
     maxParticipants: String,
     imageUrl: String,
     date: LocalDateTime?,
+    endDate: LocalDateTime?,
     authorizationPdfUrl: String?,
     pdfUploadState: PdfUploadState,
     imageUploadState: ImageUploadState,  // ← NUEVO
@@ -219,6 +259,7 @@ private fun ExcursionFormContent(
     onMaxParticipantsChange: (String) -> Unit,
     onImageUrlChange: (String) -> Unit,
     onDatePickerClick: () -> Unit,
+    onEndDatePickerClick: () -> Unit,
     onUploadImageClick: () -> Unit,  // ← NUEVO
     onRemoveImageClick: () -> Unit,  // ← NUEVO
     onClearImageError: () -> Unit,  // ← NUEVO
@@ -354,6 +395,40 @@ private fun ExcursionFormContent(
                         text = date?.let { formatDateForDisplay(it) } ?: "Selecciona una fecha",
                         style = MaterialTheme.typography.bodyLarge,
                         color = if (date != null)
+                            MaterialTheme.colorScheme.onSurface
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.CalendarMonth,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        // End date selector
+        OutlinedCard(
+            onClick = { if (!isSaving) onEndDatePickerClick() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Fecha de fin *",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = endDate?.let { formatDateForDisplay(it) } ?: "Selecciona una fecha de fin",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (endDate != null)
                             MaterialTheme.colorScheme.onSurface
                         else
                             MaterialTheme.colorScheme.onSurfaceVariant

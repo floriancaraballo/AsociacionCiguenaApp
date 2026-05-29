@@ -1,14 +1,18 @@
 package com.asociacionciguena.app.presentation.screens.admin.excursions
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.asociacionciguena.app.util.ImageCompressor
+import com.asociacionciguena.app.util.NetworkMonitor
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,16 +25,12 @@ import kotlinx.datetime.toLocalDateTime
 import java.util.Date
 import java.util.UUID
 import javax.inject.Inject
-import android.content.Context
-import com.asociacionciguena.app.util.ImageCompressor
-import com.asociacionciguena.app.util.NetworkMonitor
-import dagger.hilt.android.qualifiers.ApplicationContext
 
 @HiltViewModel
 class ExcursionFormViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth,
-    private val storage: FirebaseStorage,  // ← AÑADIDO
+    private val storage: FirebaseStorage,
     savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context,
     private val networkMonitor: NetworkMonitor
@@ -59,13 +59,15 @@ class ExcursionFormViewModel @Inject constructor(
     private val _imageUrl = MutableStateFlow("")
     val imageUrl: StateFlow<String> = _imageUrl.asStateFlow()
 
-    private val _uploadedImageUrl = MutableStateFlow<String?>(null)  // ← NUEVO
+    private val _uploadedImageUrl = MutableStateFlow<String?>(null)
     val uploadedImageUrl: StateFlow<String?> = _uploadedImageUrl.asStateFlow()
 
     private val _date = MutableStateFlow<LocalDateTime?>(null)
     val date: StateFlow<LocalDateTime?> = _date.asStateFlow()
 
-    // ← NUEVO: Estado del PDF de autorización
+    private val _endDate = MutableStateFlow<LocalDateTime?>(null)
+    val endDate: StateFlow<LocalDateTime?> = _endDate.asStateFlow()
+
     private val _authorizationPdfUrl = MutableStateFlow<String?>(null)
     val authorizationPdfUrl: StateFlow<String?> = _authorizationPdfUrl.asStateFlow()
 
@@ -74,10 +76,8 @@ class ExcursionFormViewModel @Inject constructor(
 
     val isEditMode = excursionId != null && excursionId != "new"
 
-    // ← NUEVO: Estado de subida de imagen
     private val _imageUploadState = MutableStateFlow<ImageUploadState>(ImageUploadState.Idle)
     val imageUploadState: StateFlow<ImageUploadState> = _imageUploadState.asStateFlow()
-
 
     init {
         if (isEditMode && excursionId != null) {
@@ -102,9 +102,14 @@ class ExcursionFormViewModel @Inject constructor(
                     _price.value = doc.getDouble("price")?.toString() ?: ""
                     _maxParticipants.value = doc.getLong("maxParticipants")?.toString() ?: ""
                     _imageUrl.value = doc.getString("imageUrl") ?: ""
-                    _authorizationPdfUrl.value = doc.getString("authorizationPdfUrl")  // ← NUEVO
+                    _authorizationPdfUrl.value = doc.getString("authorizationPdfUrl")
 
                     _date.value = doc.getTimestamp("date")?.let {
+                        kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
+                            .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+                    }
+
+                    _endDate.value = doc.getTimestamp("endDate")?.let {
                         kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
                             .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
                     }
@@ -113,7 +118,6 @@ class ExcursionFormViewModel @Inject constructor(
                 } else {
                     _uiState.value = ExcursionFormUiState.Error("Excursión no encontrada")
                 }
-
             } catch (e: Exception) {
                 _uiState.value = ExcursionFormUiState.Error("Error al cargar: ${e.message}")
             }
@@ -133,7 +137,6 @@ class ExcursionFormViewModel @Inject constructor(
     }
 
     fun onPriceChange(newPrice: String) {
-        // Solo permitir números y un punto decimal
         if (newPrice.isEmpty() || newPrice.matches(Regex("^\\d*\\.?\\d{0,2}$"))) {
             _price.value = newPrice
         }
@@ -153,6 +156,10 @@ class ExcursionFormViewModel @Inject constructor(
         _date.value = newDate
     }
 
+    fun onEndDateChange(newEndDate: LocalDateTime?) {
+        _endDate.value = newEndDate
+    }
+
     private fun isValidImageUrl(url: String): Boolean {
         if (url.isBlank()) return true
         return url.matches(
@@ -163,34 +170,26 @@ class ExcursionFormViewModel @Inject constructor(
         )
     }
 
-    // ← NUEVO: Subir PDF de autorización
     fun uploadAuthorizationPdf(uri: Uri) {
         viewModelScope.launch {
             try {
                 _pdfUploadState.value = PdfUploadState.Uploading(0f)
 
-                // Generar nombre único
                 val pdfId = UUID.randomUUID().toString()
                 val fileName = "authorization_${pdfId}.pdf"
                 val storagePath = "excursions/authorizations/$fileName"
 
-                // Subir a Storage
                 val storageRef = storage.reference.child(storagePath)
                 val uploadTask = storageRef.putFile(uri)
 
-                // Monitorear progreso
                 uploadTask.addOnProgressListener { taskSnapshot ->
                     val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount).toFloat()
                     _pdfUploadState.value = PdfUploadState.Uploading(progress / 100f)
                 }
 
-                // Esperar a que termine
                 uploadTask.await()
-
-                // Obtener URL de descarga
                 val downloadUrl = storageRef.downloadUrl.await().toString()
 
-                // Guardar URL
                 _authorizationPdfUrl.value = downloadUrl
                 _pdfUploadState.value = PdfUploadState.Success
 
@@ -200,7 +199,6 @@ class ExcursionFormViewModel @Inject constructor(
         }
     }
 
-    // ← NUEVO: Eliminar PDF de autorización
     fun removeAuthorizationPdf() {
         _authorizationPdfUrl.value = null
         _pdfUploadState.value = PdfUploadState.Idle
@@ -215,7 +213,6 @@ class ExcursionFormViewModel @Inject constructor(
     fun saveExcursion(onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
-                // Verificar conexión
                 if (!networkMonitor.isCurrentlyOnline()) {
                     _uiState.value = ExcursionFormUiState.Error("Sin conexión a internet. No se puede guardar.")
                     return@launch
@@ -246,6 +243,11 @@ class ExcursionFormViewModel @Inject constructor(
                     return@launch
                 }
 
+                if (_endDate.value != null && _endDate.value!! < _date.value!!) {
+                    _uiState.value = ExcursionFormUiState.Error("La fecha de finalización no puede ser anterior a la fecha de inicio")
+                    return@launch
+                }
+
                 val maxParticipantsValue = _maxParticipants.value.toIntOrNull()
                 if (maxParticipantsValue == null || maxParticipantsValue <= 0) {
                     _uiState.value = ExcursionFormUiState.Error("El máximo de participantes debe ser mayor que 0")
@@ -264,17 +266,22 @@ class ExcursionFormViewModel @Inject constructor(
                     Timestamp(Date(instant.toEpochMilliseconds()))
                 } ?: Timestamp.now()
 
+                val endTimestamp = _endDate.value?.let { localDateTime ->
+                    val instant = localDateTime.toInstant(TimeZone.currentSystemDefault())
+                    Timestamp(Date(instant.toEpochMilliseconds()))
+                }
+
                 val excursionData = hashMapOf<String, Any?>(
                     "title" to _title.value,
                     "description" to _description.value,
                     "location" to _location.value,
                     "date" to timestamp,
+                    "endDate" to endTimestamp,
                     "imageUrl" to _imageUrl.value.ifBlank { null },
                     "authorizationPdfUrl" to _authorizationPdfUrl.value,
                     "maxParticipants" to maxParticipantsValue
                 )
 
-// Solo añadir precio si tiene valor
                 val priceValue = _price.value.toDoubleOrNull()
                 if (priceValue != null && priceValue > 0) {
                     excursionData["price"] = priceValue
@@ -305,7 +312,6 @@ class ExcursionFormViewModel @Inject constructor(
             try {
                 _imageUploadState.value = ImageUploadState.Uploading(0f)
 
-                // COMPRIMIR antes de subir
                 val compressedFile = ImageCompressor.compressPhoto(context, uri)
 
                 val imageId = UUID.randomUUID().toString()
@@ -323,7 +329,6 @@ class ExcursionFormViewModel @Inject constructor(
                 uploadTask.await()
                 val downloadUrl = storageRef.downloadUrl.await().toString()
 
-                // Limpiar archivo temporal
                 compressedFile.delete()
 
                 _uploadedImageUrl.value = downloadUrl
@@ -336,7 +341,6 @@ class ExcursionFormViewModel @Inject constructor(
         }
     }
 
-    // ← NUEVO: Eliminar imagen
     fun removeExcursionImage() {
         _imageUrl.value = ""
         _imageUploadState.value = ImageUploadState.Idle
@@ -362,7 +366,6 @@ class ExcursionFormViewModel @Inject constructor(
     }
 }
 
-// ← NUEVO: Estados de subida de PDF
 sealed class PdfUploadState {
     object Idle : PdfUploadState()
     data class Uploading(val progress: Float) : PdfUploadState()

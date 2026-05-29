@@ -20,7 +20,6 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import com.google.firebase.functions.FirebaseFunctions  // ← AÑADIR
-import kotlinx.coroutines.tasks.await  // ← Ya deberías tenerlo
 
 @Singleton
 class PaymentRepository @Inject constructor(
@@ -91,9 +90,8 @@ class PaymentRepository @Inject constructor(
 
             val userName = auth.currentUser?.displayName ?: "Usuario"
 
-            if (!canUserStartPayment(excursionId, userId)) {
-                return Result.failure(Exception("No quedan plazas disponibles para esta excursión"))
-            }
+            val approvedAuthorizationId = getApprovedAuthorizationId(excursionId, userId)
+                ?: return Result.failure(Exception("La autorización debe estar aprobada antes de subir el comprobante"))
 
             val contentType = context.contentResolver.getType(photoUri)
                 ?: return Result.failure(Exception("No se pudo identificar el tipo de archivo"))
@@ -105,19 +103,6 @@ class PaymentRepository @Inject constructor(
             val fileName = getDisplayName(photoUri)
                 ?: "comprobante_${UUID.randomUUID()}.${extensionForContentType(contentType)}"
 
-            // 1. Subir comprobante a Storage
-            val proofId = UUID.randomUUID().toString()
-            val storageRef = storage.reference
-                .child("payments/${excursionId}/${userId}_${proofId}.${extensionForContentType(contentType)}")
-
-            val metadata = StorageMetadata.Builder()
-                .setContentType(contentType)
-                .build()
-
-            storageRef.putFile(photoUri, metadata).await()
-            val downloadUrl = storageRef.downloadUrl.await().toString()
-
-            // 2. Verificar si ya existe un pago
             val existingPayment = firestore.collection("payments")
                 .whereEqualTo("excursionId", excursionId)
                 .whereEqualTo("userId", userId)
@@ -125,30 +110,49 @@ class PaymentRepository @Inject constructor(
                 .get()
                 .await()
 
+            val existingPaymentDoc = existingPayment.documents.firstOrNull()
+            if (PaymentStatus.fromFirestoreValue(existingPaymentDoc?.getString("status")) == PaymentStatus.PAID) {
+                return Result.failure(Exception("El pago ya está confirmado"))
+            }
+
+            // 1. Subir comprobante a Storage
+            val proofId = UUID.randomUUID().toString()
+            val storageRef = storage.reference
+                .child("payments/${excursionId}/${userId}_${proofId}.${extensionForContentType(contentType)}")
+
+            val metadata = StorageMetadata.Builder()
+                .setContentType(contentType)
+                .setCustomMetadata("authorizationId", approvedAuthorizationId)
+                .build()
+
+            storageRef.putFile(photoUri, metadata).await()
+            val downloadUrl = storageRef.downloadUrl.await().toString()
+
             val paymentData = hashMapOf(
                 "excursionId" to excursionId,
                 "userId" to userId,
                 "userName" to userName,
                 "amount" to amount,
                 "status" to PaymentStatus.PENDING.name,
+                "authorizationId" to approvedAuthorizationId,
                 "paymentProofUrl" to downloadUrl,
                 "paymentProofContentType" to contentType,
                 "paymentProofFileName" to fileName,
                 "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )
 
-            if (existingPayment.documents.isNotEmpty()) {
+            if (existingPaymentDoc != null) {
                 val paymentUpdateData = hashMapOf(
                     "status" to PaymentStatus.PENDING.name,
+                    "authorizationId" to approvedAuthorizationId,
                     "paymentProofUrl" to downloadUrl,
                     "paymentProofContentType" to contentType,
                     "paymentProofFileName" to fileName,
                     "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                 )
 
-                val docId = existingPayment.documents[0].id
                 firestore.collection("payments")
-                    .document(docId)
+                    .document(existingPaymentDoc.id)
                     .update(paymentUpdateData)
                     .await()
             } else {
@@ -194,26 +198,16 @@ class PaymentRepository @Inject constructor(
         }
     }
 
-    private suspend fun canUserStartPayment(excursionId: String, userId: String): Boolean {
-        val excursionDoc = firestore.collection("excursions")
-            .document(excursionId)
-            .get()
-            .await()
-
-        if (!excursionDoc.exists()) return false
-
-        val activeStatuses = listOf("PENDING", "APPROVED")
-        val userActiveAuthorization = firestore.collection("signedAuthorizations")
+    private suspend fun getApprovedAuthorizationId(excursionId: String, userId: String): String? {
+        val userApprovedAuthorization = firestore.collection("signedAuthorizations")
             .whereEqualTo("excursionId", excursionId)
             .whereEqualTo("userId", userId)
+            .whereEqualTo("status", "APPROVED")
+            .limit(1)
             .get()
             .await()
 
-        if (userActiveAuthorization.documents.any { doc -> doc.getString("status") in activeStatuses }) {
-            return true
-        }
-
-        return true
+        return userApprovedAuthorization.documents.firstOrNull()?.id
     }
 
     /**

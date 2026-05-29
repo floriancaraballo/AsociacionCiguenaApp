@@ -1025,6 +1025,134 @@ export const onAuthorizationSigned = onDocumentCreated(
 // ENVÍO DE EMAIL PARA AUTORIZACIONES MÚLTIPLES (HERMANOS)
 // ==========================================
 
+export const onAuthorizationApproved = onDocumentUpdated(
+  {
+    document: "signedAuthorizations/{authorizationId}",
+    region: "europe-west1",
+  },
+  async (event) => {
+    try {
+      const beforeData = event.data?.before.data();
+      const afterData = event.data?.after.data();
+
+      if (!beforeData || !afterData) {
+        return null;
+      }
+
+      if (beforeData.status === "APPROVED" || afterData.status !== "APPROVED") {
+        return null;
+      }
+
+      const authorizationId = event.params.authorizationId;
+      const userId = afterData.userId as string | undefined;
+      const excursionId = afterData.excursionId as string | undefined;
+      const excursionTitle = (afterData.excursionTitle as string | undefined) || "la excursión";
+      const minorName = afterData.minorName as string | undefined;
+
+      if (!userId) {
+        console.log(`Autorizacion ${authorizationId} aprobada sin userId`);
+        return null;
+      }
+
+      const userDoc = await admin.firestore().collection("users").doc(userId).get();
+      const userFcmToken = userDoc.get("fcmToken") as string | undefined;
+      const deviceTokensSnapshot = await admin.firestore()
+        .collection("deviceTokens")
+        .where("userId", "==", userId)
+        .get();
+
+      const tokens = Array.from(new Set([
+        userFcmToken,
+        ...deviceTokensSnapshot.docs
+          .filter((doc) => doc.get("invalid") !== true)
+          .map((doc) => doc.get("token") as string | undefined),
+      ].filter((token): token is string => Boolean(token))));
+
+      if (tokens.length === 0) {
+        console.log(`Usuario ${userId} sin tokens FCM activos para autorizacion ${authorizationId}`);
+        return null;
+      }
+
+      const body = minorName
+        ? `La autorización de ${minorName} para ${excursionTitle} ha sido aprobada.`
+        : `Tu autorización para ${excursionTitle} ha sido aprobada.`;
+
+      const message: admin.messaging.MulticastMessage = {
+        tokens,
+        notification: {
+          title: "Autorización aprobada",
+          body,
+        },
+        data: {
+          type: "authorization_approved",
+          itemId: excursionId || "",
+          authorizationId,
+          title: "Autorización aprobada",
+          body,
+        },
+        android: {
+          priority: "high" as const,
+          notification: {
+            icon: "ic_notification",
+            color: "#1976D2",
+          },
+        },
+      };
+
+      const response = await admin.messaging().sendEachForMulticast(message);
+      const invalidTokens: string[] = [];
+
+      response.responses.forEach((sendResponse, index) => {
+        const errorCode = sendResponse.error?.code;
+        const isInvalidToken =
+          errorCode === "messaging/registration-token-not-registered" ||
+          errorCode === "messaging/invalid-registration-token";
+
+        if (isInvalidToken) {
+          invalidTokens.push(tokens[index]);
+        } else if (!sendResponse.success) {
+          console.error(
+            `Error enviando notificacion a token ${index} de usuario ${userId}:`,
+            sendResponse.error
+          );
+        }
+      });
+
+      if (invalidTokens.length > 0) {
+        const latestUserDoc = await userDoc.ref.get();
+        if (invalidTokens.includes(latestUserDoc.get("fcmToken") as string)) {
+          await userDoc.ref.update({
+            fcmToken: admin.firestore.FieldValue.delete(),
+            fcmTokenInvalidatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+
+        await Promise.all(invalidTokens.map((token) =>
+          admin.firestore().collection("deviceTokens").doc(token).set(
+            {
+              userId: null,
+              invalid: true,
+              invalidatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            {merge: true}
+          )
+        ));
+
+        console.log(`Tokens FCM obsoletos eliminados para usuario ${userId}: ${invalidTokens.length}`);
+      }
+
+      console.log(
+        `Notificacion de autorizacion aprobada para ${userId}: ` +
+        `${response.successCount} enviadas, ${response.failureCount} fallidas`
+      );
+      return null;
+    } catch (error) {
+      console.error("Error en onAuthorizationApproved:", error);
+      return null;
+    }
+  }
+);
+
 export const sendBatchAuthorizationEmail = onCall({
 
   region: "europe-west1",

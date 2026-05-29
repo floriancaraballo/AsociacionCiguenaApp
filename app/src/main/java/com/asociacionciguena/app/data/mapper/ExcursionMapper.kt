@@ -11,6 +11,7 @@ fun ExcursionDto.toDomain(): Excursion {
         title = title,
         description = description,
         date = date?.toLocalDateTime() ?: LocalDateTime(2025, 1, 1, 0, 0),
+        endDate = endDate?.toLocalDateTime(),
         location = location,
         imageUrl = imageUrl,
         authorizationPdfUrl = authorizationPdfUrl,

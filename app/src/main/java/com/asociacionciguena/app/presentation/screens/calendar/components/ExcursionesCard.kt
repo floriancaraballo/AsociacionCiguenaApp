@@ -14,10 +14,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.asociacionciguena.app.domain.model.Excursion
 import com.asociacionciguena.app.presentation.components.CachedSubcomposeAsyncImage
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toJavaLocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
+import com.asociacionciguena.app.util.formatDateRange
 
 /**
  * Card que muestra una excursión
@@ -74,7 +71,7 @@ fun ExcursionCard(
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = formatDate(excursion.date),
+                        text = formatDateRange(excursion.date, excursion.endDate),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -112,13 +109,4 @@ fun ExcursionCard(
             }
         }
     }
-}
-
-/**
- * Formatea la fecha en formato legible
- */
-private fun formatDate(date: kotlinx.datetime.LocalDateTime): String {
-    val javaDate = date.toJavaLocalDateTime()
-    val formatter = DateTimeFormatter.ofPattern("EEEE, dd 'de' MMMM 'de' yyyy", Locale("es", "ES"))
-    return javaDate.format(formatter).replaceFirstChar { it.uppercase() }
 }

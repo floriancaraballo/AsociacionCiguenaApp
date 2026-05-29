@@ -18,11 +18,8 @@ import androidx.navigation.NavHostController
 import com.asociacionciguena.app.domain.model.PaymentStatus
 import com.asociacionciguena.app.presentation.components.CachedSubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
-import kotlinx.datetime.toJavaLocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import com.asociacionciguena.app.presentation.navigation.Screen  // ✅ Ruta correct// a
-import com.asociacionciguena.app.util.formatDate
+import com.asociacionciguena.app.util.formatDateRange
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -194,7 +191,7 @@ private fun ExcursionDetailContent(
                     Icon(Icons.Default.CalendarToday, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
                     Column {
                         Text("Fecha", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                        Text(formatDate(excursion.date), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        Text(formatDateRange(excursion.date, excursion.endDate), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
                     }
                 }
             }
@@ -251,8 +248,10 @@ private fun ExcursionDetailContent(
                 val currentUser by viewModel.currentUser.collectAsState()
                 val paymentStatus by viewModel.getPaymentStatus(currentUser?.id ?: "").collectAsState(initial = null)
                 val hasSignedForPayment by viewModel.hasUserSignedAuthorization(currentUser?.id ?: "").collectAsState(initial = false)
+                val hasApprovedAuthorization by viewModel.hasUserApprovedAuthorization(currentUser?.id ?: "").collectAsState(initial = false)
                 val isUploadingPaymentProof by viewModel.isUploadingPaymentProof.collectAsState()
                 val isPaymentBlockedByCapacity = isCapacityFull && !hasSignedForPayment
+                val isPaymentBlockedByAuthorization = currentUser != null && !hasApprovedAuthorization
                 var showPaymentSheet by remember { mutableStateOf(false) }
 
                 Divider(modifier = Modifier.padding(vertical = 16.dp))
@@ -293,6 +292,8 @@ private fun ExcursionDetailContent(
                                     Text("Comprobante rechazado. Contacta con un administrador.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
                                     if (isPaymentBlockedByCapacity) {
                                         Text("No se puede reintentar el pago porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                                    } else if (isPaymentBlockedByAuthorization) {
+                                        Text("Podrás subir el comprobante cuando tu autorización esté aprobada.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
                                     } else {
                                         Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Intentar de nuevo") }
                                     }
@@ -300,6 +301,8 @@ private fun ExcursionDetailContent(
                                 null -> {
                                     if (isPaymentBlockedByCapacity) {
                                         Text("No se puede pagar porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    } else if (isPaymentBlockedByAuthorization) {
+                                        Text("Podrás subir el comprobante cuando tu autorización esté aprobada.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     } else if (currentUser != null) {
                                         Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Pagar excursión") }
                                     } else {
@@ -310,7 +313,7 @@ private fun ExcursionDetailContent(
                         }
                     }
                 }
-                if (showPaymentSheet && currentUser != null) {
+                if (showPaymentSheet && currentUser != null && hasApprovedAuthorization) {
                     PaymentBottomSheet(
                         excursionTitle = excursion.title,
                         amount = excursion.price ?: 0.0,

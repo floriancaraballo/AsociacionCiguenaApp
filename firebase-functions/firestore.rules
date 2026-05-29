@@ -1,0 +1,187 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ========================================
+    // FUNCIONES AUXILIARES
+    // ========================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Admin incluye tanto 'admin' como 'superadmin'
+    function isAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
+    }
+
+    // Super-Admin específico
+    function isSuperAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin';
+    }
+
+    // Socio (incluye admin y super-admin)
+    function isMember() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['socio', 'admin', 'superadmin'];
+    }
+
+    function hasApprovedAuthorization(paymentData) {
+      return paymentData.authorizationId is string
+             && exists(/databases/$(database)/documents/signedAuthorizations/$(paymentData.authorizationId))
+             && get(/databases/$(database)/documents/signedAuthorizations/$(paymentData.authorizationId)).data.userId == request.auth.uid
+             && get(/databases/$(database)/documents/signedAuthorizations/$(paymentData.authorizationId)).data.excursionId == paymentData.excursionId
+             && get(/databases/$(database)/documents/signedAuthorizations/$(paymentData.authorizationId)).data.status == 'APPROVED';
+    }
+
+    // ========================================
+    // USUARIOS
+    // ========================================
+    // Usuarios pendientes (solo admins pueden crear)
+    match /pendingUsers/{pendingUserId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      // Lectura individual (get): el propio usuario o cualquier admin
+      allow get: if request.auth.uid == userId || isAdmin();
+
+      // Lectura en lista (list): admin o si el documento consultado tiene el email del propio usuario (necesario para el login/migración)
+      allow list: if isAdmin() || (isAuthenticated() && resource.data.email == request.auth.token.email);
+
+      // Super-Admin puede actualizar cualquier usuario
+      allow update: if isSuperAdmin();
+
+      // Admin puede actualizar usuarios (excepto super-admins)
+      allow update: if isAdmin() 
+                    && get(/databases/$(database)/documents/users/$(userId)).data.role != 'superadmin';
+
+      // Usuario puede actualizar su perfil (pero NO su role)
+      allow update: if request.auth.uid == userId 
+                    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+
+      // Creación al registrarse
+      allow create: if request.auth != null;
+
+      // Eliminación (delete): admin, o el propio usuario si es para borrar el documento temporal durante la migración
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.email == request.auth.token.email);
+    }
+
+    // Fotos de perfil de usuarios
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ========================================
+    // NOTICIAS
+    // ========================================
+    match /news/{newsId} {
+      // Lectura: públicas para todos, privadas solo para autenticados
+      allow read: if resource.data.isPublic == true || isAuthenticated();
+
+      // Escritura: admins y super-admins
+      allow write: if isAdmin();
+    }
+
+    // ========================================
+    // EXCURSIONES
+    // ========================================
+    match /excursions/{excursionId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      // Subcolección de inscripciones (necesaria para registrarse en las excursiones)
+      match /registrations/{registrationId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && (request.auth.uid == registrationId || isAdmin());
+      }
+    }
+
+    // ========================================
+    // FOTOS
+    // ========================================
+    match /photos/{photoId} {
+      // Lectura:
+      // - Permitido a todos los usuarios autenticados para poder cargar la galería completa
+      allow read: if isAuthenticated();
+      
+      // Escritura: solo admins y super-admins
+      allow write: if isAdmin();
+    }
+
+    // ========================================
+    // UPLOAD BATCHES
+    // ========================================
+    match /uploadBatches/{batchId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+    
+    // ========================================
+    // DISPOSITIVOS / NOTIFICACIONES (FCM)
+    // ========================================
+    match /deviceTokens/{tokenId} {
+      allow read, write: if true; // Acceso público para guardar tokens del dispositivo
+    }
+    
+    // ========================================
+    // PAGOS
+    // ========================================
+    match /payments/{paymentId} {
+      allow create: if isAuthenticated()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.status == 'PENDING'
+                    && request.resource.data.amount is number
+                    && request.resource.data.excursionId is string
+                    && hasApprovedAuthorization(request.resource.data)
+                    && request.resource.data.paymentProofUrl is string
+                    && !request.resource.data.keys().hasAny(['validatedBy', 'validatedAt']);
+
+      allow read: if isAuthenticated() &&
+                  (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow list: if isAdmin();
+
+      allow update: if isAdmin()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                      .hasOnly(['status', 'validatedAt', 'validatedBy'])
+                    && request.resource.data.status in ['PAID', 'REJECTED', 'PENDING'];
+
+      allow update: if isAuthenticated()
+                    && resource.data.userId == request.auth.uid
+                    && resource.data.status in ['PENDING', 'REJECTED']
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.status == 'PENDING'
+                    && hasApprovedAuthorization(request.resource.data)
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                      .hasOnly(['status', 'authorizationId', 'paymentProofUrl', 'paymentProofContentType', 'paymentProofFileName', 'updatedAt']);
+
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // FIRMA AUTORIZACIÓN
+    // ========================================
+    match /signedAuthorizations/{authorizationId} {
+      // Cualquier usuario autenticado puede crear su autorización
+      allow create: if request.auth != null;
+
+      // Los usuarios pueden leer sus propias autorizaciones
+      allow read: if request.auth != null && 
+                  (resource.data.userId == request.auth.uid ||
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin']);
+
+      // Solo admins pueden actualizar (aprobar/rechazar)
+      allow update: if request.auth != null &&
+                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
+
+      // Los admins pueden leer todas las autorizaciones
+      allow list: if request.auth != null &&
+                  get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
+    }
+  }
+}

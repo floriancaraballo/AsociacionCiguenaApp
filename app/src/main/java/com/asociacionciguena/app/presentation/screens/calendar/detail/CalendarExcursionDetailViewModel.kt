@@ -89,6 +89,10 @@ class CalendarExcursionDetailViewModel @Inject constructor(
                         kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
                             .toLocalDateTime(TimeZone.currentSystemDefault())
                     } ?: now,
+                    endDate = excursionDoc.getTimestamp("endDate")?.let {
+                        kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
+                            .toLocalDateTime(TimeZone.currentSystemDefault())
+                    },
                     location = excursionDoc.getString("location") ?: "",
                     imageUrl = excursionDoc.getString("imageUrl"),
                     authorizationPdfUrl = excursionDoc.getString("authorizationPdfUrl"),
@@ -217,6 +221,15 @@ class CalendarExcursionDetailViewModel @Inject constructor(
         } else {
             val hasSigned = signedAuthorizationRepository.hasUserSigned(excursionId, userId)
             emit(hasSigned)
+        }
+    }
+
+    fun hasUserApprovedAuthorization(userId: String): Flow<Boolean> = flow {
+        if (userId.isEmpty()) {
+            emit(false)
+        } else {
+            val hasApproved = signedAuthorizationRepository.hasUserApproved(excursionId, userId)
+            emit(hasApproved)
         }
     }
 

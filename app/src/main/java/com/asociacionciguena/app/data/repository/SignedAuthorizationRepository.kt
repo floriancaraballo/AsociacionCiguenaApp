@@ -201,6 +201,22 @@ class SignedAuthorizationRepository @Inject constructor(
         }
     }
 
+    suspend fun hasUserApproved(excursionId: String, userId: String): Boolean {
+        return try {
+            val snapshot = firestore.collection("signedAuthorizations")
+                .whereEqualTo("excursionId", excursionId)
+                .whereEqualTo("userId", userId)
+                .whereEqualTo("status", AuthorizationStatus.APPROVED.name)
+                .limit(1)
+                .get()
+                .await()
+
+            snapshot.documents.isNotEmpty()
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     suspend fun hasAvailableCapacity(excursionId: String, requestedParticipants: Int): Boolean {
         if (requestedParticipants <= 0) return true
 
