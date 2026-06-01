@@ -45,11 +45,23 @@ fun SignatureScreen(
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberLazyListState()
 
+    fun showValidationError(message: String) {
+        showError = true
+        errorMessage = message
+        coroutineScope.launch { scrollState.animateScrollToItem(0) }
+    }
+
     // Datos de la excursión
     val excursion = (uiState as? CalendarExcursionDetailUiState.Success)?.excursion
+    val isAdmin = (uiState as? CalendarExcursionDetailUiState.Success)?.isAdmin ?: false
     val excursionTitle = excursion?.title ?: "Cargando..."
     val excursionDate = excursion?.let { formatDateRange(it.date, it.endDate) } ?: ""
-    val activeAuthorizationCount by viewModel.getActiveAuthorizationCount().collectAsState(initial = 0)
+    val observedAuthorizationCount by viewModel.activeAuthorizationCount.collectAsState()
+    val activeAuthorizationCount = if (isAdmin) {
+        observedAuthorizationCount
+    } else {
+        excursion?.currentParticipants ?: 0
+    }
     val isCapacityFull = excursion?.let {
         it.maxParticipants > 0 && activeAuthorizationCount >= it.maxParticipants
     } ?: false
@@ -121,6 +133,21 @@ fun SignatureScreen(
 
     // ✅ FUNCIÓN: Validar un menor específico
     // ✅ FUNCIÓN: Validar un menor específico CON LOGS DETALLADOS
+    fun validationErrorForMinor(minor: MinorAuth, participantNumber: Int? = null): String? {
+        val participantPrefix = participantNumber?.let { "Participante $it: " } ?: ""
+
+        return when {
+            minor.minorName.isBlank() -> "${participantPrefix}introduce el nombre del participante."
+            minor.tutorName.isBlank() -> "${participantPrefix}introduce el nombre del tutor."
+            minor.tutorDni.isBlank() -> "${participantPrefix}introduce el DNI/NIE del tutor."
+            !isValidDni(minor.tutorDni) -> "${participantPrefix}el DNI/NIE no es valido."
+            minor.tutorPhone.isBlank() -> "${participantPrefix}introduce el telefono del tutor."
+            !isValidPhone(minor.tutorPhone) -> "${participantPrefix}el telefono debe tener 9 digitos y empezar por 6, 7, 8 o 9."
+            minor.signaturePaths.isEmpty() -> "${participantPrefix}falta la firma."
+            else -> null
+        }
+    }
+
     fun validateMinor(minor: MinorAuth, minorLabel: String = "Participante"): Boolean {
         val checks = listOf(
             "minorName" to minor.minorName.isNotBlank(),
@@ -454,14 +481,17 @@ fun SignatureScreen(
                                 android.util.Log.d("MultiAuth", "🔘 Pulsado: Siguiente (participante ${currentMinorIndex + 1})")
 
                                 // Validar solo el menor actual antes de avanzar
-                                if (validateMinor(minors[currentMinorIndex])) {
+                                val validationError = validationErrorForMinor(
+                                    minors[currentMinorIndex],
+                                    currentMinorIndex + 1
+                                )
+                                if (validationError == null) {
                                     android.util.Log.d("MultiAuth", "✅ Participante ${currentMinorIndex + 1} válido, avanzando")
                                     currentMinorIndex++
                                     coroutineScope.launch { scrollState.animateScrollToItem(0) }
                                 } else {
                                     android.util.Log.d("MultiAuth", "❌ Validación fallida para participante ${currentMinorIndex + 1}")
-                                    showError = true
-                                    errorMessage = "Completa todos los campos del participante ${currentMinorIndex + 1}"
+                                    showValidationError(validationError)
                                 }
                             },
                             modifier = Modifier.weight(1f),
@@ -486,6 +516,10 @@ fun SignatureScreen(
                             android.util.Log.d("MultiAuth", "📋 Participantes a procesar: ${filledMinors.map { it.minorName }}")
 
                             // Validar SOLO los menores rellenados
+                            val validationErrors = filledMinors.mapIndexedNotNull { index, minor ->
+                                validationErrorForMinor(minor, index + 1)
+                            }
+
                             val allValid = filledMinors.all { minor ->
                                 val valid = validateMinor(minor)
                                 android.util.Log.d("MultiAuth", "🔍 '${minor.minorName}' válido: $valid")
@@ -512,19 +546,18 @@ fun SignatureScreen(
                                     },
                                     onError = { error ->
                                         android.util.Log.e("MultiAuth", "❌ onError: $error")
-                                        showError = true
-                                        errorMessage = error
+                                        showValidationError(error)
                                         isSubmitting = false
                                     }
                                 )
                             } else {
                                 android.util.Log.e("MultiAuth", "❌ Validación fallida")
-                                showError = true
-                                errorMessage = if (filledMinors.isEmpty()) {
+                                showValidationError(if (filledMinors.isEmpty()) {
                                     "Rellena al menos un participante para firmar"
                                 } else {
-                                    "Revisa los datos de los participantes rellenados"
-                                }
+                                    validationErrors.firstOrNull()
+                                        ?: "Revisa los datos de los participantes rellenados"
+                                })
                             }
                         },
                         modifier = Modifier.weight(1f),
@@ -545,7 +578,8 @@ fun SignatureScreen(
                 // ✅ Autorización única: botón normal
                 Button(
                     onClick = {
-                        if (validateMinor(minors.first())) {
+                        val validationError = validationErrorForMinor(minors.first())
+                        if (validationError == null) {
                             isSubmitting = true
                             showError = false
                             viewModel.signAuthorization(
@@ -558,8 +592,13 @@ fun SignatureScreen(
                                 minorName = minors.first().minorName,
                                 signaturePaths = minors.first().signaturePaths,
                                 onSuccess = { onNavigateBack() },
-                                onError = { error -> showError = true; errorMessage = error; isSubmitting = false }
+                                onError = { error ->
+                                    showValidationError(error)
+                                    isSubmitting = false
+                                }
                             )
+                        } else {
+                            showValidationError(validationError)
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),

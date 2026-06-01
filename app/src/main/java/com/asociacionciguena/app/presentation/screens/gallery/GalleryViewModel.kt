@@ -76,7 +76,7 @@ class GalleryViewModel @Inject constructor(
                     } catch (_: Exception) {
                         null
                     }
-                }.filter { it.date < now }
+                }.filter { it.date.date <= now.date }
 
                 val visibleExcursions = if (isAdmin) {
                     pastExcursions

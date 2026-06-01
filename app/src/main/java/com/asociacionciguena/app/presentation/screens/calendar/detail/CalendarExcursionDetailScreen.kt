@@ -86,6 +86,7 @@ fun CalendarExcursionDetailScreen(
             is CalendarExcursionDetailUiState.Success -> {
                 ExcursionDetailContent(
                     excursion = state.excursion,
+                    isAdmin = state.isAdmin,
                     viewModel = viewModel,
                     navController = navController,  // ← Pasar para navegación
                     onDownloadPdf = { url ->
@@ -149,12 +150,18 @@ fun CalendarExcursionDetailScreen(
 @Composable
 private fun ExcursionDetailContent(
     excursion: com.asociacionciguena.app.domain.model.Excursion,
+    isAdmin: Boolean,
     viewModel: CalendarExcursionDetailViewModel,
     navController: NavHostController,  // ← Para navegar a firma
     onDownloadPdf: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val activeAuthorizationCount by viewModel.getActiveAuthorizationCount().collectAsState(initial = 0)
+    val observedAuthorizationCount by viewModel.activeAuthorizationCount.collectAsState()
+    val activeAuthorizationCount = if (isAdmin) {
+        observedAuthorizationCount
+    } else {
+        excursion.currentParticipants
+    }
     val hasParticipantLimit = excursion.maxParticipants > 0
     val isCapacityFull = hasParticipantLimit && activeAuthorizationCount >= excursion.maxParticipants
     val remainingPlaces = if (hasParticipantLimit) {

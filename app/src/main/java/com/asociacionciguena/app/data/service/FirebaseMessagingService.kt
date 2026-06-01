@@ -54,6 +54,7 @@ class FirebaseMessagingService : FirebaseMessagingService() {
         // ✅ 2. Si hay usuario logueado, suscribir a topic privado (fotos)
         if (auth.currentUser != null) {
             subscribeToTopic(TOPIC_AUTHENTICATED)
+            subscribeToTopic(userNotificationTopic(auth.currentUser!!.uid))
             android.util.Log.d("FCM_TOPIC", "✅ Usuario logueado: suscrito a '$TOPIC_AUTHENTICATED'")
         }
 
@@ -95,6 +96,10 @@ class FirebaseMessagingService : FirebaseMessagingService() {
             }
     }
 
+    private fun userNotificationTopic(userId: String): String {
+        return "user_${userId.replace(Regex("[^A-Za-z0-9_\\-.~%]"), "_")}"
+    }
+
     fun unsubscribeFromTopic(topic: String) {
         FirebaseMessaging.getInstance().unsubscribeFromTopic(topic)
             .addOnCompleteListener { task ->
@@ -110,6 +115,7 @@ class FirebaseMessagingService : FirebaseMessagingService() {
     fun onUserLogin() {
         android.util.Log.d("FCM_TOPIC", "🔐 Usuario logueado: suscribiendo a '$TOPIC_AUTHENTICATED'")
         subscribeToTopic(TOPIC_AUTHENTICATED)
+        auth.currentUser?.uid?.let { subscribeToTopic(userNotificationTopic(it)) }
 
         // Actualizar token en Firestore por si acaso
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
@@ -123,6 +129,7 @@ class FirebaseMessagingService : FirebaseMessagingService() {
     fun onUserLogout() {
         android.util.Log.d("FCM_TOPIC", "🔓 Usuario deslogueado: desuscribiendo de '$TOPIC_AUTHENTICATED'")
         unsubscribeFromTopic(TOPIC_AUTHENTICATED)
+        auth.currentUser?.uid?.let { unsubscribeFromTopic(userNotificationTopic(it)) }
     }
 
     private fun showNotification(
@@ -279,7 +286,8 @@ class FirebaseMessagingService : FirebaseMessagingService() {
                         "fcmToken" to token,
                         "fcmTopics" to listOfNotNull(
                             TOPIC_PUBLIC,
-                            if (auth.currentUser != null) TOPIC_AUTHENTICATED else null
+                            if (auth.currentUser != null) TOPIC_AUTHENTICATED else null,
+                            userId?.let { userNotificationTopic(it) }
                         ),
                         "updatedAt" to com.google.firebase.Timestamp.now()
                     ),

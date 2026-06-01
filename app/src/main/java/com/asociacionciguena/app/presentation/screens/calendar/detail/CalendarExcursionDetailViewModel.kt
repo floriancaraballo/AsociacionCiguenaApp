@@ -26,8 +26,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import androidx.compose.ui.graphics.Path
-import com.google.firebase.Firebase
-import com.google.firebase.functions.functions
+import com.google.firebase.functions.FirebaseFunctions
 import java.util.UUID
 
 
@@ -36,6 +35,7 @@ class CalendarExcursionDetailViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth,
+    private val functions: FirebaseFunctions,
     private val paymentRepository: PaymentRepository,
     private val signedAuthorizationRepository: SignedAuthorizationRepository
 ) : ViewModel() {
@@ -46,6 +46,14 @@ class CalendarExcursionDetailViewModel @Inject constructor(
         CalendarExcursionDetailUiState.Loading
     )
     val uiState: StateFlow<CalendarExcursionDetailUiState> = _uiState.asStateFlow()
+
+    val activeAuthorizationCount: StateFlow<Int> =
+        signedAuthorizationRepository.getActiveAuthorizationCount(excursionId)
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = 0
+            )
 
     // ───────── NUEVO: Estado para mensaje de éxito de autorización ─────────
     private val _showAuthSuccess = MutableStateFlow(false)
@@ -81,7 +89,7 @@ class CalendarExcursionDetailViewModel @Inject constructor(
                     return@launch
                 }
 
-                val excursion = Excursion(
+                val loadedExcursion = Excursion(
                     id = excursionDoc.id,
                     title = excursionDoc.getString("title") ?: "",
                     description = excursionDoc.getString("description") ?: "",
@@ -97,7 +105,8 @@ class CalendarExcursionDetailViewModel @Inject constructor(
                     imageUrl = excursionDoc.getString("imageUrl"),
                     authorizationPdfUrl = excursionDoc.getString("authorizationPdfUrl"),
                     price = excursionDoc.getDouble("price"),  // ← NUEVO
-                    maxParticipants = excursionDoc.getLong("maxParticipants")?.toInt() ?: 0
+                    maxParticipants = excursionDoc.getLong("maxParticipants")?.toInt() ?: 0,
+                    currentParticipants = excursionDoc.getLong("currentParticipants")?.toInt() ?: 0
                 )
 
                 // Verificar si es admin
@@ -111,6 +120,15 @@ class CalendarExcursionDetailViewModel @Inject constructor(
                     role == "admin" || role == "superadmin"
                 } else {
                     false
+                }
+
+                val excursion = if (isAdmin) {
+                    loadedExcursion
+                } else {
+                    loadedExcursion.copy(
+                        currentParticipants = fetchServerParticipantCount(loadedExcursion.id)
+                            ?: loadedExcursion.currentParticipants
+                    )
                 }
 
                 _uiState.value = CalendarExcursionDetailUiState.Success(
@@ -233,8 +251,24 @@ class CalendarExcursionDetailViewModel @Inject constructor(
         }
     }
 
-    fun getActiveAuthorizationCount(): Flow<Int> {
-        return signedAuthorizationRepository.getActiveAuthorizationCount(excursionId)
+    private suspend fun fetchServerParticipantCount(excursionId: String): Int? {
+        return try {
+            val result = functions
+                .getHttpsCallable("getExcursionParticipantCount")
+                .call(mapOf("excursionId" to excursionId))
+                .await()
+
+            @Suppress("UNCHECKED_CAST")
+            val data = result.getData() as? Map<String, Any?>
+            (data?.get("currentParticipants") as? Number)?.toInt()
+        } catch (e: Exception) {
+            android.util.Log.w(
+                "CalendarDetail",
+                "No se pudo obtener el contador de participantes desde Functions",
+                e
+            )
+            null
+        }
     }
 
     /**
@@ -334,7 +368,6 @@ class CalendarExcursionDetailViewModel @Inject constructor(
                 // 2. ✅ LLAMAR A CLOUD FUNCTION PARA EMAIL BATCH (SOLO UNA VEZ)
                 if (authorizationIds.isNotEmpty()) {
                     try {
-                        val functions = Firebase.functions("europe-west1")  // ← Región correcta
                         val sendBatchEmail = functions.getHttpsCallable("sendBatchAuthorizationEmail")
 
                         android.util.Log.d("BatchDebug", "🔹 Llamando a sendBatchAuthorizationEmail")

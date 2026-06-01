@@ -16,6 +16,7 @@ fun ExcursionDto.toDomain(): Excursion {
         imageUrl = imageUrl,
         authorizationPdfUrl = authorizationPdfUrl,
         price = price,
-        maxParticipants = maxParticipants
+        maxParticipants = maxParticipants,
+        currentParticipants = currentParticipants
     )
 }

@@ -34,6 +34,7 @@ class FCMTokenManager @Inject constructor(
 
             val token = messaging.token.await()
             saveTokenToFirestore(token)
+            subscribeToNotificationTopics(userId)
             Result.success(token)
         } catch (e: Exception) {
             Result.failure(e)
@@ -106,7 +107,7 @@ class FCMTokenManager @Inject constructor(
     private suspend fun saveUserNotificationToken(userId: String, token: String) {
         val tokenData = mapOf(
             "fcmToken" to token,
-            "fcmTopics" to listOf("public", "authenticated"),
+            "fcmTopics" to listOf("public", "authenticated", userNotificationTopic(userId)),
             "fcmTokenUpdatedAt" to FieldValue.serverTimestamp(),
             "fcmTokenInvalidatedAt" to FieldValue.delete()
         )
@@ -127,6 +128,19 @@ class FCMTokenManager @Inject constructor(
     /**
      * Eliminar token (al cerrar sesión)
      */
+    private suspend fun subscribeToNotificationTopics(userId: String?) {
+        messaging.subscribeToTopic("public").await()
+
+        if (userId != null) {
+            messaging.subscribeToTopic("authenticated").await()
+            messaging.subscribeToTopic(userNotificationTopic(userId)).await()
+        }
+    }
+
+    private fun userNotificationTopic(userId: String): String {
+        return "user_${userId.replace(Regex("[^A-Za-z0-9_\\-.~%]"), "_")}"
+    }
+
     suspend fun deleteToken() {
         val userId = auth.currentUser?.uid
 
@@ -137,6 +151,7 @@ class FCMTokenManager @Inject constructor(
                 clearDeviceTokenUser(token)
 
                 clearUserNotificationToken(userId)
+                messaging.unsubscribeFromTopic(userNotificationTopic(userId)).await()
             } catch (e: Exception) {
                 android.util.Log.e("FCMTokenManager", "Error eliminando token: ${e.message}")
             }

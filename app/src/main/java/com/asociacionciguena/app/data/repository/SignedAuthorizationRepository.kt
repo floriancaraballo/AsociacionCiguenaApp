@@ -17,6 +17,7 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import com.google.firebase.firestore.snapshots
 
@@ -229,16 +230,19 @@ class SignedAuthorizationRepository @Inject constructor(
             val maxParticipants = excursionDoc.getLong("maxParticipants")?.toInt() ?: 0
             if (maxParticipants <= 0) return true
 
-            val activeCount = firestore.collection("signedAuthorizations")
-                .whereEqualTo("excursionId", excursionId)
-                .get()
-                .await()
-                .documents
-                .count { doc -> doc.getString("status") in activeAuthorizationStatuses }
+            val activeCount = getActiveAuthorizationCountOnce(excursionId)
+            if (activeCount == null) {
+                android.util.Log.w(
+                    "AuthRepo",
+                    "No se pudo verificar el cupo de $excursionId; se permite continuar para no bloquear por permisos"
+                )
+                return true
+            }
 
             activeCount + requestedParticipants <= maxParticipants
         } catch (e: Exception) {
-            false
+            android.util.Log.w("AuthRepo", "Error verificando cupo de $excursionId", e)
+            true
         }
     }
 
@@ -251,6 +255,38 @@ class SignedAuthorizationRepository @Inject constructor(
                     doc.getString("status") in activeAuthorizationStatuses
                 }
             }
+            .catch { e ->
+                android.util.Log.w("AuthRepo", "No se pudo observar el conteo de autorizaciones", e)
+                emit(getPublishedAuthorizationCount(excursionId) ?: 0)
+            }
+    }
+
+    private suspend fun getActiveAuthorizationCountOnce(excursionId: String): Int? {
+        return try {
+            firestore.collection("signedAuthorizations")
+                .whereEqualTo("excursionId", excursionId)
+                .get()
+                .await()
+                .documents
+                .count { doc -> doc.getString("status") in activeAuthorizationStatuses }
+        } catch (e: Exception) {
+            android.util.Log.w("AuthRepo", "No se pudo contar autorizaciones activas", e)
+            getPublishedAuthorizationCount(excursionId)
+        }
+    }
+
+    private suspend fun getPublishedAuthorizationCount(excursionId: String): Int? {
+        return try {
+            firestore.collection("excursions")
+                .document(excursionId)
+                .get()
+                .await()
+                .getLong("currentParticipants")
+                ?.toInt()
+        } catch (e: Exception) {
+            android.util.Log.w("AuthRepo", "No se pudo leer currentParticipants", e)
+            null
+        }
     }
 
     /**

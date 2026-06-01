@@ -1,8 +1,11 @@
 import * as admin from "firebase-admin";
 import {randomBytes} from "node:crypto";
-import {onDocumentCreated} from "firebase-functions/v2/firestore";
+import {
+  onDocumentCreated,
+  onDocumentUpdated,
+  onDocumentWritten,
+} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
-import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { generateMinorsListDocx } from "./generateMinorsList";
 
 admin.initializeApp();
@@ -31,6 +34,11 @@ interface InvitationUserData {
 
 const HOSTING_BASE_URL = "https://asociacion-ciguena-188da.web.app";
 const CUSTOM_AUTH_ACTION_URL = `${HOSTING_BASE_URL}/auth/action`;
+const ACTIVE_AUTHORIZATION_STATUSES = ["PENDING", "APPROVED"];
+
+function userNotificationTopic(userId: string): string {
+  return `user_${userId.replace(/[^A-Za-z0-9_\-.~%]/g, "_")}`;
+}
 
 function generateTemporaryPassword(): string {
   return `${randomBytes(18).toString("base64url")}Aa1!`;
@@ -1069,7 +1077,38 @@ export const onAuthorizationApproved = onDocumentUpdated(
       ].filter((token): token is string => Boolean(token))));
 
       if (tokens.length === 0) {
-        console.log(`Usuario ${userId} sin tokens FCM activos para autorizacion ${authorizationId}`);
+        const fallbackBody = minorName
+          ? `La autorizaciÃ³n de ${minorName} para ${excursionTitle} ha sido aprobada.`
+          : `Tu autorizaciÃ³n para ${excursionTitle} ha sido aprobada.`;
+        const topic = userNotificationTopic(userId);
+
+        const topicResponse = await admin.messaging().send({
+          topic,
+          notification: {
+            title: "AutorizaciÃ³n aprobada",
+            body: fallbackBody,
+          },
+          data: {
+            type: "authorization_approved",
+            itemId: excursionId || "",
+            authorizationId,
+            title: "AutorizaciÃ³n aprobada",
+            body: fallbackBody,
+          },
+          android: {
+            priority: "high" as const,
+            notification: {
+              icon: "ic_notification",
+              color: "#1976D2",
+              visibility: "public" as const,
+            },
+          },
+        });
+
+        console.log(
+          `Usuario ${userId} sin tokens FCM activos; ` +
+          `notificacion enviada al topic ${topic}: ${topicResponse}`
+        );
         return null;
       }
 
@@ -1095,6 +1134,7 @@ export const onAuthorizationApproved = onDocumentUpdated(
           notification: {
             icon: "ic_notification",
             color: "#1976D2",
+            visibility: "public" as const,
           },
         },
       };
@@ -1152,6 +1192,93 @@ export const onAuthorizationApproved = onDocumentUpdated(
     }
   }
 );
+
+async function updateExcursionCurrentParticipants(excursionId: string) {
+  if (!excursionId) {
+    return;
+  }
+
+  const authorizationsSnapshot = await admin.firestore()
+    .collection("signedAuthorizations")
+    .where("excursionId", "==", excursionId)
+    .get();
+
+  const currentParticipants = authorizationsSnapshot.docs.filter((doc) =>
+    ACTIVE_AUTHORIZATION_STATUSES.includes(doc.get("status"))
+  ).length;
+
+  await admin.firestore().collection("excursions").doc(excursionId).set(
+    {
+      currentParticipants,
+      currentParticipantsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    {merge: true}
+  );
+
+  console.log(
+    `Participantes actualizados para excursion ${excursionId}: ${currentParticipants}`
+  );
+}
+
+export const syncExcursionCurrentParticipants = onDocumentWritten(
+  {
+    document: "signedAuthorizations/{authorizationId}",
+    region: "europe-west1",
+  },
+  async (event) => {
+    try {
+      const beforeData = event.data?.before.data();
+      const afterData = event.data?.after.data();
+      const excursionIds = new Set<string>();
+
+      const beforeExcursionId = beforeData?.excursionId as string | undefined;
+      const afterExcursionId = afterData?.excursionId as string | undefined;
+
+      if (beforeExcursionId) {
+        excursionIds.add(beforeExcursionId);
+      }
+      if (afterExcursionId) {
+        excursionIds.add(afterExcursionId);
+      }
+
+      await Promise.all(
+        Array.from(excursionIds).map((excursionId) =>
+          updateExcursionCurrentParticipants(excursionId)
+        )
+      );
+
+      return null;
+    } catch (error) {
+      console.error("Error en syncExcursionCurrentParticipants:", error);
+      return null;
+    }
+  }
+);
+
+export const getExcursionParticipantCount = onCall({
+  region: "europe-west1",
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Debes iniciar sesiÃ³n");
+  }
+
+  const {excursionId} = request.data as {excursionId?: string};
+
+  if (!excursionId || typeof excursionId !== "string") {
+    throw new HttpsError("invalid-argument", "Falta excursionId");
+  }
+
+  await updateExcursionCurrentParticipants(excursionId);
+
+  const excursionDoc = await admin.firestore()
+    .collection("excursions")
+    .doc(excursionId)
+    .get();
+
+  return {
+    currentParticipants: excursionDoc.get("currentParticipants") || 0,
+  };
+});
 
 export const sendBatchAuthorizationEmail = onCall({
 

@@ -8,6 +8,7 @@ import coil.request.ErrorResult
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.asociacionciguena.app.data.datasource.local.PreferencesDataSource
+import com.asociacionciguena.app.data.manager.FCMTokenManager
 import com.asociacionciguena.app.util.NetworkMonitor
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
@@ -50,6 +51,7 @@ class MainViewModel @Inject constructor(
     private val preferencesDataSource: PreferencesDataSource,
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore,
+    private val fcmTokenManager: FCMTokenManager,
     private val imageLoader: ImageLoader,
     @ApplicationContext private val context: Context,
     val networkMonitor: NetworkMonitor
@@ -88,6 +90,10 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             val isOnboardingCompleted = preferencesDataSource.isOnboardingCompleted().first()
             val isUserLoggedIn = auth.currentUser != null
+
+            if (isUserLoggedIn) {
+                refreshNotificationToken()
+            }
 
             val remainingPreloadUrls = preloadStartupContent(auth.currentUser?.uid)
 
@@ -267,7 +273,8 @@ class MainViewModel @Inject constructor(
                         .toLocalDateTime(TimeZone.currentSystemDefault())
 
                     doc.id.takeIf {
-                        excursionDate < now && (isAdmin || excursionDate.year == registrationYear)
+                        excursionDate.date <= now.date &&
+                            (isAdmin || excursionDate.year == registrationYear)
                     }
                 }
                 .take(GALLERY_EXCURSION_PRELOAD_LIMIT)
@@ -361,12 +368,28 @@ class MainViewModel @Inject constructor(
                     currentState.isUserLoggedIn != isUserLoggedIn ||
                     currentState.currentUserId != currentUserId
                 ) {
+                    if (isUserLoggedIn) {
+                        refreshNotificationToken()
+                    }
+
                     _initState.value = currentState.copy(
                         isUserLoggedIn = isUserLoggedIn,
                         currentUserId = currentUserId
                     )
                 }
             }
+        }
+    }
+
+    private fun refreshNotificationToken() {
+        viewModelScope.launch {
+            fcmTokenManager.refreshToken()
+                .onFailure { error ->
+                    android.util.Log.w(
+                        "MainViewModel",
+                        "No se pudo actualizar el token FCM: ${error.message}"
+                    )
+                }
         }
     }
 
