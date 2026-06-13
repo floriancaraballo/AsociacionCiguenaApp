@@ -16,7 +16,9 @@ data class Excursion(
     val currentParticipants: Int = 0,
     val registrationClosed: Boolean = false,
     val registrationClosureReason: RegistrationClosureReason? = null,
-    val registrationClosureSource: RegistrationClosureSource? = null
+    val registrationClosureSource: RegistrationClosureSource? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )
 
 enum class RegistrationClosureReason {

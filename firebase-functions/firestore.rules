@@ -16,6 +16,15 @@ service cloud.firestore {
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
     }
 
+    function isMonitor() {
+      return isAuthenticated() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'monitor';
+    }
+
+    function canManageContent() {
+      return isAdmin() || isMonitor();
+    }
+
     // Super-Admin específico
     function isSuperAdmin() {
       return isAuthenticated() && 
@@ -25,7 +34,7 @@ service cloud.firestore {
     // Socio (incluye admin y super-admin)
     function isMember() {
       return isAuthenticated() && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['socio', 'admin', 'superadmin'];
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['socio', 'monitor', 'admin', 'superadmin'];
     }
 
     function hasApprovedAuthorization(paymentData) {
@@ -63,8 +72,8 @@ service cloud.firestore {
       allow update: if request.auth.uid == userId 
                     && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
 
-      // Creación al registrarse
-      allow create: if request.auth != null;
+      // Creación/migración únicamente del documento propio.
+      allow create: if isAuthenticated() && request.auth.uid == userId;
 
       // Eliminación (delete): admin, o el propio usuario si es para borrar el documento temporal durante la migración
       allow delete: if isAdmin() || (isAuthenticated() && resource.data.email == request.auth.token.email);
@@ -83,8 +92,8 @@ service cloud.firestore {
       // Lectura: públicas para todos, privadas solo para autenticados
       allow read: if resource.data.isPublic == true || isAuthenticated();
 
-      // Escritura: admins y super-admins
-      allow write: if isAdmin();
+      allow create, update: if canManageContent();
+      allow delete: if isAdmin();
     }
 
     // ========================================
@@ -109,16 +118,15 @@ service cloud.firestore {
       // - Permitido a todos los usuarios autenticados para poder cargar la galería completa
       allow read: if isAuthenticated();
       
-      // Escritura: solo admins y super-admins
-      allow write: if isAdmin();
+      allow create, delete: if canManageContent();
+      allow update: if isAdmin();
     }
 
     // ========================================
     // UPLOAD BATCHES
     // ========================================
     match /uploadBatches/{batchId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
+      allow read, write: if canManageContent();
     }
     
     // ========================================

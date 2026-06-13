@@ -30,6 +30,7 @@ fun NewsManagementScreen(
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val canDeleteNews by viewModel.canDeleteNews.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -94,6 +95,7 @@ fun NewsManagementScreen(
                             )
                         }
                     },
+                    canDeleteNews = canDeleteNews,
                     modifier = Modifier.padding(paddingValues)
                 )
             }
@@ -122,6 +124,7 @@ private fun NewsListContent(
     onEditClick: (News) -> Unit,
     onDeleteClick: (String) -> Unit,
     onToggleVisibility: (String, Boolean) -> Unit,
+    canDeleteNews: Boolean,
     modifier: Modifier = Modifier
 ) {
     // Filtrar noticias
@@ -228,7 +231,8 @@ private fun NewsListContent(
                         news = newsItem,
                         onEditClick = { onEditClick(newsItem) },
                         onDeleteClick = { onDeleteClick(newsItem.id) },
-                        onToggleVisibility = { onToggleVisibility(newsItem.id, newsItem.isPublic) }
+                        onToggleVisibility = { onToggleVisibility(newsItem.id, newsItem.isPublic) },
+                        canDelete = canDeleteNews
                     )
                 }
             }
@@ -244,7 +248,8 @@ private fun NewsManagementCard(
     news: News,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit,
-    onToggleVisibility: () -> Unit
+    onToggleVisibility: () -> Unit,
+    canDelete: Boolean
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
 
@@ -327,27 +332,29 @@ private fun NewsManagementCard(
                     Text("Editar")
                 }
 
-                OutlinedButton(
-                    onClick = { showDeleteDialog = true },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Eliminar")
+                if (canDelete) {
+                    OutlinedButton(
+                        onClick = { showDeleteDialog = true },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Eliminar")
+                    }
                 }
             }
         }
     }
 
     // Diálogo de confirmación
-    if (showDeleteDialog) {
+    if (showDeleteDialog && canDelete) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Eliminar publicación") },

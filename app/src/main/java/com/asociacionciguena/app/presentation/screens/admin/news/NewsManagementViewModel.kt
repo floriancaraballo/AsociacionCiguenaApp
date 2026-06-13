@@ -3,6 +3,7 @@ package com.asociacionciguena.app.presentation.screens.admin.news
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.asociacionciguena.app.domain.model.News
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,14 +16,35 @@ import kotlinx.datetime.toLocalDateTime
 
 @HiltViewModel
 class NewsManagementViewModel @Inject constructor(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val auth: FirebaseAuth
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<NewsManagementUiState>(NewsManagementUiState.Loading)
     val uiState: StateFlow<NewsManagementUiState> = _uiState.asStateFlow()
 
+    private val _canDeleteNews = MutableStateFlow(false)
+    val canDeleteNews: StateFlow<Boolean> = _canDeleteNews.asStateFlow()
+
     init {
+        loadPermissions()
         loadNews()
+    }
+
+    private fun loadPermissions() {
+        viewModelScope.launch {
+            val userId = auth.currentUser?.uid ?: return@launch
+            try {
+                val role = firestore.collection("users")
+                    .document(userId)
+                    .get()
+                    .await()
+                    .getString("role")
+                _canDeleteNews.value = role == "admin" || role == "superadmin"
+            } catch (_: Exception) {
+                _canDeleteNews.value = false
+            }
+        }
     }
 
     /**
@@ -86,6 +108,13 @@ class NewsManagementViewModel @Inject constructor(
     fun deleteNews(newsId: String, onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
+                if (!_canDeleteNews.value) {
+                    _uiState.value = NewsManagementUiState.Error(
+                        message = "No tienes permisos para eliminar publicaciones"
+                    )
+                    return@launch
+                }
+
                 firestore.collection("news")
                     .document(newsId)
                     .delete()

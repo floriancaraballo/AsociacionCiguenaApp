@@ -7,7 +7,7 @@ data class User(
     val email: String,
     val displayName: String,
     val photoUrl: String? = null,
-    val role: String,  // "admin" o "socio"
+    val role: String,  // "superadmin", "admin", "monitor" o "socio"
     val createdAt: LocalDateTime,
     val photoConsents: List<String>  // IDs de excursiones autorizadas
 )

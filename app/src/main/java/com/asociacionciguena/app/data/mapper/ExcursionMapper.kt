@@ -22,6 +22,8 @@ fun ExcursionDto.toDomain(): Excursion {
         currentParticipants = currentParticipants,
         registrationClosed = registrationClosed,
         registrationClosureReason = RegistrationClosureReason.fromStorage(registrationClosureReason),
-        registrationClosureSource = RegistrationClosureSource.fromStorage(registrationClosureSource)
+        registrationClosureSource = RegistrationClosureSource.fromStorage(registrationClosureSource),
+        latitude = latitude,
+        longitude = longitude
     )
 }

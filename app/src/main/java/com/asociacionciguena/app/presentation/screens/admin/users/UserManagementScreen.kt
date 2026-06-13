@@ -198,6 +198,18 @@ private fun CreateUserDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
+                            selected = selectedRole == "monitor",
+                            onClick = { selectedRole = "monitor" }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Monitor")
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
                             selected = selectedRole == "socio",
                             onClick = { selectedRole = "socio" }
                         )
@@ -346,6 +358,7 @@ private fun UserCard(
                                 text = when (user.role) {
                                     "superadmin" -> "Super-Admin"
                                     "admin" -> "Admin"
+                                    "monitor" -> "Monitor"
                                     "socio" -> "Socio"
                                     else -> "Usuario"
                                 }
@@ -365,6 +378,7 @@ private fun UserCard(
                             imageVector = when (user.role) {
                                 "superadmin" -> Icons.Default.Shield
                                 "admin" -> Icons.Default.Shield
+                                "monitor" -> Icons.Default.Edit
                                 else -> Icons.Default.Person
                             },
                             contentDescription = null,
@@ -375,6 +389,7 @@ private fun UserCard(
                         containerColor = when (user.role) {
                             "superadmin" -> MaterialTheme.colorScheme.tertiaryContainer
                             "admin" -> MaterialTheme.colorScheme.primaryContainer
+                            "monitor" -> MaterialTheme.colorScheme.secondaryContainer
                             else -> MaterialTheme.colorScheme.secondaryContainer
                         }
                     ),
@@ -413,6 +428,31 @@ private fun UserCard(
                             )
                             Text(
                                 text = "Gestión de contenido y usuarios",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = user.role == "monitor",
+                            onClick = {
+                                onRoleChange("monitor")
+                                showRoleDialog = false
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Monitor",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = "Publicaciones y fotos de excursiones",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

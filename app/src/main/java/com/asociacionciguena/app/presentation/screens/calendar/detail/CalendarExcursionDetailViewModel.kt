@@ -105,6 +105,8 @@ class CalendarExcursionDetailViewModel @Inject constructor(
                             .toLocalDateTime(TimeZone.currentSystemDefault())
                     },
                     location = excursionDoc.getString("location") ?: "",
+                    latitude = excursionDoc.getDouble("latitude"),
+                    longitude = excursionDoc.getDouble("longitude"),
                     imageUrl = excursionDoc.getString("imageUrl"),
                     authorizationPdfUrl = excursionDoc.getString("authorizationPdfUrl"),
                     price = excursionDoc.getDouble("price"),

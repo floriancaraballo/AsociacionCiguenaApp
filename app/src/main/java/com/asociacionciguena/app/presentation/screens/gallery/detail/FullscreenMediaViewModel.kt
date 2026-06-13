@@ -70,7 +70,8 @@ class FullscreenMediaViewModel @Inject constructor(
                     .await()
 
                 val role = userDoc.getString("role")
-                val isAdmin = role == "admin" || role == "superadmin"
+                val canManageMedia =
+                    role == "admin" || role == "superadmin" || role == "monitor"
                 val registrationYear = userDoc.registrationYear()
                 val excursionYear = excursionDoc.getTimestamp("date")?.let {
                     kotlinx.datetime.Instant.fromEpochMilliseconds(it.toDate().time)
@@ -78,7 +79,7 @@ class FullscreenMediaViewModel @Inject constructor(
                         .year
                 }
 
-                if (!isAdmin && excursionYear != registrationYear) {
+                if (!canManageMedia && excursionYear != registrationYear) {
                     _uiState.value = FullscreenMediaUiState.Error("No tienes permiso para ver estas fotos")
                     return@launch
                 }

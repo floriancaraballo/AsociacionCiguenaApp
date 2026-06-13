@@ -8,6 +8,7 @@ import android.os.Build
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.asociacionciguena.app.di.CoilImageLoaderFactory
+import com.google.android.libraries.places.api.Places
 import dagger.hilt.android.HiltAndroidApp
 import android.app.Notification
 
@@ -26,6 +27,9 @@ class AsociacionCiguenaApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        if (BuildConfig.PLACES_API_KEY.isNotBlank() && !Places.isInitialized()) {
+            Places.initializeWithNewPlacesApiEnabled(this, BuildConfig.PLACES_API_KEY)
+        }
         // ✅ Crear canal de notificaciones al inicio de la app
         // Esto garantiza que exista antes de que Firebase intente usarlo
         createNotificationChannel()

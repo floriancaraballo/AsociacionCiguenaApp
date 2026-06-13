@@ -127,6 +127,11 @@ class UserManagementViewModel @Inject constructor(
                     return@launch
                 }
 
+                if (newRole !in listOf("admin", "monitor", "socio")) {
+                    onError("Rol no válido")
+                    return@launch
+                }
+
                 if (userId == currentUserId && newRole !in listOf("admin", "superadmin")) {
                     onError("No puedes degradar tu propio rol")
                     return@launch
@@ -180,6 +185,11 @@ class UserManagementViewModel @Inject constructor(
 
                 if (role == "superadmin") {
                     onError("⛔ No se puede crear Super-Administradores desde la app")
+                    return@launch
+                }
+
+                if (role !in listOf("admin", "monitor", "socio")) {
+                    onError("Rol no válido")
                     return@launch
                 }
 

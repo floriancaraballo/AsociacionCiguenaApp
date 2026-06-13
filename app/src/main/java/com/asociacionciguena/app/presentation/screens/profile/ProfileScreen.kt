@@ -467,6 +467,7 @@ private fun ProfileContent(
                     value = when (user.role) {
                         "admin" -> "Administrador"
                         //"superadmin" -> "Superadministrador"
+                        "monitor" -> "Monitor"
                         "socio" -> "Socio"
                         else -> user.role.replaceFirstChar { it.uppercase() }
                     }
@@ -477,7 +478,7 @@ private fun ProfileContent(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Botón Panel Admin (solo si es admin)
-        if (user.role == "admin" || user.role == "superadmin") {
+        if (user.role in listOf("admin", "superadmin", "monitor")) {
             Button(
                 onClick = onNavigateToAdminPanel,
                 modifier = Modifier
@@ -493,7 +494,7 @@ private fun ProfileContent(
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Panel de Administración")
+                Text(if (user.role == "monitor") "Panel de Monitor" else "Panel de Administración")
             }
 
             Spacer(modifier = Modifier.height(16.dp))

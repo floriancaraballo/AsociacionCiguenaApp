@@ -27,12 +27,17 @@ fun AdminDashboardScreen(
 ) {
     val stats by viewModel.stats.collectAsState()
     val isLoadingStats by viewModel.isLoadingStats.collectAsState()
+    val currentRole by viewModel.currentRole.collectAsState()
+    val isMonitor = currentRole == "monitor"
+    val isAdmin = currentRole == "admin" || currentRole == "superadmin"
 
     @OptIn(ExperimentalMaterial3Api::class)  // ← AÑADIR ESTA ANOTACIÓN
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Panel de Administración") },
+                title = {
+                    Text(if (isMonitor) "Panel de Monitor" else "Panel de Administración")
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, "Volver")
@@ -65,7 +70,11 @@ fun AdminDashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Card de estadísticas generales
-                StatsOverviewCard(stats = stats, isLoading = isLoadingStats)
+                StatsOverviewCard(
+                    stats = stats,
+                    isLoading = isLoadingStats,
+                    showUserStats = isAdmin
+                )
 
                 Text(
                     text = "Gestión",
@@ -82,14 +91,16 @@ fun AdminDashboardScreen(
                         title = "Gestionar Publicaciones",
                         icon = Icons.Default.Article,
                         onClick = onNavigateToNews,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        enabled = isAdmin || isMonitor
                     )
 
                     AdminOptionCard(
                         title = "Gestionar Excursiones",
                         icon = Icons.Default.CalendarMonth,
                         onClick = onNavigateToExcursions,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        enabled = isAdmin
                     )
                 }
 
@@ -101,7 +112,8 @@ fun AdminDashboardScreen(
                         title = "Subir Fotos",
                         icon = Icons.Default.Photo,
                         onClick = onNavigateToPhotos,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        enabled = isAdmin || isMonitor
                     )
 
                     AdminOptionCard(
@@ -109,7 +121,7 @@ fun AdminDashboardScreen(
                         icon = Icons.Default.People,
                         onClick = onNavigateToUsers,
                         modifier = Modifier.weight(1f),
-                        enabled = true
+                        enabled = isAdmin
                     )
                 }
             }
@@ -121,6 +133,7 @@ fun AdminDashboardScreen(
 private fun StatsOverviewCard(
     stats: DashboardStats,
     isLoading: Boolean,
+    showUserStats: Boolean,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -173,12 +186,14 @@ private fun StatsOverviewCard(
                 value = "${stats.totalPhotos}"
             )
 
-            StatRow(
-                icon = Icons.Default.People,
-                label = "Usuarios",
-                value = "${stats.totalUsers}",
-                detail = "${stats.adminUsers} administradores"
-            )
+            if (showUserStats) {
+                StatRow(
+                    icon = Icons.Default.People,
+                    label = "Usuarios",
+                    value = "${stats.totalUsers}",
+                    detail = "${stats.adminUsers} administradores"
+                )
+            }
         }
     }
 }

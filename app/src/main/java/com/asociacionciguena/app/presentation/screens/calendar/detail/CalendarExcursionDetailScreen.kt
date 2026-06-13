@@ -1,10 +1,14 @@
 package com.asociacionciguena.app.presentation.screens.calendar.detail
 
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -131,6 +135,15 @@ fun CalendarExcursionDetailScreen(
                             ).show()
                         }
                     },
+                    onLocationClick = { location, latitude, longitude ->
+                        if (!openLocationInMaps(context, location, latitude, longitude)) {
+                            Toast.makeText(
+                                context,
+                                "No se ha encontrado una aplicación para abrir el mapa",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    },
                     modifier = Modifier.padding(paddingValues)
                 )
             }
@@ -155,6 +168,7 @@ private fun ExcursionDetailContent(
     viewModel: CalendarExcursionDetailViewModel,
     navController: NavHostController,  // ← Para navegar a firma
     onDownloadPdf: (String) -> Unit,
+    onLocationClick: (String, Double?, Double?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val observedAuthorizationCount by viewModel.activeAuthorizationCount.collectAsState()
@@ -243,13 +257,34 @@ private fun ExcursionDetailContent(
             }
 
             // Ubicación
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
+            Card(
+                onClick = {
+                    onLocationClick(
+                        excursion.location,
+                        excursion.latitude,
+                        excursion.longitude
+                    )
+                },
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                )
+            ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.LocationOn, null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text("Ubicación", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
                         Text(excursion.location, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                        Text(
+                            "Abrir en mapas",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
                     }
+                    Icon(
+                        Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = "Abrir ubicación en mapas",
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
                 }
             }
 
@@ -475,6 +510,48 @@ private fun ExcursionDetailContent(
                 }
             }
         }
+    }
+}
+
+private fun openLocationInMaps(
+    context: Context,
+    location: String,
+    latitude: Double?,
+    longitude: Double?
+): Boolean {
+    val normalizedLocation = location.trim()
+    if (normalizedLocation.isEmpty()) return false
+
+    val hasCoordinates = latitude != null && longitude != null
+    val query = if (hasCoordinates) {
+        "$latitude,$longitude"
+    } else {
+        normalizedLocation
+    }
+    val encodedQuery = Uri.encode(query)
+    val encodedLabel = Uri.encode(normalizedLocation)
+    val mapIntents = listOf(
+        Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse(
+                if (hasCoordinates) {
+                    "geo:$latitude,$longitude?q=$latitude,$longitude($encodedLabel)"
+                } else {
+                    "geo:0,0?q=$encodedQuery"
+                }
+            )
+        ),
+        Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse("https://www.google.com/maps/search/?api=1&query=$encodedQuery")
+        )
+    )
+
+    return mapIntents.any { intent ->
+        runCatching {
+            context.startActivity(intent)
+            true
+        }.getOrDefault(false)
     }
 }
 

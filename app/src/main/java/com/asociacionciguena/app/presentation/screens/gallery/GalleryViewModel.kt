@@ -49,7 +49,7 @@ class GalleryViewModel @Inject constructor(
                     .get()
                     .await()
 
-                val isAdmin = userDoc.isAdmin()
+                val canManageMedia = userDoc.canManageMedia()
                 val registrationYear = userDoc.registrationYear()
 
                 val now = Clock.System.now()
@@ -70,6 +70,8 @@ class GalleryViewModel @Inject constructor(
                                     .toLocalDateTime(TimeZone.currentSystemDefault())
                             } ?: now,
                             location = doc.getString("location") ?: "",
+                            latitude = doc.getDouble("latitude"),
+                            longitude = doc.getDouble("longitude"),
                             imageUrl = doc.getString("imageUrl"),
                             authorizationPdfUrl = doc.getString("authorizationPdfUrl")
                         )
@@ -78,7 +80,7 @@ class GalleryViewModel @Inject constructor(
                     }
                 }.filter { it.date.date <= now.date }
 
-                val visibleExcursions = if (isAdmin) {
+                val visibleExcursions = if (canManageMedia) {
                     pastExcursions
                 } else {
                     registrationYear?.let { year ->
@@ -141,9 +143,9 @@ class GalleryViewModel @Inject constructor(
             }
     }
 
-    private fun DocumentSnapshot.isAdmin(): Boolean {
+    private fun DocumentSnapshot.canManageMedia(): Boolean {
         val role = getString("role")
-        return role == "admin" || role == "superadmin"
+        return role == "admin" || role == "superadmin" || role == "monitor"
     }
 
     private fun DocumentSnapshot.registrationYear(): Int? {

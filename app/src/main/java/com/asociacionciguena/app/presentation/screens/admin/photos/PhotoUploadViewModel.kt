@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.asociacionciguena.app.util.ImageCompressor
 import com.asociacionciguena.app.util.NetworkMonitor
 import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
@@ -29,6 +30,7 @@ class PhotoUploadViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
+    private val auth: FirebaseAuth,
     @ApplicationContext private val context: Context,
     private val networkMonitor: NetworkMonitor
 ) : ViewModel() {
@@ -121,6 +123,14 @@ class PhotoUploadViewModel @Inject constructor(
                     return@launch
                 }
 
+                val uploaderId = auth.currentUser?.uid
+                if (uploaderId == null || !canManageExcursionMedia(uploaderId)) {
+                    _uiState.value = PhotoUploadUiState.Error(
+                        "No tienes permisos para subir fotos"
+                    )
+                    return@launch
+                }
+
                 val currentState = _uiState.value
                 if (currentState !is PhotoUploadUiState.PhotosSelected) {
                     _uiState.value = PhotoUploadUiState.Error("Estado invalido")
@@ -200,7 +210,7 @@ class PhotoUploadViewModel @Inject constructor(
                         "excursionId" to selectedExcursionId,
                         "imageUrl" to downloadUrl,
                         "storagePath" to storagePath,
-                        "uploadedBy" to "admin",
+                        "uploadedBy" to uploaderId,
                         "uploadedAt" to Timestamp.now(),
                         "authorizedUsers" to emptyList<String>(),
                         "batchId" to batchId,
@@ -276,6 +286,15 @@ class PhotoUploadViewModel @Inject constructor(
 
     fun reset() {
         _uiState.value = PhotoUploadUiState.Idle
+    }
+
+    private suspend fun canManageExcursionMedia(userId: String): Boolean {
+        val role = firestore.collection("users")
+            .document(userId)
+            .get()
+            .await()
+            .getString("role")
+        return role == "admin" || role == "superadmin" || role == "monitor"
     }
 }
 

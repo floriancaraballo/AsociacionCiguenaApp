@@ -18,8 +18,8 @@ class AdminDashboardViewModel @Inject constructor(
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
-    private val _isAdmin = MutableStateFlow(false)
-    val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
+    private val _currentRole = MutableStateFlow<String?>(null)
+    val currentRole: StateFlow<String?> = _currentRole.asStateFlow()
 
     private val _stats = MutableStateFlow(DashboardStats())
     val stats: StateFlow<DashboardStats> = _stats.asStateFlow()
@@ -28,11 +28,10 @@ class AdminDashboardViewModel @Inject constructor(
     val isLoadingStats: StateFlow<Boolean> = _isLoadingStats.asStateFlow()
 
     init {
-        checkAdminStatus()
-        loadStats()
+        loadCurrentRoleAndStats()
     }
 
-    private fun checkAdminStatus() {
+    private fun loadCurrentRoleAndStats() {
         viewModelScope.launch {
             try {
                 val currentUser = auth.currentUser
@@ -43,10 +42,11 @@ class AdminDashboardViewModel @Inject constructor(
                         .await()
 
                     val role = userDoc.getString("role")
-                    _isAdmin.value = role == "admin" || role == "superadmin"
+                    _currentRole.value = role
+                    loadStats()
                 }
             } catch (e: Exception) {
-                _isAdmin.value = false
+                _currentRole.value = null
             }
         }
     }
@@ -71,13 +71,17 @@ class AdminDashboardViewModel @Inject constructor(
                 val photosSnapshot = firestore.collection("photos").get().await()
                 val totalPhotos = photosSnapshot.size()
 
-                // Contar usuarios
-                val usersSnapshot = firestore.collection("users").get().await()
-                val totalUsers = usersSnapshot.size()
-                val adminUsers = usersSnapshot.documents.count {
+                val canManageUsers = _currentRole.value in listOf("admin", "superadmin")
+                val usersSnapshot = if (canManageUsers) {
+                    firestore.collection("users").get().await()
+                } else {
+                    null
+                }
+                val totalUsers = usersSnapshot?.size() ?: 0
+                val adminUsers = usersSnapshot?.documents?.count {
                     val role = it.getString("role")
                     role == "admin" || role == "superadmin"
-                }
+                } ?: 0
 
                 _stats.value = DashboardStats(
                     totalNews = totalNews,

@@ -37,6 +37,8 @@ fun ExcursionFormScreen(
     val title by viewModel.title.collectAsState()
     val description by viewModel.description.collectAsState()
     val location by viewModel.location.collectAsState()
+    val latitude by viewModel.latitude.collectAsState()
+    val longitude by viewModel.longitude.collectAsState()
     val price by viewModel.price.collectAsState()
     val maxParticipants by viewModel.maxParticipants.collectAsState()
     val currentParticipants by viewModel.currentParticipants.collectAsState()
@@ -53,6 +55,7 @@ fun ExcursionFormScreen(
     var showExitDialog by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
+    var showLocationPicker by remember { mutableStateOf(false) }
 
     // Launcher para seleccionar PDF
     val pdfPickerLauncher = rememberLauncherForActivityResult(
@@ -130,6 +133,8 @@ fun ExcursionFormScreen(
                     title = title,
                     description = description,
                     location = location,
+                    latitude = latitude,
+                    longitude = longitude,
                     price = price,
                     maxParticipants = maxParticipants,
                     currentParticipants = currentParticipants,
@@ -147,6 +152,7 @@ fun ExcursionFormScreen(
                     onTitleChange = viewModel::onTitleChange,
                     onDescriptionChange = viewModel::onDescriptionChange,
                     onLocationChange = viewModel::onLocationChange,
+                    onSelectLocationClick = { showLocationPicker = true },
                     onPriceChange = viewModel::onPriceChange,
                     onMaxParticipantsChange = viewModel::onMaxParticipantsChange,
                     onRegistrationClosedChange = viewModel::onRegistrationClosedChange,
@@ -222,6 +228,26 @@ fun ExcursionFormScreen(
             }
         }
 
+        if (showLocationPicker) {
+            LocationPickerDialog(
+                initialLocation = location,
+                initialLatitude = latitude,
+                initialLongitude = longitude,
+                onConfirm = {
+                    selectedLocation,
+                    selectedLatitude,
+                    selectedLongitude ->
+                    viewModel.onLocationChange(selectedLocation)
+                    viewModel.onLocationCoordinatesChange(
+                        selectedLatitude,
+                        selectedLongitude
+                    )
+                    showLocationPicker = false
+                },
+                onDismiss = { showLocationPicker = false }
+            )
+        }
+
         if (showExitDialog) {
             AlertDialog(
                 onDismissRequest = { showExitDialog = false },
@@ -255,6 +281,8 @@ private fun ExcursionFormContent(
     title: String,
     description: String,
     location: String,
+    latitude: Double?,
+    longitude: Double?,
     price: String,  // ← AÑADIR
     maxParticipants: String,
     currentParticipants: Int,
@@ -272,6 +300,7 @@ private fun ExcursionFormContent(
     onTitleChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
     onLocationChange: (String) -> Unit,
+    onSelectLocationClick: () -> Unit,
     onPriceChange: (String) -> Unit,  // ← NUEVO
     onMaxParticipantsChange: (String) -> Unit,
     onRegistrationClosedChange: (Boolean) -> Unit,
@@ -431,6 +460,36 @@ private fun ExcursionFormContent(
             modifier = Modifier.fillMaxWidth(),
             enabled = !isSaving,
             singleLine = true
+        )
+
+        OutlinedButton(
+            onClick = onSelectLocationClick,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isSaving
+        ) {
+            Icon(Icons.Default.Map, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                if (latitude != null && longitude != null) {
+                    "Cambiar punto en el mapa"
+                } else {
+                    "Seleccionar punto en el mapa"
+                }
+            )
+        }
+
+        Text(
+            text = if (latitude != null && longitude != null) {
+                "Punto seleccionado: %.6f, %.6f".format(
+                    Locale.US,
+                    latitude,
+                    longitude
+                )
+            } else {
+                "Busca un lugar o selecciona directamente un punto en el mapa."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         // AÑADIR AQUÍ ↓

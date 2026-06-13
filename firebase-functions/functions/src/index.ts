@@ -84,7 +84,9 @@ function buildCustomAuthActionLink(rawLink: string): string {
 }
 
 function buildInvitationEmail(userData: InvitationUserData, actionLink: string) {
-  const roleLabel = userData.role === "admin" ? "Administrador" : "Socio";
+  const roleLabel = userData.role === "admin" ?
+    "Administrador" :
+    userData.role === "monitor" ? "Monitor" : "Socio";
   const emailSubject = "Configura tu acceso a Asociación Cigüeña";
   const emailText = [
     `Hola ${userData.displayName},`,

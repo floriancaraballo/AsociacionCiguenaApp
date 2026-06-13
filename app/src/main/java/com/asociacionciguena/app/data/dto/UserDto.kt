@@ -10,7 +10,7 @@ data class UserDto(
     val email: String = "",
     val displayName: String = "",
     val photoUrl: String? = null,
-    val role: String = "socio",  // "admin" o "socio"
+    val role: String = "socio",  // "superadmin", "admin", "monitor" o "socio"
     val createdAt: Timestamp? = null,
     val photoConsents: List<String> = emptyList()  // IDs de excursiones autorizadas
 ) {

@@ -70,6 +70,8 @@ class ExcursionDetailViewModel @Inject constructor(
                             .toLocalDateTime(TimeZone.currentSystemDefault())
                     } ?: now,
                     location = excursionDoc.getString("location") ?: "",
+                    latitude = excursionDoc.getDouble("latitude"),
+                    longitude = excursionDoc.getDouble("longitude"),
                     imageUrl = excursionDoc.getString("imageUrl"),
                     authorizationPdfUrl = excursionDoc.getString("authorizationPdfUrl")
                 )
@@ -81,10 +83,10 @@ class ExcursionDetailViewModel @Inject constructor(
                         .get()
                         .await()
                 }
-                val isAdmin = userDoc?.isAdmin() ?: false
+                val canManageMedia = userDoc?.canManageMedia() ?: false
                 val registrationYear = userDoc?.registrationYear()
 
-                if (!isAdmin && excursion.date.year != registrationYear) {
+                if (!canManageMedia && excursion.date.year != registrationYear) {
                     _uiState.value = ExcursionDetailUiState.Success(
                         excursion = excursion,
                         photos = emptyList(),
@@ -93,7 +95,7 @@ class ExcursionDetailViewModel @Inject constructor(
                     return@launch
                 }
 
-                setupPhotosListener(excursion, isAdmin, currentUserUid)
+                setupPhotosListener(excursion, canManageMedia, currentUserUid)
             } catch (e: Exception) {
                 _uiState.value = ExcursionDetailUiState.Error(
                     "Error al cargar detalles: ${e.message}"
@@ -164,6 +166,11 @@ class ExcursionDetailViewModel @Inject constructor(
     fun deletePhoto(photo: Photo, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
+                if (!currentUserCanManageMedia()) {
+                    onError("No tienes permisos para eliminar fotos")
+                    return@launch
+                }
+
                 deleteStorageAsset(photo.storagePath)
                 photo.thumbnailUrl?.let { deleteStorageAssetByUrl(it) }
 
@@ -182,6 +189,11 @@ class ExcursionDetailViewModel @Inject constructor(
     fun deleteMultiplePhotos(photos: List<Photo>, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
+                if (!currentUserCanManageMedia()) {
+                    onError("No tienes permisos para eliminar fotos")
+                    return@launch
+                }
+
                 photos.forEach { photo ->
                     deleteStorageAsset(photo.storagePath)
                     photo.thumbnailUrl?.let { deleteStorageAssetByUrl(it) }
@@ -228,9 +240,9 @@ class ExcursionDetailViewModel @Inject constructor(
         }
     }
 
-    private fun DocumentSnapshot.isAdmin(): Boolean {
+    private fun DocumentSnapshot.canManageMedia(): Boolean {
         val role = getString("role")
-        return role == "admin" || role == "superadmin"
+        return role == "admin" || role == "superadmin" || role == "monitor"
     }
 
     private fun DocumentSnapshot.registrationYear(): Int? {
@@ -243,6 +255,15 @@ class ExcursionDetailViewModel @Inject constructor(
                 .toLocalDateTime(TimeZone.currentSystemDefault())
                 .year
         }
+    }
+
+    private suspend fun currentUserCanManageMedia(): Boolean {
+        val userId = auth.currentUser?.uid ?: return false
+        return firestore.collection("users")
+            .document(userId)
+            .get()
+            .await()
+            .canManageMedia()
     }
 
     fun retry() {

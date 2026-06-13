@@ -47,6 +47,8 @@ class ExcursionManagementViewModel @Inject constructor(
                             } ?: kotlinx.datetime.Clock.System.now()
                                 .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()),
                             location = doc.getString("location") ?: "",
+                            latitude = doc.getDouble("latitude"),
+                            longitude = doc.getDouble("longitude"),
                             imageUrl = doc.getString("imageUrl"),
                             // SIN maxParticipants y currentParticipants
                         )

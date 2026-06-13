@@ -22,6 +22,15 @@ service firebase.storage {
              getDefaultRole(request.auth.uid) in ['admin', 'superadmin'];
     }
 
+    function isMonitor() {
+      return isAuthenticated() &&
+             getDefaultRole(request.auth.uid) == 'monitor';
+    }
+
+    function canManageExcursionMedia() {
+      return isAdmin() || isMonitor();
+    }
+
     function isServiceAccount() {
       return request.auth != null &&
              request.auth.token.email.matches(".*@gserviceaccount.com$");
@@ -62,7 +71,7 @@ service firebase.storage {
     // ========================================
     match /news/{allPaths=**} {
       allow read: if true;
-      allow create, update: if isAdmin() &&
+      allow create, update: if (isAdmin() || isMonitor()) &&
                             request.resource.contentType.matches('image/.*') &&
                             isValidImageSize();
       allow delete: if isAdmin();
@@ -74,10 +83,17 @@ service firebase.storage {
     // ========================================
     match /excursions/{excursionId}/{mediaId} {
       allow read: if true;
-      allow create, update: if isAdmin() &&
+      allow create: if canManageExcursionMedia() &&
+                            excursionId != 'images' &&
+                            excursionId != 'authorizations' &&
                             isImageOrVideo() &&
                             isValidMediaSize();
-      allow delete: if isAdmin();
+      allow update: if isAdmin() &&
+                            isImageOrVideo() &&
+                            isValidMediaSize();
+      allow delete: if canManageExcursionMedia() &&
+                           excursionId != 'images' &&
+                           excursionId != 'authorizations';
     }
 
     // ========================================
@@ -85,10 +101,13 @@ service firebase.storage {
     // ========================================
     match /excursions/{excursionId}/thumbnails/{thumbnailId} {
       allow read: if true;
-      allow create, update: if isAdmin() &&
+      allow create: if canManageExcursionMedia() &&
                             request.resource.contentType.matches('image/.*') &&
                             isValidImageSize();
-      allow delete: if isAdmin();
+      allow update: if isAdmin() &&
+                            request.resource.contentType.matches('image/.*') &&
+                            isValidImageSize();
+      allow delete: if canManageExcursionMedia();
     }
 
     // ========================================

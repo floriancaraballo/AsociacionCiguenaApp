@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,6 +25,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 class NewsFormViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
+    private val auth: FirebaseAuth,
     savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context,
     private val networkMonitor: NetworkMonitor
@@ -194,6 +196,13 @@ class NewsFormViewModel @Inject constructor(
                     return@launch
                 }
 
+                if (!canManageNews()) {
+                    _uiState.value = NewsFormUiState.Error(
+                        "No tienes permisos para guardar publicaciones"
+                    )
+                    return@launch
+                }
+
                 if (_title.value.isBlank()) {
                     _uiState.value = NewsFormUiState.Error("El título es obligatorio")
                     return@launch
@@ -300,5 +309,15 @@ class NewsFormViewModel @Inject constructor(
         if (_uiState.value is NewsFormUiState.Error) {
             _uiState.value = NewsFormUiState.Idle
         }
+    }
+
+    private suspend fun canManageNews(): Boolean {
+        val userId = auth.currentUser?.uid ?: return false
+        val role = firestore.collection("users")
+            .document(userId)
+            .get()
+            .await()
+            .getString("role")
+        return role == "admin" || role == "superadmin" || role == "monitor"
     }
 }

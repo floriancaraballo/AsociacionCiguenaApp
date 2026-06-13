@@ -52,6 +52,12 @@ class ExcursionFormViewModel @Inject constructor(
     private val _location = MutableStateFlow("")
     val location: StateFlow<String> = _location.asStateFlow()
 
+    private val _latitude = MutableStateFlow<Double?>(null)
+    val latitude: StateFlow<Double?> = _latitude.asStateFlow()
+
+    private val _longitude = MutableStateFlow<Double?>(null)
+    val longitude: StateFlow<Double?> = _longitude.asStateFlow()
+
     private val _price = MutableStateFlow("")
     val price: StateFlow<String> = _price.asStateFlow()
 
@@ -118,6 +124,8 @@ class ExcursionFormViewModel @Inject constructor(
                     _title.value = doc.getString("title") ?: ""
                     _description.value = doc.getString("description") ?: ""
                     _location.value = doc.getString("location") ?: ""
+                    _latitude.value = doc.getDouble("latitude")
+                    _longitude.value = doc.getDouble("longitude")
                     _price.value = doc.getDouble("price")?.toString() ?: ""
                     _maxParticipants.value = doc.getLong("maxParticipants")?.toString() ?: ""
                     _currentParticipants.value =
@@ -165,6 +173,11 @@ class ExcursionFormViewModel @Inject constructor(
 
     fun onLocationChange(newLocation: String) {
         _location.value = newLocation
+    }
+
+    fun onLocationCoordinatesChange(latitude: Double, longitude: Double) {
+        _latitude.value = latitude
+        _longitude.value = longitude
     }
 
     fun onPriceChange(newPrice: String) {
@@ -343,6 +356,8 @@ class ExcursionFormViewModel @Inject constructor(
                     "title" to _title.value,
                     "description" to _description.value,
                     "location" to _location.value,
+                    "latitude" to _latitude.value,
+                    "longitude" to _longitude.value,
                     "date" to timestamp,
                     "endDate" to endTimestamp,
                     "imageUrl" to _imageUrl.value.ifBlank { null },

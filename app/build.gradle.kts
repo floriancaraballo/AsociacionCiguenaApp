@@ -14,9 +14,14 @@ plugins {
 // Cargar keystore properties
 val keystorePropertiesFile: File = project.file("keystore.properties")
 val keystoreProperties = Properties()
+val localPropertiesFile: File = rootProject.file("local.properties")
+val localProperties = Properties()
 
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(keystorePropertiesFile.inputStream())
+}
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
 }
 
 android {
@@ -30,6 +35,13 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["MAPS_API_KEY"] =
+            localProperties.getProperty("MAPS_API_KEY", "")
+        buildConfigField(
+            "String",
+            "PLACES_API_KEY",
+            "\"${localProperties.getProperty("PLACES_API_KEY", "")}\""
+        )
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -187,6 +199,9 @@ dependencies {
     // ========================================
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.kotlinx.datetime)
+    implementation(libs.google.maps.compose)
+    implementation(libs.google.places)
+    implementation(libs.google.material)
     implementation("id.zelory:compressor:3.0.1")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
