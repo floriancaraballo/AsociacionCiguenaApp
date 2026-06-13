@@ -21,9 +21,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -46,8 +49,20 @@ fun ProfileScreen(
 
     Scaffold(
         topBar = {
+            val accentColor = MaterialTheme.colorScheme.tertiary
             TopAppBar(
-                title = { Text(if (isEditMode) "Editar Perfil" else "Mi Perfil") },
+                modifier = Modifier.drawBehind {
+                    val strokeWidth = 2.dp.toPx()
+                    val y = size.height - strokeWidth / 2
+                    drawLine(accentColor, Offset(0f, y), Offset(size.width, y), strokeWidth)
+                },
+                title = {
+                    Text(
+                        text = if (isEditMode) "Editar Perfil" else "Mi Perfil",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
                 navigationIcon = {
                     if (isEditMode) {
                         IconButton(onClick = { viewModel.cancelEdit() }) {
@@ -55,6 +70,7 @@ fun ProfileScreen(
                         }
                     }
                 },
+                expandedHeight = 56.dp,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary,

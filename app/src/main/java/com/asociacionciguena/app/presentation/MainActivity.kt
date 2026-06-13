@@ -7,11 +7,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -19,6 +27,7 @@ import androidx.lifecycle.lifecycleScope
 import com.asociacionciguena.app.presentation.navigation.AppNavigation
 import com.asociacionciguena.app.presentation.screens.main.MainViewModel
 import com.asociacionciguena.app.presentation.theme.AsociacionCiguenaTheme
+import com.asociacionciguena.app.presentation.theme.PrimaryDark
 import com.asociacionciguena.app.presentation.theme.ThemeViewModel
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.AndroidEntryPoint
@@ -72,14 +81,27 @@ class MainActivity : ComponentActivity() {
             AsociacionCiguenaTheme(
                 darkTheme = isDarkMode
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                Box(
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    AppNavigation(
-                        mainViewModel = mainViewModel,
-                        notificationType = notificationType,
-                        itemId = itemId
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        AppNavigation(
+                            mainViewModel = mainViewModel,
+                            notificationType = notificationType,
+                            itemId = itemId
+                        )
+                    }
+
+                    // Covers transparent system-bar and display-cutout areas on OEM devices.
+                    Spacer(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .windowInsetsTopHeight(WindowInsets.safeDrawing)
+                            .background(PrimaryDark)
                     )
                 }
             }

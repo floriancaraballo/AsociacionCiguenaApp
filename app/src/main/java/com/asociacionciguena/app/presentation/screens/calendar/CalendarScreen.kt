@@ -13,11 +13,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.presentation.components.EmptyState
 import com.asociacionciguena.app.presentation.components.ErrorMessage
+import com.asociacionciguena.app.presentation.components.AppSearchTopBarContent
 import com.asociacionciguena.app.presentation.screens.calendar.components.ExcursionCard
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -104,57 +108,36 @@ private fun CalendarTopBar(
     onSearchQueryChange: (String) -> Unit,
     onClearSearch: () -> Unit
 ) {
+    val accentColor = MaterialTheme.colorScheme.tertiary
+
     TopAppBar(
+        modifier = Modifier.drawBehind {
+            val strokeWidth = 2.dp.toPx()
+            val y = size.height - strokeWidth / 2
+            drawLine(accentColor, Offset(0f, y), Offset(size.width, y), strokeWidth)
+        },
         title = {
             if (isSearchActive) {
-                TextField(
-                    value = searchQuery,
-                    onValueChange = onSearchQueryChange,
-                    placeholder = {
-                        Text(
-                            "Buscar excursiones...",
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black,
-                        cursorColor = MaterialTheme.colorScheme.primary
-                    ),
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                AppSearchTopBarContent(
+                    query = searchQuery,
+                    placeholder = "Buscar excursiones",
+                    onQueryChange = onSearchQueryChange,
+                    onClear = onClearSearch,
+                    onClose = {
+                        onSearchActiveChange(false)
+                        onClearSearch()
+                    }
                 )
             } else {
-                Text("Calendario")
+                Text(
+                    text = "Calendario",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         },
         actions = {
-            if (isSearchActive) {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = onClearSearch) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Limpiar búsqueda"
-                        )
-                    }
-                }
-                IconButton(onClick = {
-                    onSearchActiveChange(false)
-                    onClearSearch()
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Cerrar búsqueda"
-                    )
-                }
-            } else {
+            if (!isSearchActive) {
                 IconButton(onClick = { onSearchActiveChange(true) }) {
                     Icon(
                         imageVector = Icons.Default.Search,
@@ -163,6 +146,7 @@ private fun CalendarTopBar(
                 }
             }
         },
+        expandedHeight = if (isSearchActive) 72.dp else 56.dp,
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.primary,
             titleContentColor = MaterialTheme.colorScheme.onPrimary,

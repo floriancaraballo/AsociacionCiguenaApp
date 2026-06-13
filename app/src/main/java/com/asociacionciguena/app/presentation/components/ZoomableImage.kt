@@ -23,6 +23,7 @@ fun ZoomableImage(
     contentDescription: String?,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Fit,
+    onTap: (() -> Unit)? = null,
     onScaleChange: ((Float) -> Unit)? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -42,6 +43,7 @@ fun ZoomableImage(
             // Doble tap para zoom
             .pointerInput(Unit) {
                 detectTapGestures(
+                    onTap = { onTap?.invoke() },
                     onDoubleTap = { tapOffset ->
                         coroutineScope.launch {
                             if (animatedScale.value > 1f) {

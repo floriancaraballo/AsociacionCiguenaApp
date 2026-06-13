@@ -1,5 +1,6 @@
 package com.asociacionciguena.app.presentation.screens.splash
 
+import android.annotation.SuppressLint
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -129,6 +130,7 @@ private fun LoadingSplashScreen(
 }
 
 @Composable
+@SuppressLint("UnsafeOptInUsageError")
 private fun LoadingSplashVideoBackground() {
     val context = LocalContext.current
     val videoResourceId = remember(context) {

@@ -4,14 +4,18 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.asociacionciguena.app.domain.model.Photo
+import com.asociacionciguena.app.domain.model.Result
+import com.asociacionciguena.app.domain.usecase.photo.DownloadPhotoUseCase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.Clock
@@ -27,11 +31,21 @@ sealed class FullscreenMediaUiState {
     data class Error(val message: String) : FullscreenMediaUiState()
 }
 
+sealed class FullscreenMediaEvent {
+    data class PhotoDownloaded(
+        val photo: Photo,
+        val bytes: ByteArray
+    ) : FullscreenMediaEvent()
+
+    data class DownloadError(val message: String) : FullscreenMediaEvent()
+}
+
 @HiltViewModel
 class FullscreenMediaViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val firestore: FirebaseFirestore,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val downloadPhotoUseCase: DownloadPhotoUseCase
 ) : ViewModel() {
 
     private val excursionId: String = checkNotNull(savedStateHandle["excursionId"])
@@ -40,12 +54,47 @@ class FullscreenMediaViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<FullscreenMediaUiState>(FullscreenMediaUiState.Loading)
     val uiState: StateFlow<FullscreenMediaUiState> = _uiState.asStateFlow()
 
+    private val _downloadingPhotoId = MutableStateFlow<String?>(null)
+    val downloadingPhotoId: StateFlow<String?> = _downloadingPhotoId.asStateFlow()
+
+    private val eventChannel = Channel<FullscreenMediaEvent>(Channel.BUFFERED)
+    val events = eventChannel.receiveAsFlow()
+
     init {
         loadPhotos()
     }
 
     fun retry() {
         loadPhotos()
+    }
+
+    fun downloadPhoto(photo: Photo) {
+        if (photo.mediaType != "image" || _downloadingPhotoId.value != null) return
+
+        viewModelScope.launch {
+            _downloadingPhotoId.value = photo.id
+            when (val result = downloadPhotoUseCase(photo.id)) {
+                is Result.Success -> {
+                    eventChannel.send(
+                        FullscreenMediaEvent.PhotoDownloaded(
+                            photo = photo,
+                            bytes = result.data
+                        )
+                    )
+                }
+
+                is Result.Error -> {
+                    eventChannel.send(
+                        FullscreenMediaEvent.DownloadError(
+                            result.message.ifBlank { "No se pudo descargar la foto" }
+                        )
+                    )
+                }
+
+                Result.Loading -> Unit
+            }
+            _downloadingPhotoId.value = null
+        }
     }
 
     private fun loadPhotos() {

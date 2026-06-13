@@ -9,11 +9,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.presentation.components.EmptyState
 import com.asociacionciguena.app.presentation.components.ErrorMessage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
+import com.asociacionciguena.app.presentation.components.AppSearchTopBarContent
 import com.asociacionciguena.app.presentation.screens.news.components.NewsCard
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
@@ -23,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 
@@ -113,58 +117,36 @@ private fun NewsTopBar(
     onClearSearch: () -> Unit
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
+    val accentColor = MaterialTheme.colorScheme.tertiary
 
     TopAppBar(
+        modifier = Modifier.drawBehind {
+            val strokeWidth = 2.dp.toPx()
+            val y = size.height - strokeWidth / 2
+            drawLine(accentColor, Offset(0f, y), Offset(size.width, y), strokeWidth)
+        },
         title = {
             if (isSearchActive) {
-                TextField(
-                    value = searchQuery,
-                    onValueChange = onSearchQueryChange,
-                    placeholder = {
-                        Text(
-                            "Buscar publicaciones...",
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.White,  // ← Fondo blanco
-                        unfocusedContainerColor = Color.White,  // ← Fondo blanco
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        focusedTextColor = Color.Black,  // ← Texto negro
-                        unfocusedTextColor = Color.Black,  // ← Texto negro
-                        cursorColor = MaterialTheme.colorScheme.primary  // ← Cursor con color primario
-                    ),
-                    shape = MaterialTheme.shapes.medium,  // ← Bordes redondeados
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp)  // ← Padding
+                AppSearchTopBarContent(
+                    query = searchQuery,
+                    placeholder = "Buscar publicaciones",
+                    onQueryChange = onSearchQueryChange,
+                    onClear = onClearSearch,
+                    onClose = {
+                        isSearchActive = false
+                        onClearSearch()
+                    }
                 )
             } else {
-                Text("Publicaciones")
+                Text(
+                    text = "Publicaciones",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         },
         actions = {
-            if (isSearchActive) {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = onClearSearch) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Limpiar búsqueda"
-                        )
-                    }
-                }
-                IconButton(onClick = {
-                    isSearchActive = false
-                    onClearSearch()
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Cerrar búsqueda"
-                    )
-                }
-            } else {
+            if (!isSearchActive) {
                 IconButton(onClick = { isSearchActive = true }) {
                     Icon(
                         imageVector = Icons.Default.Search,
@@ -173,6 +155,7 @@ private fun NewsTopBar(
                 }
             }
         },
+        expandedHeight = if (isSearchActive) 72.dp else 56.dp,
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.primary,
             titleContentColor = MaterialTheme.colorScheme.onPrimary,

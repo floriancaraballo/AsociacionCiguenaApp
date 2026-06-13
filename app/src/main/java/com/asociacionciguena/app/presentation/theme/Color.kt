@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 
 // Colores primarios - Azul Asociación
 val Primary = Color(0xFF0061A4)
+val PrimaryDark = Color(0xFF004A7C)
 val OnPrimary = Color(0xFFFFFFFF)
 val PrimaryContainer = Color(0xFFD1E4FF)
 val OnPrimaryContainer = Color(0xFF001D36)

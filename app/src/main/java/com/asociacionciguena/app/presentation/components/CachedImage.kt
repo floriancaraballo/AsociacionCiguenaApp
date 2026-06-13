@@ -1,5 +1,6 @@
 package com.asociacionciguena.app.presentation.components
 
+import android.annotation.SuppressLint
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -17,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalCoilApi::class)
+@SuppressLint("ProduceStateDoesNotAssignValue")
 @Composable
 fun CachedSubcomposeAsyncImage(
     imageUrl: String,
@@ -31,13 +33,14 @@ fun CachedSubcomposeAsyncImage(
     }
     val isCachedInMemory = context.imageLoader.memoryCache?.get(MemoryCache.Key(imageUrl)) != null
     val isCachedOnDisk by produceState<Boolean?>(initialValue = null, imageUrl, isCachedInMemory) {
-        value = if (isCachedInMemory) {
+        val cached = if (isCachedInMemory) {
             true
         } else {
             withContext(Dispatchers.IO) {
                 context.imageLoader.diskCache?.openSnapshot(imageUrl)?.use { true } ?: false
             }
         }
+        value = cached
     }
 
     if (isCachedInMemory || isCachedOnDisk == true || isCachedOnDisk == null) {

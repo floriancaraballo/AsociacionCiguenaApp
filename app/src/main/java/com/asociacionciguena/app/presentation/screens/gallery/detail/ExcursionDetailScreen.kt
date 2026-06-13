@@ -1,5 +1,6 @@
 package com.asociacionciguena.app.presentation.screens.gallery.detail
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
@@ -19,10 +20,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -111,7 +112,7 @@ fun ExcursionDetailScreen(
                             }
                         }
                     ) {
-                        Icon(Icons.Default.ArrowBack, "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
                     }
                 },
                 actions = {
@@ -210,24 +211,25 @@ fun ExcursionDetailScreen(
                     modifier = Modifier.padding(paddingValues)
                 )
 
-                if (showDeleteDialog && photoToDelete != null) {
-                    val photoToDeleteCopy = photoToDelete!!
-                    DeletePhotoDialog(
-                        photoCount = 1,
-                        onConfirm = {
-                            showDeleteDialog = false
-                            photoToDelete = null
-                            viewModel.deletePhoto(
-                                photo = photoToDeleteCopy,
-                                onSuccess = {},
-                                onError = { error -> deleteError = error }
-                            )
-                        },
-                        onDismiss = {
-                            showDeleteDialog = false
-                            photoToDelete = null
-                        }
-                    )
+                if (showDeleteDialog) {
+                    photoToDelete?.let { selectedPhoto ->
+                        DeletePhotoDialog(
+                            photoCount = 1,
+                            onConfirm = {
+                                showDeleteDialog = false
+                                photoToDelete = null
+                                viewModel.deletePhoto(
+                                    photo = selectedPhoto,
+                                    onSuccess = {},
+                                    onError = { error -> deleteError = error }
+                                )
+                            },
+                            onDismiss = {
+                                showDeleteDialog = false
+                                photoToDelete = null
+                            }
+                        )
+                    }
                 }
 
                 if (showDeleteMultipleDialog) {
@@ -334,8 +336,7 @@ private fun ExcursionDetailContent(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(items = photos, key = { it.id }) { photo ->
-                    val index = photos.indexOf(photo)
+                itemsIndexed(items = photos, key = { _, photo -> photo.id }) { index, photo ->
                     PhotoGridItem(
                         photo = photo,
                         isSelected = photo.id in selectedPhotos,
@@ -441,6 +442,7 @@ private fun openFullscreenMedia(
 }
 
 @Composable
+@SuppressLint("ProduceStateDoesNotAssignValue")
 private fun DetailMediaPreview(
     photo: Photo,
     modifier: Modifier = Modifier
@@ -457,7 +459,7 @@ private fun DetailMediaPreview(
 
     val videoUrl = remember(photo.imageUrl) { ensureVideoUrlFormat(photo.imageUrl) }
     val generatedThumbnail by produceState<Bitmap?>(initialValue = null, videoUrl) {
-        value = withContext(Dispatchers.IO) {
+        val thumbnail = withContext(Dispatchers.IO) {
             runCatching {
                 val retriever = MediaMetadataRetriever()
                 try {
@@ -468,12 +470,14 @@ private fun DetailMediaPreview(
                 }
             }.getOrNull()
         }
+        value = thumbnail
     }
 
+    val thumbnail = generatedThumbnail
     when {
-        generatedThumbnail != null -> {
+        thumbnail != null -> {
             Image(
-                bitmap = generatedThumbnail!!.asImageBitmap(),
+                bitmap = thumbnail.asImageBitmap(),
                 contentDescription = null,
                 modifier = modifier,
                 contentScale = ContentScale.Crop

@@ -1,5 +1,6 @@
 package com.asociacionciguena.app.presentation.screens.gallery
 
+import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import androidx.compose.foundation.Image
@@ -13,9 +14,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.imageLoader
@@ -39,11 +43,24 @@ fun GalleryScreen(
 
     Scaffold(
         topBar = {
+            val accentColor = MaterialTheme.colorScheme.tertiary
             TopAppBar(
-                title = { Text("Galería") },
+                modifier = Modifier.drawBehind {
+                    val strokeWidth = 2.dp.toPx()
+                    val y = size.height - strokeWidth / 2
+                    drawLine(accentColor, Offset(0f, y), Offset(size.width, y), strokeWidth)
+                },
+                title = {
+                    Text(
+                        text = "Galería",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                expandedHeight = 56.dp,
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         }
@@ -251,6 +268,7 @@ private fun ExcursionCard(
 }
 
 @Composable
+@SuppressLint("ProduceStateDoesNotAssignValue")
 private fun GalleryMediaPreview(
     mediaUrl: String,
     thumbnailUrl: String?,
@@ -259,7 +277,7 @@ private fun GalleryMediaPreview(
 ) {
     if (mediaType == "video") {
         val generatedThumbnail by produceState<Bitmap?>(initialValue = null, mediaUrl) {
-            value = withContext(Dispatchers.IO) {
+            val thumbnail = withContext(Dispatchers.IO) {
                 runCatching {
                     val retriever = MediaMetadataRetriever()
                     try {
@@ -270,12 +288,14 @@ private fun GalleryMediaPreview(
                     }
                 }.getOrNull()
             }
+            value = thumbnail
         }
 
+        val thumbnail = generatedThumbnail
         when {
-            generatedThumbnail != null -> {
+            thumbnail != null -> {
                 Image(
-                    bitmap = generatedThumbnail!!.asImageBitmap(),
+                    bitmap = thumbnail.asImageBitmap(),
                     contentDescription = null,
                     modifier = modifier,
                     contentScale = ContentScale.Crop
