@@ -46,10 +46,14 @@ Thumbs.db
 *.log
 
 gradle-app.setting
-gradle/wrapper/gradle-wrapper.jar
+# Gradle Wrapper is required to build the project after cloning.
+!gradle/wrapper/gradle-wrapper.jar
 
 # Optional: exclude IDE run configs
 .run/
 
 keystore.properties
 *.jks
+
+# Generated release artifacts
+app/release/
