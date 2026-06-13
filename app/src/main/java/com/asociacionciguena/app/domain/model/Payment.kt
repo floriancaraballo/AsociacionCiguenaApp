@@ -7,6 +7,7 @@ data class Payment(
     val excursionId: String = "",
     val userId: String = "",
     val userName: String = "",
+    val participantNames: List<String> = emptyList(),
     val amount: Double = 0.0,
     val status: PaymentStatus = PaymentStatus.PENDING,
     val paymentProofUrl: String? = null,  // URL del comprobante
@@ -18,6 +19,7 @@ data class Payment(
 )
 
 enum class PaymentStatus {
+    INITIATED,
     PENDING,     // Pendiente de pago/validación
     PAID,        // Pagado y validado
     REJECTED;    // Rechazado por admin

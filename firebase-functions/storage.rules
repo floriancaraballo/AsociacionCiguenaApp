@@ -10,7 +10,7 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function getRole(userId) {
+    function getDefaultRole(userId) {
       let userDoc = firestore.get(
         /databases/(default)/documents/users/$(userId)
       );
@@ -19,7 +19,7 @@ service firebase.storage {
 
     function isAdmin() {
       return isAuthenticated() &&
-             getRole(request.auth.uid) in ['admin', 'superadmin'];
+             getDefaultRole(request.auth.uid) in ['admin', 'superadmin'];
     }
 
     function isServiceAccount() {
@@ -153,21 +153,36 @@ service firebase.storage {
       return request.resource.size < 10 * 1024 * 1024;
     }
 
-    function hasApprovedAuthorizationForPayment(excursionId) {
-      return request.resource.metadata.authorizationId is string &&
-             firestore.exists(/databases/(default)/documents/signedAuthorizations/$(request.resource.metadata.authorizationId)) &&
-             firestore.get(/databases/(default)/documents/signedAuthorizations/$(request.resource.metadata.authorizationId)).data.userId == request.auth.uid &&
-             firestore.get(/databases/(default)/documents/signedAuthorizations/$(request.resource.metadata.authorizationId)).data.excursionId == excursionId &&
-             firestore.get(/databases/(default)/documents/signedAuthorizations/$(request.resource.metadata.authorizationId)).data.status == 'APPROVED';
+    function hasValidPaymentUploadAuthorization(excursionId, paymentId) {
+      let uploadAuthorizationId =
+        request.resource.metadata.uploadAuthorizationId;
+      let authorizationPath =
+        /databases/(default)/documents/paymentProofUploadAuthorizations/$(uploadAuthorizationId);
+      let uploadAuthorization = firestore.get(authorizationPath);
+
+      return uploadAuthorizationId is string &&
+             request.resource.metadata.authorizationId is string &&
+             paymentId == request.auth.uid + "_" + uploadAuthorizationId &&
+             uploadAuthorization.data.userId == request.auth.uid &&
+             uploadAuthorization.data.excursionId == excursionId &&
+             uploadAuthorization.data.authorizationId ==
+               request.resource.metadata.authorizationId &&
+             uploadAuthorization.data.databaseId ==
+               request.resource.metadata.databaseId &&
+             uploadAuthorization.data.expiresAt > request.time;
     }
 
     match /payments/{excursionId}/{paymentId} {
-      allow read: if isAdmin() ||
-                  (isAuthenticated() && paymentId.matches(request.auth.uid + "_.*"));
+      allow read: if
+        (isAuthenticated() && paymentId.matches(request.auth.uid + "_.*")) ||
+        isAdmin();
 
       allow create, update: if isAuthenticated() &&
                             paymentId.matches(request.auth.uid + "_.*") &&
-                            hasApprovedAuthorizationForPayment(excursionId) &&
+                            hasValidPaymentUploadAuthorization(
+                              excursionId,
+                              paymentId
+                            ) &&
                             isPaymentProof() &&
                             isValidPaymentProofSize();
 

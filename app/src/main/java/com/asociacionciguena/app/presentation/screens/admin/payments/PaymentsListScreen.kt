@@ -229,7 +229,10 @@ private fun PaymentCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = payment.userName.ifBlank { "Usuario sin nombre" },
+                        text = payment.participantNames
+                            .takeIf { names -> names.isNotEmpty() }
+                            ?.joinToString(", ")
+                            ?: payment.userName.ifBlank { "Participante sin nombre" },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -343,16 +346,19 @@ private fun PaymentCard(
 private fun PaymentStatusChip(status: PaymentStatus) {
     val containerColor = when (status) {
         PaymentStatus.PAID -> MaterialTheme.colorScheme.primary
+        PaymentStatus.INITIATED -> MaterialTheme.colorScheme.surfaceVariant
         PaymentStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
         PaymentStatus.REJECTED -> MaterialTheme.colorScheme.error
     }
     val contentColor = when (status) {
         PaymentStatus.PAID -> MaterialTheme.colorScheme.onPrimary
+        PaymentStatus.INITIATED -> MaterialTheme.colorScheme.onSurfaceVariant
         PaymentStatus.PENDING -> MaterialTheme.colorScheme.onSecondaryContainer
         PaymentStatus.REJECTED -> MaterialTheme.colorScheme.onError
     }
     val label = when (status) {
         PaymentStatus.PAID -> "Pagado"
+        PaymentStatus.INITIATED -> "Iniciado"
         PaymentStatus.PENDING -> "Pendiente"
         PaymentStatus.REJECTED -> "Rechazado"
     }

@@ -8,13 +8,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.presentation.screens.payment.PaymentViewModel
 import com.asociacionciguena.app.presentation.screens.payment.PaymentUiState
-import android.util.Base64
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -27,6 +25,7 @@ fun PaymentWebView(
     viewModel: PaymentViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val viewConfig = viewModel.viewConfig
 
     LaunchedEffect(Unit) {
         viewModel.createPaymentIntent(excursionId, amount)
@@ -49,7 +48,7 @@ fun PaymentWebView(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator()
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("Conectando con pasarela de pago segura...")
+                    Text(viewConfig.loadingTitle)
                 }
             }
             is PaymentUiState.PaymentReady -> {
@@ -63,6 +62,8 @@ fun PaymentWebView(
 
                 val params = escapeForJs(state.params["Ds_MerchantParameters"] ?: "")
                 val signature = escapeForJs(state.params["Ds_Signature"] ?: "")
+                val progressColor = escapeForJs(viewConfig.progressColor)
+                val redirectMessage = escapeForJs(viewConfig.redirectMessage)
 
                 val html = """
 <!DOCTYPE html>
@@ -84,7 +85,7 @@ body {
 }
 .spinner {
     border: 4px solid #f3f3f3;
-    border-top: 4px solid #1976D2;
+    border-top: 4px solid $progressColor;
     border-radius: 50%;
     width: 40px;
     height: 40px;
@@ -100,7 +101,7 @@ body {
 <body>
 <div class="loader">
     <div class="spinner"></div>
-    <p>Conectando con la pasarela de pago segura...</p>
+    <p>$redirectMessage</p>
 </div>
 <form id="redsysForm" method="POST" action="${state.tpvUrl}" accept-charset="UTF-8">
     <input type="hidden" name="Ds_SignatureVersion" value="HMAC_SHA256_V1">
@@ -108,8 +109,6 @@ body {
     <input type="hidden" name="Ds_Signature" value='$signature'>
 </form>
 <script>
-console.log('🔄 Enviando formulario a Redsys...');
-console.log('URL:', '${state.tpvUrl}');
 document.getElementById('redsysForm').submit();
 </script>
 </body>
@@ -121,11 +120,34 @@ document.getElementById('redsysForm').submit();
                         WebView(ctx).apply {
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
-                            // ✅ Permitir acceso universal para evitar bloqueos
-                            settings.allowUniversalAccessFromFileURLs = true
-                            settings.allowFileAccessFromFileURLs = true
+                            // Mantener el WebView limitado al formulario de pago servido en memoria.
+                            settings.allowFileAccess = false
 
                             webViewClient = object : WebViewClient() {
+                                override fun onReceivedError(
+                                    view: WebView?,
+                                    request: android.webkit.WebResourceRequest?,
+                                    error: android.webkit.WebResourceError?
+                                ) {
+                                    if (request?.isForMainFrame == true) {
+                                        viewModel.onPaymentLoadFailed(
+                                            "No se pudo cargar Redsys: ${error?.description ?: "error de conexion"}"
+                                        )
+                                    }
+                                }
+
+                                override fun onReceivedHttpError(
+                                    view: WebView?,
+                                    request: android.webkit.WebResourceRequest?,
+                                    errorResponse: android.webkit.WebResourceResponse?
+                                ) {
+                                    if (request?.isForMainFrame == true) {
+                                        viewModel.onPaymentLoadFailed(
+                                            "Redsys devolvio un error HTTP ${errorResponse?.statusCode ?: ""}".trim()
+                                        )
+                                    }
+                                }
+
                                 override fun shouldOverrideUrlLoading(
                                     view: WebView?,
                                     request: android.webkit.WebResourceRequest?

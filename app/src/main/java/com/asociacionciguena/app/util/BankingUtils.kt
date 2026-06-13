@@ -7,7 +7,7 @@ import android.widget.Toast
 
 object BankingUtils {
 
-    private const val ASSOCIATION_IBAN = "ES5901825332130207495699"
+    private const val ASSOCIATION_IBAN = "ES9820958032209171007944"
     private const val ASSOCIATION_NAME = "Asociación Cigüeña"
 
     /**

@@ -100,14 +100,30 @@ fun PaymentBottomSheet(
 
             // Sección existente: Datos bancarios (transferencia)
             Text(
-                text = "Transferencia bancaria",
+                text = "Pago con tarjeta",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
+            Button(
+                onClick = { onNavigateToPayment(excursionId, amount) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.CreditCard, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Pagar con tarjeta")
+            }
 
             Text(
-                text = "Opciones de pago",
+                text = "Seras redirigido a la pasarela segura del banco para completar el pago.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Divider()
+
+            Text(
+                text = "Transferencia bancaria",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -149,7 +165,7 @@ fun PaymentBottomSheet(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = "ES59 0182 5332 1302 0749 5699",
+                                    text = "ES98 2095 8032 20 9171007944",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )

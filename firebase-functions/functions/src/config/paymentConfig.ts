@@ -1,43 +1,62 @@
-// functions/src/config/paymentConfig.ts
 
-/**
- * Configuración de Redsys para pagos con TPV Virtual
- */
-export const paymentConfig = {
-  // 🔹 MODO TEST (Redsys sandbox - datos públicos de prueba)
-  test: {
-    MERCHANT_CODE: '123456789',                    // FUC de test
-    TERMINAL: '1',                                  // Terminal
-    SECRET_KEY: 'sq7HjrUOBfKmC576ILgskD5srU870gJ7', // Clave SHA-256 test (pública para sandbox)
-    URL_TPV: 'https://sis-t.redsys.es:25443/sis/realizarPago',
-    URL_NOTIFICATION: 'https://europe-west1-asociacion-ciguena-188da.cloudfunctions.net/paymentNotification',
-    URL_OK: 'https://europe-west1-asociacion-ciguena-188da.cloudfunctions.net/paymentResult',
-    URL_KO: 'https://europe-west1-asociacion-ciguena-188da.cloudfunctions.net/paymentResult',
-    CURRENCY: '978', // EUR
-  },
-  // 🔹 MODO PRODUCCIÓN (Cajasur real - rellenar cuando te lo den)
-  production: {
-    MERCHANT_CODE: '', 
-    TERMINAL: '1',
-    SECRET_KEY: '', 
-    URL_TPV: 'https://sis.redsys.es/sis/realizarPago',
-    URL_NOTIFICATION: 'https://europe-west1-asociacion-ciguena-188da.cloudfunctions.net/paymentNotification',
-    URL_OK: 'https://europe-west1-asociacion-ciguena-188da.cloudfunctions.net/paymentResult',
-    URL_KO: 'https://europe-west1-asociacion-ciguena-188da.cloudfunctions.net/paymentResult',
-    CURRENCY: '978',
-  }
-};
-
-/**
- * ✅ Función helper para obtener config según entorno
- * @param env - 'test' o 'production'
- * @returns Configuración de Redsys para el entorno especificado
- */
-export function getPaymentConfig(env: 'test' | 'production' = 'test') {
-  return env === 'test' ? paymentConfig.test : paymentConfig.production;
+export interface PaymentConfig {
+  MERCHANT_CODE: string;
+  TERMINAL: string;
+  SECRET_KEY: string;
+  MERCHANT_NAME: string;
+  URL_TPV: string;
+  URL_NOTIFICATION: string;
+  CURRENCY: string;
 }
 
-/**
- * Tipo para la configuración de pago
- */
-export type PaymentConfig = typeof paymentConfig.test;
+const NOTIFICATION_URL =
+  "https://europe-west1-asociacion-ciguena-188da.cloudfunctions.net/paymentNotification";
+
+const paymentConfig = {
+  test: {
+    MERCHANT_CODE: "059515841",
+
+    TERMINAL: "100",
+    SECRET_KEY: "sq7HjrUOBfKmC576ILgskD5srU870gJ7",
+    MERCHANT_NAME: "Asociacion Ciguena",
+    URL_TPV: "https://sis-t.redsys.es:25443/sis/realizarPago",
+    URL_NOTIFICATION: NOTIFICATION_URL,
+    CURRENCY: "978",
+  },
+  production: {
+    MERCHANT_CODE: process.env.REDSYS_MERCHANT_CODE || "",
+    TERMINAL: process.env.REDSYS_TERMINAL || "1",
+    SECRET_KEY: process.env.REDSYS_SECRET_KEY || "",
+    MERCHANT_NAME: process.env.REDSYS_MERCHANT_NAME || "Asociacion Ciguena",
+    URL_TPV: "https://sis.redsys.es/sis/realizarPago",
+    URL_NOTIFICATION: NOTIFICATION_URL,
+    CURRENCY: "978",
+  },
+} satisfies Record<"test" | "production", PaymentConfig>;
+
+function selectedEnvironment(): "test" | "production" {
+  return process.env.REDSYS_ENV === "production" ? "production" : "test";
+}
+
+export function getPaymentConfig(): PaymentConfig {
+  const env = selectedEnvironment();
+  const config = paymentConfig[env];
+
+  if (!config.MERCHANT_CODE || !config.TERMINAL || !config.SECRET_KEY) {
+    throw new Error(`Configuracion Redsys incompleta para entorno ${env}`);
+  }
+
+  if (!/^\d{1,9}$/.test(config.MERCHANT_CODE)) {
+    throw new Error(`FUC Redsys invalido para entorno ${env}`);
+  }
+
+  if (!/^\d{1,3}$/.test(config.TERMINAL)) {
+    throw new Error(`Terminal Redsys invalido para entorno ${env}`);
+  }
+
+  if (Buffer.from(config.SECRET_KEY, "base64").length !== 24) {
+    throw new Error(`Clave SHA-256 Redsys invalida para entorno ${env}`);
+  }
+
+  return config;
+}

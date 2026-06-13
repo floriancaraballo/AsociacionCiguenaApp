@@ -3,6 +3,7 @@ package com.asociacionciguena.app.presentation.screens.calendar.detail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.asociacionciguena.app.BuildConfig
 import com.asociacionciguena.app.domain.model.Excursion
 import com.asociacionciguena.app.domain.model.User
 import com.google.firebase.auth.FirebaseAuth
@@ -251,11 +252,31 @@ class CalendarExcursionDetailViewModel @Inject constructor(
         }
     }
 
+    fun getApprovedAuthorizationCount(userId: String): Flow<Int> = flow {
+        if (userId.isEmpty()) {
+            emit(0)
+        } else {
+            val snapshot = firestore.collection("signedAuthorizations")
+                .whereEqualTo("excursionId", excursionId)
+                .whereEqualTo("userId", userId)
+                .whereEqualTo("status", "APPROVED")
+                .get()
+                .await()
+
+            emit(snapshot.size())
+        }
+    }
+
     private suspend fun fetchServerParticipantCount(excursionId: String): Int? {
         return try {
             val result = functions
                 .getHttpsCallable("getExcursionParticipantCount")
-                .call(mapOf("excursionId" to excursionId))
+                .call(
+                    mapOf(
+                        "excursionId" to excursionId,
+                        "databaseId" to BuildConfig.FIRESTORE_DATABASE_ID
+                    )
+                )
                 .await()
 
             @Suppress("UNCHECKED_CAST")

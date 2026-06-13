@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import {getFirestore} from "firebase-admin/firestore";
 import {randomBytes} from "node:crypto";
 import {
   onDocumentCreated,
@@ -12,10 +13,19 @@ admin.initializeApp();
 
 // ✅ IMPORTAR funciones de pago
 import { createPaymentIntent } from './payments/createPaymentIntent';
+import {
+  createPaymentProofUploadAuthorization,
+} from "./payments/createPaymentProofUploadAuthorization";
 import { paymentNotification } from './payments/paymentNotification';
+import { paymentResult } from './payments/paymentResult';
 
 // ✅ EXPORTAR funciones de pago (nombres exactos para deploy)
-export { createPaymentIntent, paymentNotification };
+export {
+  createPaymentIntent,
+  createPaymentProofUploadAuthorization,
+  paymentNotification,
+  paymentResult,
+};
 
 interface PendingUserDocument {
   email: string;
@@ -738,6 +748,17 @@ export const onExcursionCreated = onDocumentCreated({
   const excursionId = event.params.excursionId;
   const excursionData = snapshot.data();
 
+  if (
+    typeof excursionData.title !== "string" ||
+    excursionData.title.trim().length === 0 ||
+    !excursionData.date
+  ) {
+    console.log(
+      `Excursion ${excursionId} incompleta; no se envia notificacion`
+    );
+    return;
+  }
+
   try {
     const title = excursionData.title || "Nueva excursión";
     const date = excursionData.date;
@@ -1262,21 +1283,31 @@ export const getExcursionParticipantCount = onCall({
     throw new HttpsError("unauthenticated", "Debes iniciar sesiÃ³n");
   }
 
-  const {excursionId} = request.data as {excursionId?: string};
+  const {excursionId, databaseId} = request.data as {
+    excursionId?: string;
+    databaseId?: string;
+  };
 
   if (!excursionId || typeof excursionId !== "string") {
     throw new HttpsError("invalid-argument", "Falta excursionId");
   }
 
-  await updateExcursionCurrentParticipants(excursionId);
-
-  const excursionDoc = await admin.firestore()
-    .collection("excursions")
-    .doc(excursionId)
+  const normalizedDatabaseId = databaseId === "debug" ?
+    "debug" :
+    "(default)";
+  const firestore = normalizedDatabaseId === "(default)" ?
+    admin.firestore() :
+    getFirestore(normalizedDatabaseId);
+  const authorizationsSnapshot = await firestore
+    .collection("signedAuthorizations")
+    .where("excursionId", "==", excursionId)
     .get();
+  const currentParticipants = authorizationsSnapshot.docs.filter((doc) =>
+    ACTIVE_AUTHORIZATION_STATUSES.includes(doc.get("status"))
+  ).length;
 
   return {
-    currentParticipants: excursionDoc.get("currentParticipants") || 0,
+    currentParticipants,
   };
 });
 

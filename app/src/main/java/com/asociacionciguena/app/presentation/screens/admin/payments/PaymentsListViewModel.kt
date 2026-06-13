@@ -81,6 +81,7 @@ class PaymentsListViewModel @Inject constructor(
                 _message.value = when (status) {
                     PaymentStatus.PAID -> "Comprobante aprobado"
                     PaymentStatus.REJECTED -> "Comprobante rechazado"
+                    PaymentStatus.INITIATED -> null
                     PaymentStatus.PENDING -> null
                 }
                 loadPayments(excursionId)

@@ -241,7 +241,7 @@ private fun ExcursionDetailContent(
                                 color = if (isCapacityFull) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                text = "$activeAuthorizationCount/${excursion.maxParticipants} participantes. ${remainingPlaces ?: 0} plaza(s) libres.",
+                                text = "${remainingPlaces ?: 0} plaza(s) disponibles.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (isCapacityFull) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
                             )
@@ -256,9 +256,12 @@ private fun ExcursionDetailContent(
                 val paymentStatus by viewModel.getPaymentStatus(currentUser?.id ?: "").collectAsState(initial = null)
                 val hasSignedForPayment by viewModel.hasUserSignedAuthorization(currentUser?.id ?: "").collectAsState(initial = false)
                 val hasApprovedAuthorization by viewModel.hasUserApprovedAuthorization(currentUser?.id ?: "").collectAsState(initial = false)
+                val approvedAuthorizationCount by viewModel.getApprovedAuthorizationCount(currentUser?.id ?: "").collectAsState(initial = 0)
                 val isUploadingPaymentProof by viewModel.isUploadingPaymentProof.collectAsState()
                 val isPaymentBlockedByCapacity = isCapacityFull && !hasSignedForPayment
                 val isPaymentBlockedByAuthorization = currentUser != null && !hasApprovedAuthorization
+                val paymentParticipantCount = approvedAuthorizationCount.coerceAtLeast(1)
+                val paymentAmount = price * paymentParticipantCount
                 var showPaymentSheet by remember { mutableStateOf(false) }
 
                 Divider(modifier = Modifier.padding(vertical = 16.dp))
@@ -266,6 +269,7 @@ private fun ExcursionDetailContent(
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = when {
                     isUploadingPaymentProof -> MaterialTheme.colorScheme.secondaryContainer
                     paymentStatus?.status == PaymentStatus.PAID -> MaterialTheme.colorScheme.primaryContainer
+                    paymentStatus?.status == PaymentStatus.INITIATED -> MaterialTheme.colorScheme.surfaceVariant
                     paymentStatus?.status == PaymentStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
                     paymentStatus?.status == PaymentStatus.REJECTED -> MaterialTheme.colorScheme.errorContainer
                     else -> MaterialTheme.colorScheme.surfaceVariant
@@ -274,7 +278,10 @@ private fun ExcursionDetailContent(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column {
                                 Text("Precio", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(String.format("%.2f€", price), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                                Text(String.format("%.2f€", paymentAmount), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                                if (approvedAuthorizationCount > 1) {
+                                    Text("${approvedAuthorizationCount} participantes x ${String.format("%.2f€", price)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
                             if (isUploadingPaymentProof) {
                                 CircularProgressIndicator(
@@ -282,7 +289,9 @@ private fun ExcursionDetailContent(
                                     strokeWidth = 2.dp
                                 )
                             } else {
-                                paymentStatus?.status?.let { PaymentStatusBadge(it) }
+                                paymentStatus?.status
+                                    ?.takeUnless { it == PaymentStatus.INITIATED }
+                                    ?.let { PaymentStatusBadge(it) }
                             }
                         }
                         if (isUploadingPaymentProof) {
@@ -294,6 +303,15 @@ private fun ExcursionDetailContent(
                         } else {
                             when(paymentStatus?.status) {
                                 PaymentStatus.PAID -> Text("✓ Pago confirmado", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                PaymentStatus.INITIATED -> {
+                                    if (isPaymentBlockedByCapacity) {
+                                        Text("No se puede pagar porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    } else if (isPaymentBlockedByAuthorization) {
+                                        Text("Podrás pagar cuando tu autorización esté aprobada.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    } else {
+                                        Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Pagar excursión") }
+                                    }
+                                }
                                 PaymentStatus.PENDING -> Text("Tu comprobante está pendiente de validación", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                                 PaymentStatus.REJECTED -> {
                                     Text("Comprobante rechazado. Contacta con un administrador.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
@@ -323,12 +341,12 @@ private fun ExcursionDetailContent(
                 if (showPaymentSheet && currentUser != null && hasApprovedAuthorization) {
                     PaymentBottomSheet(
                         excursionTitle = excursion.title,
-                        amount = excursion.price ?: 0.0,
+                        amount = paymentAmount,
                         userName = currentUser?.displayName ?: "",
                         excursionId = excursion.id,  // ← Asegúrate de pasar esto
                         onDismiss = { showPaymentSheet = false },
                         onUploadProof = { uri ->
-                            viewModel.uploadPaymentProof(excursion.id, excursion.price ?: 0.0, uri)
+                            viewModel.uploadPaymentProof(excursion.id, paymentAmount, uri)
                             showPaymentSheet = false
                         },
                         onNavigateToPayment = { excursionId, amount ->
@@ -431,16 +449,19 @@ private fun ErrorMessage(
 private fun PaymentStatusBadge(status: PaymentStatus) {
     val containerColor = when (status) {
         PaymentStatus.PAID -> MaterialTheme.colorScheme.primary
+        PaymentStatus.INITIATED -> MaterialTheme.colorScheme.surfaceVariant
         PaymentStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
         PaymentStatus.REJECTED -> MaterialTheme.colorScheme.error
     }
     val contentColor = when (status) {
         PaymentStatus.PAID -> MaterialTheme.colorScheme.onPrimary
+        PaymentStatus.INITIATED -> MaterialTheme.colorScheme.onSurfaceVariant
         PaymentStatus.PENDING -> MaterialTheme.colorScheme.onSecondaryContainer
         PaymentStatus.REJECTED -> MaterialTheme.colorScheme.onError
     }
     val label = when (status) {
         PaymentStatus.PAID -> "Pagado"
+        PaymentStatus.INITIATED -> "Iniciado"
         PaymentStatus.PENDING -> "Pendiente"
         PaymentStatus.REJECTED -> "Rechazado"
     }

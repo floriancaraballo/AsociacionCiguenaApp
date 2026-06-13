@@ -3,6 +3,7 @@ package com.asociacionciguena.app.data.repository
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.asociacionciguena.app.BuildConfig
 import com.asociacionciguena.app.domain.model.Payment
 import com.asociacionciguena.app.domain.model.PaymentStatus
 import com.google.firebase.auth.FirebaseAuth
@@ -45,32 +46,20 @@ class PaymentRepository @Inject constructor(
         val listener = firestore.collection("payments")
             .whereEqualTo("excursionId", excursionId)
             .whereEqualTo("userId", userId)
-            .limit(1)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     trySend(null)
                     return@addSnapshotListener
                 }
 
-                val doc = snapshot?.documents?.firstOrNull()
-                if (doc == null) {
-                    trySend(null)
-                } else {
-                    trySend(
-                        Payment(
-                            id = doc.id,
-                            excursionId = doc.getString("excursionId") ?: "",
-                            userId = doc.getString("userId") ?: "",
-                            userName = doc.getString("userName") ?: "",
-                            amount = doc.getDouble("amount") ?: 0.0,
-                            status = PaymentStatus.fromFirestoreValue(doc.getString("status")),
-                            paymentProofUrl = doc.getString("paymentProofUrl"),
-                            paymentProofContentType = doc.getString("paymentProofContentType"),
-                            paymentProofFileName = doc.getString("paymentProofFileName"),
-                            validatedBy = doc.getString("validatedBy")
-                        )
-                    )
-                }
+                val documents = snapshot?.documents.orEmpty()
+                val paidPaymentDoc = documents
+                    .filter { doc -> PaymentStatus.fromFirestoreValue(doc.getString("status")) == PaymentStatus.PAID }
+                    .maxByOrNull { doc -> doc.paymentSortMillis() }
+                val latestPaymentDoc = documents.maxByOrNull { doc -> doc.paymentSortMillis() }
+                val payment = (paidPaymentDoc ?: latestPaymentDoc)?.toPayment()
+
+                trySend(payment)
             }
 
         awaitClose { listener.remove() }
@@ -106,27 +95,53 @@ class PaymentRepository @Inject constructor(
             val existingPayment = firestore.collection("payments")
                 .whereEqualTo("excursionId", excursionId)
                 .whereEqualTo("userId", userId)
-                .limit(1)
                 .get()
                 .await()
 
-            val existingPaymentDoc = existingPayment.documents.firstOrNull()
-            if (PaymentStatus.fromFirestoreValue(existingPaymentDoc?.getString("status")) == PaymentStatus.PAID) {
+            val paidPaymentDoc = existingPayment.documents
+                .filter { doc -> PaymentStatus.fromFirestoreValue(doc.getString("status")) == PaymentStatus.PAID }
+                .maxByOrNull { doc -> doc.paymentSortMillis() }
+            if (paidPaymentDoc != null) {
                 return Result.failure(Exception("El pago ya está confirmado"))
             }
 
+            val existingBankTransferDoc = existingPayment.documents
+                .filter { doc -> doc.getString("paymentMethod") != "redsys" }
+                .maxByOrNull { doc -> doc.paymentSortMillis() }
+
+            val uploadAuthorizationId = createPaymentProofUploadAuthorization(
+                excursionId = excursionId,
+                authorizationId = approvedAuthorizationId
+            )
+
             // 1. Subir comprobante a Storage
-            val proofId = UUID.randomUUID().toString()
             val storageRef = storage.reference
-                .child("payments/${excursionId}/${userId}_${proofId}.${extensionForContentType(contentType)}")
+                .child("payments/${excursionId}/${userId}_${uploadAuthorizationId}")
 
             val metadata = StorageMetadata.Builder()
                 .setContentType(contentType)
                 .setCustomMetadata("authorizationId", approvedAuthorizationId)
+                .setCustomMetadata("databaseId", BuildConfig.FIRESTORE_DATABASE_ID)
+                .setCustomMetadata("uploadAuthorizationId", uploadAuthorizationId)
                 .build()
 
-            storageRef.putFile(photoUri, metadata).await()
-            val downloadUrl = storageRef.downloadUrl.await().toString()
+            try {
+                storageRef.putFile(photoUri, metadata).await()
+            } catch (e: Exception) {
+                throw Exception(
+                    "Storage rechazo la subida del archivo: ${e.message}",
+                    e
+                )
+            }
+
+            val downloadUrl = try {
+                storageRef.downloadUrl.await().toString()
+            } catch (e: Exception) {
+                throw Exception(
+                    "El archivo se subio, pero Storage rechazo obtener su URL: ${e.message}",
+                    e
+                )
+            }
 
             val paymentData = hashMapOf(
                 "excursionId" to excursionId,
@@ -134,6 +149,7 @@ class PaymentRepository @Inject constructor(
                 "userName" to userName,
                 "amount" to amount,
                 "status" to PaymentStatus.PENDING.name,
+                "paymentMethod" to "bank_transfer",
                 "authorizationId" to approvedAuthorizationId,
                 "paymentProofUrl" to downloadUrl,
                 "paymentProofContentType" to contentType,
@@ -141,9 +157,10 @@ class PaymentRepository @Inject constructor(
                 "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )
 
-            if (existingPaymentDoc != null) {
+            if (existingBankTransferDoc != null) {
                 val paymentUpdateData = hashMapOf(
                     "status" to PaymentStatus.PENDING.name,
+                    "paymentMethod" to "bank_transfer",
                     "authorizationId" to approvedAuthorizationId,
                     "paymentProofUrl" to downloadUrl,
                     "paymentProofContentType" to contentType,
@@ -151,15 +168,29 @@ class PaymentRepository @Inject constructor(
                     "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                 )
 
-                firestore.collection("payments")
-                    .document(existingPaymentDoc.id)
-                    .update(paymentUpdateData)
-                    .await()
+                try {
+                    firestore.collection("payments")
+                        .document(existingBankTransferDoc.id)
+                        .update(paymentUpdateData)
+                        .await()
+                } catch (e: Exception) {
+                    throw Exception(
+                        "El archivo se subio, pero Firestore rechazo actualizar el pago: ${e.message}",
+                        e
+                    )
+                }
             } else {
                 // Crear nuevo
-                firestore.collection("payments")
-                    .add(paymentData)
-                    .await()
+                try {
+                    firestore.collection("payments")
+                        .add(paymentData)
+                        .await()
+                } catch (e: Exception) {
+                    throw Exception(
+                        "El archivo se subio, pero Firestore rechazo crear el pago: ${e.message}",
+                        e
+                    )
+                }
             }
 
             Result.success(downloadUrl)
@@ -210,6 +241,45 @@ class PaymentRepository @Inject constructor(
         return userApprovedAuthorization.documents.firstOrNull()?.id
     }
 
+    private suspend fun createPaymentProofUploadAuthorization(
+        excursionId: String,
+        authorizationId: String
+    ): String {
+        val currentUser = auth.currentUser
+            ?: throw Exception("La sesion ha caducado. Inicia sesion de nuevo")
+
+        try {
+            currentUser.getIdToken(true).await()
+        } catch (e: Exception) {
+            throw Exception(
+                "No se pudo renovar la sesion. Inicia sesion de nuevo",
+                e
+            )
+        }
+
+        val result = functions
+            .getHttpsCallable("createPaymentProofUploadAuthorization")
+            .call(
+                mapOf(
+                    "excursionId" to excursionId,
+                    "authorizationId" to authorizationId,
+                    "databaseId" to BuildConfig.FIRESTORE_DATABASE_ID
+                )
+            )
+            .await()
+
+        @Suppress("UNCHECKED_CAST")
+        val responseData = result.getData() as? Map<String, Any>
+            ?: throw Exception("El servidor no autorizo la subida del comprobante")
+        val uploadAuthorizationId = responseData["uploadAuthorizationId"] as? String
+
+        if (uploadAuthorizationId.isNullOrBlank()) {
+            throw Exception("El servidor no devolvio un permiso de subida valido")
+        }
+
+        return uploadAuthorizationId
+    }
+
     /**
      * Obtener todos los pagos pendientes (para admin)
      */
@@ -255,30 +325,62 @@ class PaymentRepository @Inject constructor(
                 .get()
                 .await()
 
-            val payments = snapshot.documents.mapNotNull { doc ->
-                try {
-                    Payment(
-                        id = doc.id,
-                        excursionId = doc.getString("excursionId") ?: "",
-                        userId = doc.getString("userId") ?: "",
-                        userName = doc.getString("userName") ?: "",
-                        amount = doc.getDouble("amount") ?: 0.0,
-                        status = PaymentStatus.fromFirestoreValue(doc.getString("status")),
-                        paymentProofUrl = doc.getString("paymentProofUrl"),
-                        paymentProofContentType = doc.getString("paymentProofContentType"),
-                        paymentProofFileName = doc.getString("paymentProofFileName"),
-                        validatedBy = doc.getString("validatedBy")
-                    )
-                } catch (e: Exception) {
-                    null
+            val authorizationSnapshot = firestore.collection("signedAuthorizations")
+                .whereEqualTo("excursionId", excursionId)
+                .whereEqualTo("status", "APPROVED")
+                .get()
+                .await()
+
+            val participantNamesByUser = authorizationSnapshot.documents
+                .groupBy { doc -> doc.getString("userId").orEmpty() }
+                .mapValues { (_, authorizations) ->
+                    authorizations.mapNotNull { authorization ->
+                        authorization.getString("minorName")
+                            ?.trim()
+                            ?.takeIf { it.isNotEmpty() }
+                    }
                 }
-            }.sortedBy { payment ->
-                when (payment.status) {
-                    PaymentStatus.PENDING -> 0
-                    PaymentStatus.REJECTED -> 1
-                    PaymentStatus.PAID -> 2
+
+            val payments = snapshot.documents
+                .filter { doc ->
+                    PaymentStatus.fromFirestoreValue(doc.getString("status")) == PaymentStatus.PAID ||
+                            !doc.getString("paymentProofUrl").isNullOrBlank()
                 }
-            }
+                .mapNotNull { doc ->
+                    try {
+                        val userId = doc.getString("userId") ?: ""
+                        val storedParticipantNames = (doc.get("participantNames") as? List<*>)
+                            .orEmpty()
+                            .mapNotNull { name -> (name as? String)?.trim() }
+                            .filter { name -> name.isNotEmpty() }
+
+                        Payment(
+                            id = doc.id,
+                            excursionId = doc.getString("excursionId") ?: "",
+                            userId = userId,
+                            userName = doc.getString("userName") ?: "",
+                            participantNames = storedParticipantNames.ifEmpty {
+                                participantNamesByUser[userId].orEmpty()
+                            },
+                            amount = doc.getDouble("amount") ?: 0.0,
+                            status = PaymentStatus.fromFirestoreValue(doc.getString("status")),
+                            paymentProofUrl = doc.getString("paymentProofUrl"),
+                            paymentProofContentType = doc.getString("paymentProofContentType"),
+                            paymentProofFileName = doc.getString("paymentProofFileName"),
+                            validatedBy = doc.getString("validatedBy")
+                        )
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                .sortedBy { payment ->
+                    when (payment.status) {
+                        PaymentStatus.INITIATED -> 0
+                        PaymentStatus.PENDING -> 0
+                        PaymentStatus.REJECTED -> 1
+                        PaymentStatus.PAID -> 2
+                    }
+                }
 
             emit(payments)
         } catch (e: Exception) {
@@ -328,7 +430,8 @@ class PaymentRepository @Inject constructor(
             "excursionId" to excursionId,
             "amount" to amount,
             "userName" to userName,
-            "userEmail" to userEmail
+            "userEmail" to userEmail,
+            "databaseId" to BuildConfig.FIRESTORE_DATABASE_ID
         )
 
         try {
@@ -351,6 +454,18 @@ class PaymentRepository @Inject constructor(
                 else -> emptyMap()
             }
 
+            if (orderId.isBlank() || tpvUrl.isBlank()) {
+                throw Exception("La pasarela no devolvio una orden de pago valida")
+            }
+
+            if (
+                params["Ds_MerchantParameters"].isNullOrBlank() ||
+                params["Ds_Signature"].isNullOrBlank() ||
+                params["Ds_SignatureVersion"].isNullOrBlank()
+            ) {
+                throw Exception("La pasarela no devolvio parametros de firma validos")
+            }
+
             return PaymentIntentResult(
                 orderId = orderId,
                 tpvUrl = tpvUrl,
@@ -361,6 +476,29 @@ class PaymentRepository @Inject constructor(
             android.util.Log.e("PaymentRepo", "❌ Error en createPaymentIntent: ${e.message}", e)
             throw Exception("Error al crear intención de pago: ${e.message}")
         }
+    }
+
+    private fun com.google.firebase.firestore.DocumentSnapshot.toPayment(): Payment {
+        return Payment(
+            id = id,
+            excursionId = getString("excursionId") ?: "",
+            userId = getString("userId") ?: "",
+            userName = getString("userName") ?: "",
+            amount = getDouble("amount") ?: 0.0,
+            status = PaymentStatus.fromFirestoreValue(getString("status")),
+            paymentProofUrl = getString("paymentProofUrl"),
+            paymentProofContentType = getString("paymentProofContentType"),
+            paymentProofFileName = getString("paymentProofFileName"),
+            validatedBy = getString("validatedBy")
+        )
+    }
+
+    private fun com.google.firebase.firestore.DocumentSnapshot.paymentSortMillis(): Long {
+        return getTimestamp("updatedAt")?.toDate()?.time
+            ?: getTimestamp("processedAt")?.toDate()?.time
+            ?: getTimestamp("createdAt")?.toDate()?.time
+            ?: id.take(8).toLongOrNull()
+            ?: 0L
     }
 }
 

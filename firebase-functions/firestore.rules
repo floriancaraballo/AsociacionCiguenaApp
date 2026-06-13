@@ -135,6 +135,7 @@ service cloud.firestore {
       allow create: if isAuthenticated()
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.status == 'PENDING'
+                    && request.resource.data.paymentMethod == 'bank_transfer'
                     && request.resource.data.amount is number
                     && request.resource.data.excursionId is string
                     && hasApprovedAuthorization(request.resource.data)
@@ -154,11 +155,14 @@ service cloud.firestore {
       allow update: if isAuthenticated()
                     && resource.data.userId == request.auth.uid
                     && resource.data.status in ['PENDING', 'REJECTED']
+                    && (!('paymentMethod' in resource.data)
+                        || resource.data.paymentMethod == 'bank_transfer')
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.status == 'PENDING'
+                    && request.resource.data.paymentMethod == 'bank_transfer'
                     && hasApprovedAuthorization(request.resource.data)
                     && request.resource.data.diff(resource.data).affectedKeys()
-                      .hasOnly(['status', 'authorizationId', 'paymentProofUrl', 'paymentProofContentType', 'paymentProofFileName', 'updatedAt']);
+                      .hasOnly(['status', 'paymentMethod', 'authorizationId', 'paymentProofUrl', 'paymentProofContentType', 'paymentProofFileName', 'updatedAt']);
 
       allow delete: if isAdmin();
     }

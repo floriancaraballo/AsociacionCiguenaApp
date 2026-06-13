@@ -15,10 +15,21 @@ import javax.inject.Inject
 
 sealed class PaymentUiState {
     object Loading : PaymentUiState()
-    data class PaymentReady(val tpvUrl: String, val params: Map<String, String>) : PaymentUiState()
+    data class PaymentReady(
+        val orderId: String,
+        val tpvUrl: String,
+        val params: Map<String, String>
+    ) : PaymentUiState()
     object Success : PaymentUiState()
     data class Error(val message: String) : PaymentUiState()
 }
+
+data class PaymentViewConfig(
+    val loadingTitle: String = "Conectando con la pasarela de pago segura...",
+    val redirectMessage: String = "Redirigiendo a Redsys...",
+    val progressColor: String = "#1976D2",
+    val errorPrefix: String = "Error al iniciar el pago"
+)
 
 @HiltViewModel
 class PaymentViewModel @Inject constructor(
@@ -29,6 +40,8 @@ class PaymentViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<PaymentUiState>(PaymentUiState.Loading)
     val uiState: StateFlow<PaymentUiState> = _uiState.asStateFlow()
+
+    val viewConfig = PaymentViewConfig()
 
     fun createPaymentIntent(excursionId: String, amount: Double) {
         viewModelScope.launch {
@@ -54,12 +67,13 @@ class PaymentViewModel @Inject constructor(
 
                 // Actualizar estado con URL y parámetros para el WebView
                 _uiState.value = PaymentUiState.PaymentReady(
+                    orderId = result.orderId,
                     tpvUrl = result.tpvUrl,
                     params = result.params
                 )
 
             } catch (e: Exception) {
-                _uiState.value = PaymentUiState.Error("Error al iniciar el pago: ${e.message}")
+                _uiState.value = PaymentUiState.Error("${viewConfig.errorPrefix}: ${e.message}")
             }
         }
     }
@@ -68,7 +82,15 @@ class PaymentViewModel @Inject constructor(
         if (success) {
             _uiState.value = PaymentUiState.Success
         } else {
-            _uiState.value = PaymentUiState.Error("El pago fue cancelado o rechazado")
+            _uiState.value = PaymentUiState.Error("El pago no se ha completado")
         }
+    }
+
+    fun onPaymentLoadFailed(message: String) {
+        _uiState.value = PaymentUiState.Error(message)
+    }
+
+    fun cancelCurrentPayment(onFinished: () -> Unit) {
+        onFinished()
     }
 }
