@@ -16,36 +16,52 @@ import androidx.compose.ui.unit.dp
 fun SignatureCanvas(
     paths: List<Path> = emptyList(),
     onPathsChange: (List<Path>) -> Unit = {},
+    enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     var currentPath by remember { mutableStateOf(Path()) }
     var currentOffset by remember { mutableStateOf<Offset?>(null) }
 
+    LaunchedEffect(enabled) {
+        if (!enabled) {
+            currentPath = Path()
+            currentOffset = null
+        }
+    }
+
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(
+            containerColor = if (enabled) Color.White else MaterialTheme.colorScheme.surfaceVariant
+        ),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(200.dp)
-                .pointerInput(paths) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            currentPath = Path().apply { moveTo(offset.x, offset.y) }
-                            currentOffset = offset
-                        },
-                        onDrag = { change, _ ->
-                            currentPath.lineTo(change.position.x, change.position.y)
-                            currentOffset = change.position
-                        },
-                        onDragEnd = {
-                            onPathsChange(paths + currentPath)
-                            currentPath = Path()
-                            currentOffset = null
-                        }
-                    )
+                .pointerInput(paths, enabled) {
+                    if (enabled) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                currentPath = Path().apply { moveTo(offset.x, offset.y) }
+                                currentOffset = offset
+                            },
+                            onDrag = { change, _ ->
+                                currentPath.lineTo(change.position.x, change.position.y)
+                                currentOffset = change.position
+                            },
+                            onDragEnd = {
+                                onPathsChange(paths + currentPath)
+                                currentPath = Path()
+                                currentOffset = null
+                            },
+                            onDragCancel = {
+                                currentPath = Path()
+                                currentOffset = null
+                            }
+                        )
+                    }
                 }
         ) {
             paths.forEach { path ->

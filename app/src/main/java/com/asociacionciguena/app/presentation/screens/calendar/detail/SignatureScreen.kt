@@ -439,6 +439,7 @@ fun SignatureScreen(
                             updateCurrentMinor { it.copy(signaturePaths = newPaths) }
                         }
                     },
+                    enabled = !isSubmitting,
                     modifier = Modifier.fillMaxWidth().height(200.dp)
                 )
             }
