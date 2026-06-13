@@ -13,6 +13,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.presentation.components.SignatureCanvas
+import com.asociacionciguena.app.domain.model.RegistrationClosureReason
 import com.asociacionciguena.app.util.formatDateRange
 import kotlinx.coroutines.launch
 
@@ -65,8 +66,9 @@ fun SignatureScreen(
     val isCapacityFull = excursion?.let {
         it.maxParticipants > 0 && activeAuthorizationCount >= it.maxParticipants
     } ?: false
+    val isRegistrationClosed = excursion?.registrationClosed == true || isCapacityFull
 
-    if (isCapacityFull) {
+    if (isRegistrationClosed) {
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -98,8 +100,21 @@ fun SignatureScreen(
                 ) {
                     Icon(Icons.Default.Block, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
                     Column {
-                        Text("Plazas completas", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onErrorContainer)
-                        Text("No se pueden rellenar más autorizaciones para esta excursión.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                        Text(
+                            if (excursion?.registrationClosureReason ==
+                                RegistrationClosureReason.DEADLINE_PASSED
+                            ) "Plazo finalizado" else "Plazas completas",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            if (excursion?.registrationClosureReason ==
+                                RegistrationClosureReason.DEADLINE_PASSED
+                            ) "El plazo de inscripción para esta excursión ha finalizado."
+                            else "No se pueden rellenar más autorizaciones para esta excursión.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
                     }
                 }
             }

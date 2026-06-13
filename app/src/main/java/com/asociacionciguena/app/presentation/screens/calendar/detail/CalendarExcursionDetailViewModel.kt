@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.asociacionciguena.app.BuildConfig
 import com.asociacionciguena.app.domain.model.Excursion
+import com.asociacionciguena.app.domain.model.RegistrationClosureReason
+import com.asociacionciguena.app.domain.model.RegistrationClosureSource
 import com.asociacionciguena.app.domain.model.User
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -105,9 +107,16 @@ class CalendarExcursionDetailViewModel @Inject constructor(
                     location = excursionDoc.getString("location") ?: "",
                     imageUrl = excursionDoc.getString("imageUrl"),
                     authorizationPdfUrl = excursionDoc.getString("authorizationPdfUrl"),
-                    price = excursionDoc.getDouble("price"),  // ← NUEVO
+                    price = excursionDoc.getDouble("price"),
                     maxParticipants = excursionDoc.getLong("maxParticipants")?.toInt() ?: 0,
-                    currentParticipants = excursionDoc.getLong("currentParticipants")?.toInt() ?: 0
+                    currentParticipants = excursionDoc.getLong("currentParticipants")?.toInt() ?: 0,
+                    registrationClosed = excursionDoc.getBoolean("registrationClosed") ?: false,
+                    registrationClosureReason = RegistrationClosureReason.fromStorage(
+                        excursionDoc.getString("registrationClosureReason")
+                    ),
+                    registrationClosureSource = RegistrationClosureSource.fromStorage(
+                        excursionDoc.getString("registrationClosureSource")
+                    )
                 )
 
                 // Verificar si es admin
@@ -309,11 +318,6 @@ class CalendarExcursionDetailViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
-                if (!signedAuthorizationRepository.hasAvailableCapacity(excursionId, requestedParticipants = 1)) {
-                    onError("No quedan plazas disponibles para esta excursión")
-                    return@launch
-                }
-
                 val result = signedAuthorizationRepository.signAuthorization(
                     excursionId = excursionId,
                     excursionTitle = excursionTitle,
@@ -356,35 +360,26 @@ class CalendarExcursionDetailViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
-                val authorizationIds = mutableListOf<String>()
-                val requestedParticipants = minors.size
-
-                if (!signedAuthorizationRepository.hasAvailableCapacity(excursionId, requestedParticipants)) {
-                    onError("No quedan plazas disponibles para ${requestedParticipants} participante(s)")
-                    return@launch
-                }
-
-                // 1. Firmar cada autorización CON isBatchEmail = true
-                for (minor in minors) {
-                    val result = signedAuthorizationRepository.signAuthorization(
-                        excursionId = excursionId,
-                        excursionTitle = excursionTitle,
-                        excursionDate = excursionDate,
-                        tutorName = minor.tutorName,
-                        tutorDni = minor.tutorDni,
-                        tutorPhone = minor.tutorPhone,
-                        tutorEmail = tutorEmail,
-                        minorName = minor.minorName,
-                        signaturePaths = minor.signaturePaths,
-                        isBatchEmail = true  // ← IMPORTANTE: marcar como batch
-                    )
-
-                    if (result.isSuccess) {
-                        authorizationIds.add(result.getOrNull() ?: "")
-                    } else {
-                        throw Exception("Error al firmar: ${result.exceptionOrNull()?.message}")
+                val result = signedAuthorizationRepository.signAuthorizations(
+                    excursionId = excursionId,
+                    requests = minors.map { minor ->
+                        SignedAuthorizationRepository.AuthorizationRequest(
+                            excursionTitle = excursionTitle,
+                            excursionDate = excursionDate,
+                            tutorName = minor.tutorName,
+                            tutorDni = minor.tutorDni,
+                            tutorPhone = minor.tutorPhone,
+                            tutorEmail = tutorEmail,
+                            minorName = minor.minorName,
+                            signaturePaths = minor.signaturePaths,
+                            isBatchEmail = true
+                        )
                     }
+                )
+                if (result.isFailure) {
+                    throw result.exceptionOrNull() ?: Exception("Error al firmar autorizaciones")
                 }
+                val authorizationIds = result.getOrThrow()
 
                 // 2. ✅ LLAMAR A CLOUD FUNCTION PARA EMAIL BATCH (SOLO UNA VEZ)
                 if (authorizationIds.isNotEmpty()) {

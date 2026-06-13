@@ -24,6 +24,8 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import com.asociacionciguena.app.domain.model.RegistrationClosureReason
+import com.asociacionciguena.app.domain.model.RegistrationClosureSource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,6 +39,10 @@ fun ExcursionFormScreen(
     val location by viewModel.location.collectAsState()
     val price by viewModel.price.collectAsState()
     val maxParticipants by viewModel.maxParticipants.collectAsState()
+    val currentParticipants by viewModel.currentParticipants.collectAsState()
+    val registrationClosed by viewModel.registrationClosed.collectAsState()
+    val registrationClosureReason by viewModel.registrationClosureReason.collectAsState()
+    val registrationClosureSource by viewModel.registrationClosureSource.collectAsState()
     val imageUrl by viewModel.imageUrl.collectAsState()
     val imageUploadState by viewModel.imageUploadState.collectAsState()
     val date by viewModel.date.collectAsState()
@@ -126,6 +132,10 @@ fun ExcursionFormScreen(
                     location = location,
                     price = price,
                     maxParticipants = maxParticipants,
+                    currentParticipants = currentParticipants,
+                    registrationClosed = registrationClosed,
+                    registrationClosureReason = registrationClosureReason,
+                    registrationClosureSource = registrationClosureSource,
                     imageUrl = imageUrl,
                     date = date,
                     endDate = endDate,
@@ -139,6 +149,9 @@ fun ExcursionFormScreen(
                     onLocationChange = viewModel::onLocationChange,
                     onPriceChange = viewModel::onPriceChange,
                     onMaxParticipantsChange = viewModel::onMaxParticipantsChange,
+                    onRegistrationClosedChange = viewModel::onRegistrationClosedChange,
+                    onRegistrationClosureReasonChange =
+                        viewModel::onRegistrationClosureReasonChange,
                     onImageUrlChange = viewModel::onImageUrlChange,
                     onDatePickerClick = { showDatePicker = true },
                     onEndDatePickerClick = { showEndDatePicker = true },
@@ -244,6 +257,10 @@ private fun ExcursionFormContent(
     location: String,
     price: String,  // ← AÑADIR
     maxParticipants: String,
+    currentParticipants: Int,
+    registrationClosed: Boolean,
+    registrationClosureReason: RegistrationClosureReason?,
+    registrationClosureSource: RegistrationClosureSource?,
     imageUrl: String,
     date: LocalDateTime?,
     endDate: LocalDateTime?,
@@ -257,6 +274,8 @@ private fun ExcursionFormContent(
     onLocationChange: (String) -> Unit,
     onPriceChange: (String) -> Unit,  // ← NUEVO
     onMaxParticipantsChange: (String) -> Unit,
+    onRegistrationClosedChange: (Boolean) -> Unit,
+    onRegistrationClosureReasonChange: (RegistrationClosureReason) -> Unit,
     onImageUrlChange: (String) -> Unit,
     onDatePickerClick: () -> Unit,
     onEndDatePickerClick: () -> Unit,
@@ -300,6 +319,84 @@ private fun ExcursionFormContent(
                             tint = MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
+                }
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (registrationClosed) {
+                    MaterialTheme.colorScheme.errorContainer
+                } else {
+                    MaterialTheme.colorScheme.primaryContainer
+                }
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Estado de inscripciones",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            if (registrationClosed) "Autorizaciones cerradas"
+                            else "Autorizaciones abiertas",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    Switch(
+                        checked = registrationClosed,
+                        onCheckedChange = onRegistrationClosedChange,
+                        enabled = !isSaving
+                    )
+                }
+
+                if (registrationClosed) {
+                    if (registrationClosureSource == RegistrationClosureSource.AUTOMATIC) {
+                        Text(
+                            "Cierre automático al alcanzar el máximo de participantes.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Text("Motivo del cierre", style = MaterialTheme.typography.labelLarge)
+                    RegistrationClosureReason.entries.forEach { reason ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = registrationClosureReason == reason,
+                                onClick = {
+                                    if (!isSaving) {
+                                        onRegistrationClosureReasonChange(reason)
+                                    }
+                                }
+                            )
+                            Text(
+                                when (reason) {
+                                    RegistrationClosureReason.CAPACITY_FULL ->
+                                        "Plazas agotadas"
+                                    RegistrationClosureReason.DEADLINE_PASSED ->
+                                        "Plazo de inscripción finalizado"
+                                }
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        "$currentParticipants participante(s) registrados. " +
+                            "El cierre por aforo se activará automáticamente.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         }

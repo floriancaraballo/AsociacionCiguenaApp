@@ -2,13 +2,16 @@ package com.asociacionciguena.app.data.repository
 
 import android.content.Context
 import android.net.Uri
+import com.asociacionciguena.app.BuildConfig
 import com.asociacionciguena.app.domain.model.SignedAuthorization
 import com.asociacionciguena.app.domain.model.AuthorizationStatus
 import com.asociacionciguena.app.util.PdfGenerator
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageReference
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
@@ -26,11 +29,24 @@ class SignedAuthorizationRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
     private val auth: FirebaseAuth,
+    private val functions: FirebaseFunctions,
     @ApplicationContext private val context: Context
 ) {
     private val activeAuthorizationStatuses = listOf(
         AuthorizationStatus.PENDING.name,
         AuthorizationStatus.APPROVED.name
+    )
+
+    data class AuthorizationRequest(
+        val excursionTitle: String,
+        val excursionDate: String,
+        val tutorName: String,
+        val tutorDni: String,
+        val tutorPhone: String,
+        val tutorEmail: String,
+        val minorName: String?,
+        val signaturePaths: List<androidx.compose.ui.graphics.Path>,
+        val isBatchEmail: Boolean = false
     )
 
     /**
@@ -51,95 +67,125 @@ class SignedAuthorizationRepository @Inject constructor(
         signaturePaths: List<androidx.compose.ui.graphics.Path>,
         isBatchEmail: Boolean = false
     ): Result<String> {
+        return signAuthorizations(
+            excursionId = excursionId,
+            requests = listOf(
+                AuthorizationRequest(
+                    excursionTitle = excursionTitle,
+                    excursionDate = excursionDate,
+                    tutorName = tutorName,
+                    tutorDni = tutorDni,
+                    tutorPhone = tutorPhone,
+                    tutorEmail = tutorEmail,
+                    minorName = minorName,
+                    signaturePaths = signaturePaths,
+                    isBatchEmail = isBatchEmail
+                )
+            )
+        ).mapCatching { ids -> ids.single() }
+    }
+
+    suspend fun signAuthorizations(
+        excursionId: String,
+        requests: List<AuthorizationRequest>
+    ): Result<List<String>> {
+        if (requests.isEmpty() || requests.size > 3) {
+            return Result.failure(IllegalArgumentException("Número de autorizaciones no válido"))
+        }
+
+        val userId = auth.currentUser?.uid
+            ?: return Result.failure(Exception("Usuario no autenticado"))
+        val uploadedReferences = mutableListOf<StorageReference>()
+        val localFiles = mutableListOf<File>()
+
         return try {
-            val userId = auth.currentUser?.uid
-                ?: return Result.failure(Exception("Usuario no autenticado"))
+            val batchId = UUID.randomUUID().toString()
+            val payloads = requests.map { request ->
+                val pdfFile = PdfGenerator.generateSignedAuthorization(
+                    context = context,
+                    excursionTitle = request.excursionTitle,
+                    excursionDate = request.excursionDate,
+                    tutorName = request.tutorName,
+                    tutorDni = request.tutorDni,
+                    tutorPhone = request.tutorPhone,
+                    minorName = request.minorName,
+                    signaturePaths = request.signaturePaths
+                )
+                localFiles += pdfFile
 
-            if (!hasAvailableCapacity(excursionId, requestedParticipants = 1)) {
-                return Result.failure(Exception("No quedan plazas disponibles para esta excursión"))
+                val signatureBitmap = PdfGenerator.pathsToBitmap(
+                    request.signaturePaths, 800, 300, 20f
+                )
+                val signatureFile = File(
+                    context.cacheDir,
+                    "signature_${UUID.randomUUID()}.png"
+                )
+                localFiles += signatureFile
+                signatureFile.outputStream().use { output ->
+                    signatureBitmap.compress(
+                        android.graphics.Bitmap.CompressFormat.PNG,
+                        100,
+                        output
+                    )
+                }
+
+                val signatureRef = storage.reference
+                    .child("authorizations/signatures/$userId")
+                    .child("${excursionId}_${UUID.randomUUID()}.png")
+                signatureRef.putFile(Uri.fromFile(signatureFile)).await()
+                uploadedReferences += signatureRef
+                val signatureUrl = signatureRef.downloadUrl.await().toString()
+
+                val pdfRef = storage.reference
+                    .child("authorizations/signed/$userId")
+                    .child("${excursionId}_${UUID.randomUUID()}.pdf")
+                pdfRef.putFile(Uri.fromFile(pdfFile)).await()
+                uploadedReferences += pdfRef
+                val pdfUrl = pdfRef.downloadUrl.await().toString()
+
+                mapOf(
+                    "excursionTitle" to request.excursionTitle,
+                    "excursionDate" to request.excursionDate,
+                    "tutorName" to request.tutorName,
+                    "tutorDni" to request.tutorDni,
+                    "tutorPhone" to request.tutorPhone,
+                    "tutorEmail" to request.tutorEmail,
+                    "minorName" to request.minorName,
+                    "signatureImageUrl" to signatureUrl,
+                    "signedPdfUrl" to pdfUrl,
+                    "batchId" to batchId,
+                    "isBatchEmail" to request.isBatchEmail
+                )
             }
 
-            android.util.Log.d("SignAuth", "🚀 Inicio firma - UserID: $userId, ExcursionID: $excursionId")
+            val callableResult = functions
+                .getHttpsCallable("reserveSignedAuthorizations")
+                .call(
+                    mapOf(
+                        "excursionId" to excursionId,
+                        "authorizations" to payloads,
+                        "databaseId" to BuildConfig.FIRESTORE_DATABASE_ID
+                    )
+                )
+                .await()
+            @Suppress("UNCHECKED_CAST")
+            val response = callableResult.getData() as? Map<String, Any?>
+            val ids = (response?.get("authorizationIds") as? List<*>)
+                ?.mapNotNull { it as? String }
+                .orEmpty()
 
-            // 1. Generar PDF
-            val pdfFile = PdfGenerator.generateSignedAuthorization(
-                context = context,
-                excursionTitle = excursionTitle,
-                excursionDate = excursionDate,
-                tutorName = tutorName,
-                tutorDni = tutorDni,
-                tutorPhone = tutorPhone,
-                minorName = minorName,
-                signaturePaths = signaturePaths
-            )
-            android.util.Log.d("SignAuth", "📄 PDF generado: ${pdfFile.length()} bytes")
-
-            // 2. Subir firma como imagen (ruta corregida: {userId} en lugar de {excursionId})
-            val signatureBitmap = PdfGenerator.pathsToBitmap(signaturePaths, 800, 300, 20f)
-            val signatureFile = File(context.cacheDir, "signature_${System.currentTimeMillis()}.png")
-            signatureFile.outputStream().use { out ->
-                signatureBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+            if (ids.size != requests.size) {
+                throw IllegalStateException("Respuesta incompleta al reservar las plazas")
             }
-
-            val signatureId = UUID.randomUUID().toString()
-            // ✅ RUTA CORREGIDA: authorizations/signatures/{userId}/{fileName}
-            val signatureRef = storage.reference
-                .child("authorizations")
-                .child("signatures")
-                .child(userId)  // ← CLAVE: userId, NO excursionId
-                .child("${excursionId}_${signatureId}.png")
-
-            android.util.Log.d("SignAuth", "📤 Subiendo firma a: ${signatureRef.path}")
-            signatureRef.putFile(Uri.fromFile(signatureFile)).await()
-            val signatureUrl = signatureRef.downloadUrl.await().toString()
-            signatureFile.delete()
-            android.util.Log.d("SignAuth", "✅ Firma subida: $signatureUrl")
-
-            // 3. Subir PDF firmado (ruta corregida: {userId} en lugar de {excursionId})
-            val pdfId = UUID.randomUUID().toString()
-            // ✅ RUTA CORREGIDA: authorizations/signed/{userId}/{fileName}
-            val pdfRef = storage.reference
-                .child("authorizations")
-                .child("signed")
-                .child(userId)  // ← CLAVE: userId, NO excursionId ⭐
-                .child("${excursionId}_${pdfId}.pdf")
-
-            android.util.Log.d("SignAuth", "📤 Subiendo PDF a: ${pdfRef.path}")
-            pdfRef.putFile(Uri.fromFile(pdfFile)).await()  // ← Si falla aquí, es error 403 de reglas
-            val pdfUrl = pdfRef.downloadUrl.await().toString()
-            pdfFile.delete()
-            android.util.Log.d("SignAuth", "✅ PDF subido: $pdfUrl")
-
-            val batchId = UUID.randomUUID().toString()  // ← Pasar desde el ViewModel
-
-            // 4. Guardar en Firestore
-            val authorizationData = hashMapOf(
-                "excursionId" to excursionId,
-                "excursionTitle" to excursionTitle,
-                "excursionDate" to excursionDate,
-                "userId" to userId,
-                "tutorName" to tutorName,
-                "tutorDni" to tutorDni,
-                "tutorPhone" to tutorPhone,
-                "tutorEmail" to tutorEmail,
-                "minorName" to minorName,
-                "signatureImageUrl" to signatureUrl,
-                "signedPdfUrl" to pdfUrl,
-                "signedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                "emailSent" to false,
-                "status" to AuthorizationStatus.PENDING.name,
-                "batchId" to batchId,
-                "isBatchEmail" to isBatchEmail
-            )
-
-            val docRef = firestore.collection("signedAuthorizations").add(authorizationData).await()
-            android.util.Log.d("SignAuth", "✅ Firestore doc creado: ${docRef.id}")
-
-            Result.success(docRef.id)
-
+            Result.success(ids)
         } catch (e: Exception) {
-            android.util.Log.e("SignAuth", "❌ ERROR CRÍTICO: ${e.message}", e)
+            uploadedReferences.forEach { reference ->
+                runCatching { reference.delete().await() }
+            }
+            android.util.Log.e("SignAuth", "Error reservando autorizaciones", e)
             Result.failure(e)
+        } finally {
+            localFiles.forEach { file -> runCatching { file.delete() } }
         }
     }
 
@@ -227,6 +273,10 @@ class SignedAuthorizationRepository @Inject constructor(
                 .get()
                 .await()
 
+            if (excursionDoc.getBoolean("registrationClosed") == true) {
+                return false
+            }
+
             val maxParticipants = excursionDoc.getLong("maxParticipants")?.toInt() ?: 0
             if (maxParticipants <= 0) return true
 
@@ -234,15 +284,15 @@ class SignedAuthorizationRepository @Inject constructor(
             if (activeCount == null) {
                 android.util.Log.w(
                     "AuthRepo",
-                    "No se pudo verificar el cupo de $excursionId; se permite continuar para no bloquear por permisos"
+                    "No se pudo verificar el cupo de $excursionId; se bloquea la firma"
                 )
-                return true
+                return false
             }
 
             activeCount + requestedParticipants <= maxParticipants
         } catch (e: Exception) {
             android.util.Log.w("AuthRepo", "Error verificando cupo de $excursionId", e)
-            true
+            false
         }
     }
 

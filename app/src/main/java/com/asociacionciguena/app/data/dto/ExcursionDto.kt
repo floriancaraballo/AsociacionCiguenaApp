@@ -14,9 +14,15 @@ data class ExcursionDto(
     val location: String = "",
     val maxParticipants: Int = 0,
     val currentParticipants: Int = 0,
+    val registrationClosed: Boolean = false,
+    val registrationClosureReason: String? = null,
+    val registrationClosureSource: String? = null,
     val imageUrl: String? = null,
     val authorizationPdfUrl: String? = null,
     val price: Double? = null
 ) {
-    constructor() : this("", "", "", null, null, "", 0, 0, null, null, null)
+    constructor() : this(
+        "", "", "", null, null, "", 0, 0,
+        false, null, null, null, null, null
+    )
 }

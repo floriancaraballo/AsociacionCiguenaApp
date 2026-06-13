@@ -45,6 +45,22 @@ interface InvitationUserData {
 const HOSTING_BASE_URL = "https://asociacion-ciguena-188da.web.app";
 const CUSTOM_AUTH_ACTION_URL = `${HOSTING_BASE_URL}/auth/action`;
 const ACTIVE_AUTHORIZATION_STATUSES = ["PENDING", "APPROVED"];
+const CAPACITY_FULL = "CAPACITY_FULL";
+const AUTOMATIC = "AUTOMATIC";
+
+type AuthorizationReservation = {
+  excursionTitle: string;
+  excursionDate: string;
+  tutorName: string;
+  tutorDni: string;
+  tutorPhone: string;
+  tutorEmail: string;
+  minorName?: string | null;
+  signatureImageUrl: string;
+  signedPdfUrl: string;
+  batchId: string;
+  isBatchEmail: boolean;
+};
 
 function userNotificationTopic(userId: string): string {
   return `user_${userId.replace(/[^A-Za-z0-9_\-.~%]/g, "_")}`;
@@ -1214,12 +1230,15 @@ export const onAuthorizationApproved = onDocumentUpdated(
   }
 );
 
-async function updateExcursionCurrentParticipants(excursionId: string) {
+async function updateExcursionCurrentParticipants(
+  excursionId: string,
+  firestore = admin.firestore()
+) {
   if (!excursionId) {
     return;
   }
 
-  const authorizationsSnapshot = await admin.firestore()
+  const authorizationsSnapshot = await firestore
     .collection("signedAuthorizations")
     .where("excursionId", "==", excursionId)
     .get();
@@ -1228,13 +1247,45 @@ async function updateExcursionCurrentParticipants(excursionId: string) {
     ACTIVE_AUTHORIZATION_STATUSES.includes(doc.get("status"))
   ).length;
 
-  await admin.firestore().collection("excursions").doc(excursionId).set(
-    {
+  const excursionRef = firestore.collection("excursions").doc(excursionId);
+
+  await firestore.runTransaction(async (transaction) => {
+    const excursionSnapshot = await transaction.get(excursionRef);
+    if (!excursionSnapshot.exists) {
+      return;
+    }
+
+    const excursion = excursionSnapshot.data() || {};
+    const maxParticipants = Number(excursion.maxParticipants || 0);
+    const isAutomaticallyClosed =
+      excursion.registrationClosed === true &&
+      excursion.registrationClosureReason === CAPACITY_FULL &&
+      excursion.registrationClosureSource === AUTOMATIC;
+    const isManuallyClosed =
+      excursion.registrationClosed === true &&
+      excursion.registrationClosureSource === "MANUAL";
+    const shouldClose = maxParticipants > 0 && currentParticipants >= maxParticipants;
+    const update: Record<string, unknown> = {
       currentParticipants,
       currentParticipantsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    {merge: true}
-  );
+    };
+
+    if (shouldClose && !isManuallyClosed) {
+      update.registrationClosed = true;
+      update.registrationClosureReason = CAPACITY_FULL;
+      update.registrationClosureSource = AUTOMATIC;
+      update.registrationClosedAt = admin.firestore.FieldValue.serverTimestamp();
+      update.registrationClosedBy = admin.firestore.FieldValue.delete();
+    } else if (isAutomaticallyClosed) {
+      update.registrationClosed = false;
+      update.registrationClosureReason = admin.firestore.FieldValue.delete();
+      update.registrationClosureSource = admin.firestore.FieldValue.delete();
+      update.registrationClosedAt = admin.firestore.FieldValue.delete();
+      update.registrationClosedBy = admin.firestore.FieldValue.delete();
+    }
+
+    transaction.set(excursionRef, update, {merge: true});
+  });
 
   console.log(
     `Participantes actualizados para excursion ${excursionId}: ${currentParticipants}`
@@ -1273,6 +1324,254 @@ export const syncExcursionCurrentParticipants = onDocumentWritten(
       console.error("Error en syncExcursionCurrentParticipants:", error);
       return null;
     }
+  }
+);
+
+export const syncDebugExcursionCurrentParticipants = onDocumentWritten(
+  {
+    document: "signedAuthorizations/{authorizationId}",
+    database: "debug",
+    region: "europe-west1",
+  },
+  async (event) => {
+    try {
+      const beforeData = event.data?.before.data();
+      const afterData = event.data?.after.data();
+      const excursionIds = new Set<string>();
+      const beforeExcursionId = beforeData?.excursionId as string | undefined;
+      const afterExcursionId = afterData?.excursionId as string | undefined;
+
+      if (beforeExcursionId) {
+        excursionIds.add(beforeExcursionId);
+      }
+      if (afterExcursionId) {
+        excursionIds.add(afterExcursionId);
+      }
+
+      const debugFirestore = getFirestore("debug");
+      await Promise.all(
+        Array.from(excursionIds).map((excursionId) =>
+          updateExcursionCurrentParticipants(excursionId, debugFirestore)
+        )
+      );
+      return null;
+    } catch (error) {
+      console.error(
+        "Error en syncDebugExcursionCurrentParticipants:",
+        error
+      );
+      return null;
+    }
+  }
+);
+
+export const reserveSignedAuthorizations = onCall({
+  region: "europe-west1",
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Debes iniciar sesion");
+  }
+
+  const {excursionId, authorizations, databaseId} = request.data as {
+    excursionId?: string;
+    authorizations?: AuthorizationReservation[];
+    databaseId?: string;
+  };
+
+  if (!excursionId || typeof excursionId !== "string") {
+    throw new HttpsError("invalid-argument", "Falta excursionId");
+  }
+  if (!Array.isArray(authorizations) || authorizations.length < 1 ||
+      authorizations.length > 3) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Debes enviar entre una y tres autorizaciones"
+    );
+  }
+
+  const requiredFields: Array<keyof AuthorizationReservation> = [
+    "excursionTitle",
+    "excursionDate",
+    "tutorName",
+    "tutorDni",
+    "tutorPhone",
+    "tutorEmail",
+    "signatureImageUrl",
+    "signedPdfUrl",
+    "batchId",
+  ];
+  const hasInvalidAuthorization = authorizations.some((authorization) =>
+    requiredFields.some((field) =>
+      typeof authorization[field] !== "string" ||
+      String(authorization[field]).trim().length === 0
+    )
+  );
+  if (hasInvalidAuthorization) {
+    throw new HttpsError("invalid-argument", "Datos de autorizacion incompletos");
+  }
+
+  const normalizedDatabaseId = databaseId === "debug" ? "debug" : "(default)";
+  const firestore = normalizedDatabaseId === "(default)" ?
+    admin.firestore() :
+    getFirestore(normalizedDatabaseId);
+  const excursionRef = firestore.collection("excursions").doc(excursionId);
+  const authorizationRefs = authorizations.map(() =>
+    firestore.collection("signedAuthorizations").doc()
+  );
+
+  await firestore.runTransaction(async (transaction) => {
+    const excursionSnapshot = await transaction.get(excursionRef);
+    if (!excursionSnapshot.exists) {
+      throw new HttpsError("not-found", "Excursion no encontrada");
+    }
+
+    const excursion = excursionSnapshot.data() || {};
+    if (excursion.registrationClosed === true) {
+      const reason = excursion.registrationClosureReason === "DEADLINE_PASSED" ?
+        "El plazo de inscripcion ha finalizado" :
+        "No quedan plazas disponibles";
+      throw new HttpsError("failed-precondition", reason);
+    }
+
+    const activeAuthorizationsQuery = firestore
+      .collection("signedAuthorizations")
+      .where("excursionId", "==", excursionId);
+    const activeAuthorizations = await transaction.get(
+      activeAuthorizationsQuery
+    );
+    const activeAuthorizationCount = activeAuthorizations.docs.filter((doc) =>
+      ACTIVE_AUTHORIZATION_STATUSES.includes(doc.get("status"))
+    ).length;
+    const currentParticipants = Math.max(
+      Number(excursion.currentParticipants || 0),
+      activeAuthorizationCount
+    );
+    const maxParticipants = Number(excursion.maxParticipants || 0);
+    const nextParticipants = currentParticipants + authorizations.length;
+
+    if (maxParticipants > 0 && nextParticipants > maxParticipants) {
+      throw new HttpsError(
+        "failed-precondition",
+        "No quedan plazas suficientes"
+      );
+    }
+
+    authorizations.forEach((authorization, index) => {
+      transaction.create(authorizationRefs[index], {
+        ...authorization,
+        excursionId,
+        userId: request.auth!.uid,
+        signedAt: admin.firestore.FieldValue.serverTimestamp(),
+        emailSent: false,
+        status: "PENDING",
+      });
+    });
+
+    const excursionUpdate: Record<string, unknown> = {
+      currentParticipants: nextParticipants,
+      currentParticipantsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    if (maxParticipants > 0 && nextParticipants >= maxParticipants) {
+      excursionUpdate.registrationClosed = true;
+      excursionUpdate.registrationClosureReason = CAPACITY_FULL;
+      excursionUpdate.registrationClosureSource = AUTOMATIC;
+      excursionUpdate.registrationClosedAt =
+        admin.firestore.FieldValue.serverTimestamp();
+      excursionUpdate.registrationClosedBy =
+        admin.firestore.FieldValue.delete();
+    }
+    transaction.set(excursionRef, excursionUpdate, {merge: true});
+  });
+
+  return {
+    authorizationIds: authorizationRefs.map((reference) => reference.id),
+  };
+});
+
+export const reconcileExcursionRegistrationState = onDocumentUpdated(
+  {
+    document: "excursions/{excursionId}",
+    region: "europe-west1",
+  },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after || before.maxParticipants === after.maxParticipants) {
+      return null;
+    }
+
+    const currentParticipants = Number(after.currentParticipants || 0);
+    const maxParticipants = Number(after.maxParticipants || 0);
+    const isAutomaticallyClosed =
+      after.registrationClosed === true &&
+      after.registrationClosureReason === CAPACITY_FULL &&
+      after.registrationClosureSource === AUTOMATIC;
+
+    if (isAutomaticallyClosed && maxParticipants > currentParticipants) {
+      await event.data!.after.ref.set({
+        registrationClosed: false,
+        registrationClosureReason: admin.firestore.FieldValue.delete(),
+        registrationClosureSource: admin.firestore.FieldValue.delete(),
+        registrationClosedAt: admin.firestore.FieldValue.delete(),
+        registrationClosedBy: admin.firestore.FieldValue.delete(),
+      }, {merge: true});
+    } else if (maxParticipants > 0 &&
+        currentParticipants >= maxParticipants &&
+        after.registrationClosed !== true) {
+      await event.data!.after.ref.set({
+        registrationClosed: true,
+        registrationClosureReason: CAPACITY_FULL,
+        registrationClosureSource: AUTOMATIC,
+        registrationClosedAt: admin.firestore.FieldValue.serverTimestamp(),
+        registrationClosedBy: admin.firestore.FieldValue.delete(),
+      }, {merge: true});
+    }
+
+    return null;
+  }
+);
+
+export const reconcileDebugExcursionRegistrationState = onDocumentUpdated(
+  {
+    document: "excursions/{excursionId}",
+    database: "debug",
+    region: "europe-west1",
+  },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after || before.maxParticipants === after.maxParticipants) {
+      return null;
+    }
+
+    const currentParticipants = Number(after.currentParticipants || 0);
+    const maxParticipants = Number(after.maxParticipants || 0);
+    const isAutomaticallyClosed =
+      after.registrationClosed === true &&
+      after.registrationClosureReason === CAPACITY_FULL &&
+      after.registrationClosureSource === AUTOMATIC;
+
+    if (isAutomaticallyClosed && maxParticipants > currentParticipants) {
+      await event.data!.after.ref.set({
+        registrationClosed: false,
+        registrationClosureReason: admin.firestore.FieldValue.delete(),
+        registrationClosureSource: admin.firestore.FieldValue.delete(),
+        registrationClosedAt: admin.firestore.FieldValue.delete(),
+        registrationClosedBy: admin.firestore.FieldValue.delete(),
+      }, {merge: true});
+    } else if (maxParticipants > 0 &&
+        currentParticipants >= maxParticipants &&
+        after.registrationClosed !== true) {
+      await event.data!.after.ref.set({
+        registrationClosed: true,
+        registrationClosureReason: CAPACITY_FULL,
+        registrationClosureSource: AUTOMATIC,
+        registrationClosedAt: admin.firestore.FieldValue.serverTimestamp(),
+        registrationClosedBy: admin.firestore.FieldValue.delete(),
+      }, {merge: true});
+    }
+
+    return null;
   }
 );
 

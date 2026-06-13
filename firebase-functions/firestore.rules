@@ -172,7 +172,7 @@ service cloud.firestore {
     // ========================================
     match /signedAuthorizations/{authorizationId} {
       // Cualquier usuario autenticado puede crear su autorización
-      allow create: if request.auth != null;
+      allow create: if false;
 
       // Los usuarios pueden leer sus propias autorizaciones
       allow read: if request.auth != null && 

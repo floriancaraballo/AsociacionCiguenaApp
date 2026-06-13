@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.asociacionciguena.app.util.ImageCompressor
 import com.asociacionciguena.app.util.NetworkMonitor
+import com.asociacionciguena.app.domain.model.RegistrationClosureReason
+import com.asociacionciguena.app.domain.model.RegistrationClosureSource
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -56,6 +58,23 @@ class ExcursionFormViewModel @Inject constructor(
     private val _maxParticipants = MutableStateFlow("")
     val maxParticipants: StateFlow<String> = _maxParticipants.asStateFlow()
 
+    private val _currentParticipants = MutableStateFlow(0)
+    val currentParticipants: StateFlow<Int> = _currentParticipants.asStateFlow()
+
+    private val _registrationClosed = MutableStateFlow(false)
+    val registrationClosed: StateFlow<Boolean> = _registrationClosed.asStateFlow()
+
+    private val _registrationClosureReason =
+        MutableStateFlow<RegistrationClosureReason?>(null)
+    val registrationClosureReason: StateFlow<RegistrationClosureReason?> =
+        _registrationClosureReason.asStateFlow()
+
+    private val _registrationClosureSource =
+        MutableStateFlow<RegistrationClosureSource?>(null)
+    val registrationClosureSource: StateFlow<RegistrationClosureSource?> =
+        _registrationClosureSource.asStateFlow()
+    private var registrationClosureChanged = false
+
     private val _imageUrl = MutableStateFlow("")
     val imageUrl: StateFlow<String> = _imageUrl.asStateFlow()
 
@@ -101,6 +120,18 @@ class ExcursionFormViewModel @Inject constructor(
                     _location.value = doc.getString("location") ?: ""
                     _price.value = doc.getDouble("price")?.toString() ?: ""
                     _maxParticipants.value = doc.getLong("maxParticipants")?.toString() ?: ""
+                    _currentParticipants.value =
+                        doc.getLong("currentParticipants")?.toInt() ?: 0
+                    _registrationClosed.value =
+                        doc.getBoolean("registrationClosed") ?: false
+                    _registrationClosureReason.value =
+                        RegistrationClosureReason.fromStorage(
+                            doc.getString("registrationClosureReason")
+                        )
+                    _registrationClosureSource.value =
+                        RegistrationClosureSource.fromStorage(
+                            doc.getString("registrationClosureSource")
+                        )
                     _imageUrl.value = doc.getString("imageUrl") ?: ""
                     _authorizationPdfUrl.value = doc.getString("authorizationPdfUrl")
 
@@ -150,6 +181,34 @@ class ExcursionFormViewModel @Inject constructor(
         if (newMaxParticipants.isEmpty() || newMaxParticipants.matches(Regex("^\\d{0,4}$"))) {
             _maxParticipants.value = newMaxParticipants
         }
+    }
+
+    fun onRegistrationClosedChange(closed: Boolean) {
+        val configuredMaximum = _maxParticipants.value.toIntOrNull() ?: 0
+        if (!closed && configuredMaximum > 0 &&
+            _currentParticipants.value >= configuredMaximum
+        ) {
+            _uiState.value = ExcursionFormUiState.Error(
+                "Aumenta el máximo de participantes antes de reabrir las inscripciones"
+            )
+            return
+        }
+
+        _registrationClosed.value = closed
+        registrationClosureChanged = true
+        _registrationClosureSource.value =
+            if (closed) RegistrationClosureSource.MANUAL else null
+        if (closed && _registrationClosureReason.value == null) {
+            _registrationClosureReason.value = RegistrationClosureReason.CAPACITY_FULL
+        } else if (!closed) {
+            _registrationClosureReason.value = null
+        }
+    }
+
+    fun onRegistrationClosureReasonChange(reason: RegistrationClosureReason) {
+        _registrationClosureReason.value = reason
+        _registrationClosureSource.value = RegistrationClosureSource.MANUAL
+        registrationClosureChanged = true
     }
 
     fun onDateChange(newDate: LocalDateTime) {
@@ -259,6 +318,15 @@ class ExcursionFormViewModel @Inject constructor(
                     return@launch
                 }
 
+                if (_registrationClosed.value &&
+                    _registrationClosureReason.value == null
+                ) {
+                    _uiState.value = ExcursionFormUiState.Error(
+                        "Selecciona el motivo del cierre de inscripciones"
+                    )
+                    return@launch
+                }
+
                 _uiState.value = ExcursionFormUiState.Saving
 
                 val timestamp = _date.value?.let { localDateTime ->
@@ -279,8 +347,33 @@ class ExcursionFormViewModel @Inject constructor(
                     "endDate" to endTimestamp,
                     "imageUrl" to _imageUrl.value.ifBlank { null },
                     "authorizationPdfUrl" to _authorizationPdfUrl.value,
-                    "maxParticipants" to maxParticipantsValue
+                    "maxParticipants" to maxParticipantsValue,
+                    "registrationClosed" to _registrationClosed.value
                 )
+
+                if (_registrationClosed.value) {
+                    excursionData["registrationClosureReason"] =
+                        _registrationClosureReason.value?.name
+                    excursionData["registrationClosureSource"] =
+                        _registrationClosureSource.value?.name
+                            ?: RegistrationClosureSource.MANUAL.name
+                    if (_registrationClosureSource.value == RegistrationClosureSource.MANUAL &&
+                        registrationClosureChanged
+                    ) {
+                        excursionData["registrationClosedAt"] =
+                            com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        excursionData["registrationClosedBy"] = auth.currentUser?.uid
+                    }
+                } else if (isEditMode && registrationClosureChanged) {
+                    excursionData["registrationClosureReason"] =
+                        com.google.firebase.firestore.FieldValue.delete()
+                    excursionData["registrationClosureSource"] =
+                        com.google.firebase.firestore.FieldValue.delete()
+                    excursionData["registrationClosedAt"] =
+                        com.google.firebase.firestore.FieldValue.delete()
+                    excursionData["registrationClosedBy"] =
+                        com.google.firebase.firestore.FieldValue.delete()
+                }
 
                 val priceValue = _price.value.toDoubleOrNull()
                 if (priceValue != null && priceValue > 0) {

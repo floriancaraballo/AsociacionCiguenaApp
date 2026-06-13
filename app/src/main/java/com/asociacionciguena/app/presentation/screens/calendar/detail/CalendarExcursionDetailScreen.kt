@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.asociacionciguena.app.domain.model.PaymentStatus
+import com.asociacionciguena.app.domain.model.RegistrationClosureReason
 import com.asociacionciguena.app.presentation.components.CachedSubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import com.asociacionciguena.app.presentation.navigation.Screen  // ✅ Ruta correct// a
@@ -164,6 +165,7 @@ private fun ExcursionDetailContent(
     }
     val hasParticipantLimit = excursion.maxParticipants > 0
     val isCapacityFull = hasParticipantLimit && activeAuthorizationCount >= excursion.maxParticipants
+    val isRegistrationClosed = excursion.registrationClosed || isCapacityFull
     val remainingPlaces = if (hasParticipantLimit) {
         (excursion.maxParticipants - activeAuthorizationCount).coerceAtLeast(0)
     } else {
@@ -191,6 +193,43 @@ private fun ExcursionDetailContent(
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             // Título
             Text(text = excursion.title, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+
+            if (isRegistrationClosed) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Block,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Column {
+                            Text(
+                                "Inscripciones cerradas",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                when (excursion.registrationClosureReason) {
+                                    RegistrationClosureReason.DEADLINE_PASSED ->
+                                        "El plazo de inscripción para esta excursión ha finalizado."
+                                    else ->
+                                        "Las plazas para esta excursión se han agotado."
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+            }
 
             // Fecha
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
@@ -402,8 +441,17 @@ private fun ExcursionDetailContent(
                                 Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("Para participar en esta excursión necesitas firmar la autorización digitalmente.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            if (isCapacityFull) {
-                                Text("No se puede firmar la autorización porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (isRegistrationClosed) {
+                                Text(
+                                    when (excursion.registrationClosureReason) {
+                                        RegistrationClosureReason.DEADLINE_PASSED ->
+                                            "No se puede firmar porque el plazo de inscripción ha finalizado."
+                                        else ->
+                                            "No se puede firmar porque las plazas están completas."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             } else if (currentUser != null) {
                                 // ✅ NAVEGACIÓN: En lugar de mostrar SignatureScreen, navega a la ruta
                                 Button(
