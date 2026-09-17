@@ -38,6 +38,17 @@ version release:
 El keystore original debe conservarse con copia de seguridad. Sin ese archivo
 no se podran publicar actualizaciones de la misma aplicacion firmada.
 
+## Politica de privacidad
+
+La politica de privacidad para Google Play esta en `docs/privacy-policy.html`.
+Para publicarla con GitHub Pages:
+
+1. Subir estos cambios a GitHub.
+2. Entrar en Settings > Pages del repositorio.
+3. En "Build and deployment", seleccionar "Deploy from a branch".
+4. Elegir la rama principal y la carpeta `/docs`.
+5. Usar la URL publicada de `privacy-policy.html` en Google Play Console.
+
 ## Archivos locales
 
 No se versionan:
