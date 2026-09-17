@@ -51,6 +51,11 @@
       color: var(--accent);
       font-weight: 700;
     }
+
+    nav {
+      display: grid;
+      gap: 12px;
+    }
   </style>
 </head>
 <body>
@@ -58,7 +63,10 @@
     <section>
       <h1>Asociacion Ciguena</h1>
       <p>Documentacion legal y enlaces publicos de la aplicacion.</p>
-      <a href="./privacy-policy.html">Ver politica de privacidad</a>
+      <nav aria-label="Documentacion legal">
+        <a href="./privacy-policy.html">Ver politica de privacidad</a>
+        <a href="./delete-account.html">Solicitar eliminacion de cuenta y datos</a>
+      </nav>
     </section>
   </main>
 </body>
