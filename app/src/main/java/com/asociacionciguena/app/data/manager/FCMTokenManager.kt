@@ -7,6 +7,10 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,8 +21,24 @@ class FCMTokenManager @Inject constructor(
     private val auth: FirebaseAuth,
     private val messaging: FirebaseMessaging
 ) {
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val notificationFirestore: FirebaseFirestore by lazy {
         FirebaseFirestore.getInstance()
+    }
+
+    /**
+     * Synchronize the FCM token without tying network work to a screen lifecycle.
+     */
+    fun refreshTokenInBackground() {
+        backgroundScope.launch {
+            refreshToken().onFailure { error ->
+                android.util.Log.w(
+                    "FCMTokenManager",
+                    "No se pudo sincronizar el token FCM en segundo plano: ${error.message}"
+                )
+            }
+        }
     }
 
     /**

@@ -24,6 +24,9 @@ import com.asociacionciguena.app.presentation.theme.ThemeViewModel
 import kotlinx.coroutines.delay
 
 private const val SPLASH_ART_DURATION_MILLIS = 3_000L
+private const val SPLASH_LOADING_DURATION_MILLIS = 5_000L
+private const val SPLASH_MINIMUM_DURATION_MILLIS =
+    SPLASH_ART_DURATION_MILLIS + SPLASH_LOADING_DURATION_MILLIS
 
 @Composable
 fun AppNavigation(
@@ -39,7 +42,7 @@ fun AppNavigation(
     var isInitialSplashComplete by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        delay(SPLASH_ART_DURATION_MILLIS)
+        delay(SPLASH_MINIMUM_DURATION_MILLIS)
         isInitialSplashComplete = true
     }
 

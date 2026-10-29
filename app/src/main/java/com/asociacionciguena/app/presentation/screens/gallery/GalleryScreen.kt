@@ -22,14 +22,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.imageLoader
 import com.asociacionciguena.app.presentation.components.ErrorMessage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import kotlinx.datetime.LocalDateTime
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.CalendarToday
 import com.asociacionciguena.app.presentation.components.CachedSubcomposeAsyncImage
-import com.asociacionciguena.app.presentation.components.preloadedImageRequest
 import com.asociacionciguena.app.presentation.screens.gallery.components.GalleryCardSkeleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -95,22 +93,6 @@ private fun GalleryContent(
     onExcursionClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-
-    LaunchedEffect(excursions) {
-        excursions.forEach { excursion ->
-            listOfNotNull(
-                excursion.firstPhotoThumbnailUrl,
-                excursion.firstPhotoUrl,
-                excursion.excursion.imageUrl
-            ).distinct().forEach { url ->
-                context.imageLoader.enqueue(
-                    preloadedImageRequest(context, url)
-                )
-            }
-        }
-    }
-
     if (excursions.isEmpty()) {
         Box(
             modifier = modifier.fillMaxSize(),
@@ -276,7 +258,12 @@ private fun GalleryMediaPreview(
     modifier: Modifier = Modifier
 ) {
     if (mediaType == "video") {
-        val generatedThumbnail by produceState<Bitmap?>(initialValue = null, mediaUrl) {
+        val generatedThumbnail by produceState<Bitmap?>(initialValue = null, mediaUrl, thumbnailUrl) {
+            if (!thumbnailUrl.isNullOrBlank()) {
+                value = null
+                return@produceState
+            }
+
             val thumbnail = withContext(Dispatchers.IO) {
                 runCatching {
                     val retriever = MediaMetadataRetriever()
@@ -293,17 +280,17 @@ private fun GalleryMediaPreview(
 
         val thumbnail = generatedThumbnail
         when {
-            thumbnail != null -> {
-                Image(
-                    bitmap = thumbnail.asImageBitmap(),
+            !thumbnailUrl.isNullOrBlank() -> {
+                CachedSubcomposeAsyncImage(
+                    imageUrl = thumbnailUrl,
                     contentDescription = null,
                     modifier = modifier,
                     contentScale = ContentScale.Crop
                 )
             }
-            !thumbnailUrl.isNullOrBlank() -> {
-                CachedSubcomposeAsyncImage(
-                    imageUrl = thumbnailUrl,
+            thumbnail != null -> {
+                Image(
+                    bitmap = thumbnail.asImageBitmap(),
                     contentDescription = null,
                     modifier = modifier,
                     contentScale = ContentScale.Crop

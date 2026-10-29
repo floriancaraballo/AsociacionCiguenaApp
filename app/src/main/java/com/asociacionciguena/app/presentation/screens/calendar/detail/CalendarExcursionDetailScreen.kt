@@ -33,8 +33,7 @@ fun CalendarExcursionDetailScreen(
     viewModel: CalendarExcursionDetailViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
     onNavigateToEditExcursion: (String) -> Unit,
-    onNavigateToAuthorizations: (String, String) -> Unit = { _, _ -> },
-    onNavigateToPayments: (String, String) -> Unit = { _, _ -> }
+    onNavigateToAuthorizations: (String, String) -> Unit = { _, _ -> }
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -57,13 +56,6 @@ fun CalendarExcursionDetailScreen(
                                     onNavigateToAuthorizations(state.excursion.id, state.excursion.title)
                                 }) {
                                     Icon(Icons.Default.Description, "Ver Autorizaciones")
-                                }
-                            }
-                            if (state.excursion.price != null) {
-                                IconButton(onClick = {
-                                    onNavigateToPayments(state.excursion.id, state.excursion.title)
-                                }) {
-                                    Icon(Icons.Default.ReceiptLong, "Ver Comprobantes")
                                 }
                             }
                             IconButton(onClick = {

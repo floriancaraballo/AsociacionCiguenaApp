@@ -11,7 +11,6 @@ import com.asociacionciguena.app.data.datasource.local.PreferencesDataSource
 import com.asociacionciguena.app.data.manager.FCMTokenManager
 import com.asociacionciguena.app.util.NetworkMonitor
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -31,10 +30,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 import javax.inject.Inject
 
 sealed class AppInitState {
@@ -60,25 +55,15 @@ class MainViewModel @Inject constructor(
     companion object {
         private const val STARTUP_PRELOAD_TIMEOUT_MS = 25_000L
         private const val BACKGROUND_PRELOAD_TIMEOUT_MS = 20_000L
-        private const val STARTUP_PRELOAD_REQUIRED_PERCENT = 85
         private const val CRITICAL_PRELOAD_REQUIRED_PERCENT = 100
-        private const val NEWS_PRELOAD_LIMIT = 15L
-        private const val EXCURSION_PRELOAD_LIMIT = 50L
-        private const val GALLERY_EXCURSION_PRELOAD_LIMIT = 4
-        private const val GALLERY_EXCURSION_SCAN_LIMIT = 20L
+        private const val NEWS_PRELOAD_LIMIT = 4L
+        private const val EXCURSION_PRELOAD_LIMIT = 6L
         private const val IMAGE_PRELOAD_RETRY_COUNT = 3
         private const val IMAGE_PRELOAD_RETRY_DELAY_MS = 400L
     }
 
     private val _initState = MutableStateFlow<AppInitState>(AppInitState.Loading)
     val initState: StateFlow<AppInitState> = _initState.asStateFlow()
-
-    private data class StartupPreloadUrls(
-        val criticalUrls: List<String>,
-        val secondaryUrls: List<String>
-    ) {
-        val allUrls: List<String> = (criticalUrls + secondaryUrls).distinct()
-    }
 
     init {
         checkInitialState()
@@ -95,70 +80,35 @@ class MainViewModel @Inject constructor(
                 refreshNotificationToken()
             }
 
-            val remainingPreloadUrls = preloadStartupContent(auth.currentUser?.uid)
-
             _initState.value = AppInitState.Ready(
                 isOnboardingCompleted = isOnboardingCompleted,
                 isUserLoggedIn = isUserLoggedIn,
                 currentUserId = auth.currentUser?.uid
             )
 
-            continuePreloadingInBackground(remainingPreloadUrls)
+            // Network and image cache work must not delay the first usable screen.
+            viewModelScope.launch {
+                val remainingPreloadUrls = preloadStartupContent()
+                continuePreloadingInBackground(remainingPreloadUrls)
+            }
         }
     }
 
-    private suspend fun preloadStartupContent(currentUserId: String?): List<String> {
-        val preloadUrls = withTimeoutOrNull(STARTUP_PRELOAD_TIMEOUT_MS) {
+    private suspend fun preloadStartupContent(): List<String> {
+        return withTimeoutOrNull(STARTUP_PRELOAD_TIMEOUT_MS) {
             coroutineScope {
-                val galleryExcursionIds = async {
-                    fetchRecentPastExcursionIdsForGallery(currentUserId)
-                }
                 val recentNewsUrls = async { fetchRecentNewsUrls() }
                 val recentExcursionUrls = async { fetchRecentExcursionImageUrls() }
-                val galleryPhotoUrls = async {
-                    fetchGalleryPhotoUrls(galleryExcursionIds.await(), currentUserId)
-                }
-
-                val criticalUrls = (recentNewsUrls.await() + recentExcursionUrls.await()).distinct()
-                val secondaryUrls = galleryPhotoUrls.await()
-                    .distinct()
-                    .filterNot { it in criticalUrls }
-
-                StartupPreloadUrls(
-                    criticalUrls = criticalUrls,
-                    secondaryUrls = secondaryUrls
+                val urls = (recentNewsUrls.await() + recentExcursionUrls.await()).distinct()
+                preloadUntilRequiredImagesAreCached(
+                    urls = urls,
+                    requiredSuccessCount = requiredSuccessCount(
+                        totalUrls = urls.size,
+                        requiredPercent = CRITICAL_PRELOAD_REQUIRED_PERCENT
+                    )
                 )
             }
-        } ?: StartupPreloadUrls(emptyList(), emptyList())
-
-        if (preloadUrls.allUrls.isEmpty()) return emptyList()
-
-        return preloadUntilMostImagesAreCached(preloadUrls)
-    }
-
-    private suspend fun preloadUntilMostImagesAreCached(preloadUrls: StartupPreloadUrls): List<String> {
-        val criticalRemainingUrls = preloadUntilRequiredImagesAreCached(
-            urls = preloadUrls.criticalUrls,
-            requiredSuccessCount = requiredSuccessCount(
-                totalUrls = preloadUrls.criticalUrls.size,
-                requiredPercent = CRITICAL_PRELOAD_REQUIRED_PERCENT
-            )
-        )
-        val cachedCriticalCount = preloadUrls.criticalUrls.size - criticalRemainingUrls.size
-        val requiredTotalSuccessCount = requiredSuccessCount(
-            totalUrls = preloadUrls.allUrls.size,
-            requiredPercent = STARTUP_PRELOAD_REQUIRED_PERCENT
-        )
-        val requiredSecondarySuccessCount = (requiredTotalSuccessCount - cachedCriticalCount)
-            .coerceAtLeast(0)
-            .coerceAtMost(preloadUrls.secondaryUrls.size)
-
-        val secondaryRemainingUrls = preloadUntilRequiredImagesAreCached(
-            urls = preloadUrls.secondaryUrls,
-            requiredSuccessCount = requiredSecondarySuccessCount
-        )
-
-        return (criticalRemainingUrls + secondaryRemainingUrls).distinct()
+        } ?: emptyList()
     }
 
     private suspend fun preloadUntilRequiredImagesAreCached(
@@ -245,87 +195,6 @@ class MainViewModel @Inject constructor(
                 .documents
                 .mapNotNull { it.getString("imageUrl")?.takeIf { url -> url.isNotBlank() } }
         }.getOrDefault(emptyList())
-    }
-
-    private suspend fun fetchRecentPastExcursionIdsForGallery(currentUserId: String?): List<String> {
-        if (currentUserId.isNullOrBlank()) return emptyList()
-
-        return runCatching {
-            val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
-            val userDoc = firestore.collection("users")
-                .document(currentUserId)
-                .get()
-                .await()
-            val role = userDoc.getString("role")
-            val isAdmin = role == "admin" || role == "superadmin"
-            val registrationYear = userDoc.registrationYear()
-
-            firestore.collection("excursions")
-                .orderBy("date", Query.Direction.DESCENDING)
-                .limit(GALLERY_EXCURSION_SCAN_LIMIT)
-                .get()
-                .await()
-                .documents
-                .mapNotNull { doc ->
-                    val dateMillis = doc.getTimestamp("date")?.toDate()?.time ?: return@mapNotNull null
-                    val excursionDate = Instant
-                        .fromEpochMilliseconds(dateMillis)
-                        .toLocalDateTime(TimeZone.currentSystemDefault())
-
-                    doc.id.takeIf {
-                        excursionDate.date <= now.date &&
-                            (isAdmin || excursionDate.year == registrationYear)
-                    }
-                }
-                .take(GALLERY_EXCURSION_PRELOAD_LIMIT)
-        }.getOrDefault(emptyList())
-    }
-
-    private suspend fun fetchGalleryPhotoUrls(
-        excursionIds: List<String>,
-        currentUserId: String?
-    ): List<String> {
-        if (currentUserId.isNullOrBlank() || excursionIds.isEmpty()) return emptyList()
-
-        return coroutineScope {
-            excursionIds.map { excursionId ->
-                async {
-                    runCatching {
-                        firestore.collection("photos")
-                            .whereEqualTo("excursionId", excursionId)
-                            .get()
-                            .await()
-                            .documents
-                            .flatMap { doc ->
-                                buildList {
-                                    val mediaType = doc.getString("mediaType") ?: "image"
-                                    val imageUrl = doc.getString("imageUrl")?.takeIf { it.isNotBlank() }
-                                    val thumbnailUrl = doc.getString("thumbnailUrl")?.takeIf { it.isNotBlank() }
-
-                                    if (mediaType == "video") {
-                                        thumbnailUrl?.let(::add)
-                                    } else {
-                                        imageUrl?.let(::add)
-                                        thumbnailUrl?.let(::add)
-                                    }
-                                }
-                            }
-                    }.getOrDefault(emptyList())
-                }
-            }.awaitAll().flatten()
-        }
-    }
-
-    private fun DocumentSnapshot.registrationYear(): Int? {
-        return getTimestamp("createdAt")?.let {
-            Instant.fromEpochMilliseconds(it.toDate().time)
-                .toLocalDateTime(TimeZone.currentSystemDefault())
-                .year
-        } ?: auth.currentUser?.metadata?.creationTimestamp?.let {
-            Instant.fromEpochMilliseconds(it)
-                .toLocalDateTime(TimeZone.currentSystemDefault())
-                .year
-        }
     }
 
     private suspend fun preloadImageWithRetry(url: String): Boolean {

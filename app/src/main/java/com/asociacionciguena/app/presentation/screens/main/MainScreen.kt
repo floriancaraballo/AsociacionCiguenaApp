@@ -227,9 +227,6 @@ fun MainScreen(
                             onNavigateToAuthorizations = { excursionId, excursionTitle ->
                                 navController.navigate(Screen.AuthorizationsList.createRoute(excursionId, excursionTitle))
                             },
-                            onNavigateToPayments = { excursionId, excursionTitle ->
-                                navController.navigate(Screen.PaymentsList.createRoute(excursionId, excursionTitle))
-                            }
                         )
                     }
                     // ───────── NUEVA RUTA: Pago con TPV (Redsys) ─────────

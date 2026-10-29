@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.asociacionciguena.app.data.datasource.local.PreferencesDataSource
 import com.asociacionciguena.app.data.manager.FCMTokenManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,28 +25,34 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = OnboardingUiState.NotificationsRequesting
 
-            try {
-                fcmTokenManager.refreshToken()
-
-                // Guardar que el onboarding fue completado
-                preferencesDataSource.setOnboardingCompleted(true)
-
-                _uiState.value = OnboardingUiState.Completed(notificationsEnabled = true)
-            } catch (e: Exception) {
-                // Guardar onboarding completado aunque falle el token
-                preferencesDataSource.setOnboardingCompleted(true)
-
-                _uiState.value = OnboardingUiState.Completed(notificationsEnabled = false)
-            }
+            completeOnboarding(notificationsEnabled = true)
         }
     }
 
     fun skipNotifications() {
         viewModelScope.launch {
-            // Guardar que el onboarding fue completado
-            preferencesDataSource.setOnboardingCompleted(true)
-
-            _uiState.value = OnboardingUiState.Completed(notificationsEnabled = false)
+            completeOnboarding(notificationsEnabled = false)
         }
+    }
+
+    private suspend fun completeOnboarding(notificationsEnabled: Boolean) {
+        try {
+            preferencesDataSource.setOnboardingCompleted(true)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            android.util.Log.e(
+                "OnboardingViewModel",
+                "No se pudo guardar el onboarding: ${error.message}"
+            )
+        }
+
+        if (notificationsEnabled) {
+            fcmTokenManager.refreshTokenInBackground()
+        }
+
+        _uiState.value = OnboardingUiState.Completed(
+            notificationsEnabled = notificationsEnabled
+        )
     }
 }

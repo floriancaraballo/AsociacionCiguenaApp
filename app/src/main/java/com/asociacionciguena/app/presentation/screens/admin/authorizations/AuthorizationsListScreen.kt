@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.domain.model.SignedAuthorization
 import com.asociacionciguena.app.domain.model.AuthorizationStatus
+import com.asociacionciguena.app.domain.model.PaymentStatus
+import com.asociacionciguena.app.presentation.screens.admin.payments.PaymentsListViewModel
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,11 +33,18 @@ fun AuthorizationsListScreen(
         android.util.Log.d("AuthListDebug", "🚀 Screen iniciado - excursionId: $excursionId")
     }
     val authorizations by viewModel.getAuthorizations(excursionId).collectAsState(initial = emptyList())
+    val paymentsViewModel: PaymentsListViewModel = hiltViewModel()
+    val payments by paymentsViewModel.payments.collectAsState()
+    val paymentsLoading by paymentsViewModel.isLoading.collectAsState()
     var isGeneratingDoc by remember { mutableStateOf(false) }
     var showDocPreview by remember { mutableStateOf(false) }
     var docDownloadUrl by remember { mutableStateOf<String?>(null) }
     var docFileName by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+
+    LaunchedEffect(excursionId) {
+        paymentsViewModel.loadPayments(excursionId)
+    }
 
     LaunchedEffect(authorizations) {
         android.util.Log.d("AuthListDebug", "📋 Autorizaciones cargadas: ${authorizations.size}")
@@ -193,6 +202,8 @@ fun AuthorizationsListScreen(
                         android.util.Log.d("AuthCard", "✅ Mostrando botones de aprobar/rechazar")
                         AuthorizationCard(
                             authorization = authorization,
+                            paymentStatus = payments.firstOrNull { it.userId == authorization.userId }?.status,
+                            isPaymentLoading = paymentsLoading,
                             onDownloadPdf = { url ->
                                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                                 context.startActivity(intent)
@@ -311,6 +322,8 @@ fun AuthorizationsListScreen(
 @Composable
 private fun AuthorizationCard(
     authorization: SignedAuthorization,
+    paymentStatus: PaymentStatus?,
+    isPaymentLoading: Boolean,
     onDownloadPdf: (String) -> Unit,
     onApprove: (String) -> Unit,
     onReject: (String) -> Unit
@@ -339,25 +352,52 @@ private fun AuthorizationCard(
                 }
 
                 // Chip de estado (igual que antes)
-                AssistChip(
-                    onClick = {},
-                    label = {
-                        Text(
-                            when (authorization.status) {
-                                AuthorizationStatus.APPROVED -> "✓ Aprobada"
-                                AuthorizationStatus.PENDING -> "⏳ Pendiente"
-                                AuthorizationStatus.REJECTED -> "✗ Rechazada"
+                Column(horizontalAlignment = Alignment.End) {
+                    AssistChip(
+                        onClick = {},
+                        label = {
+                            Text(
+                                when (authorization.status) {
+                                    AuthorizationStatus.APPROVED -> "✓ Aprobada"
+                                    AuthorizationStatus.PENDING -> "⏳ Pendiente"
+                                    AuthorizationStatus.REJECTED -> "✗ Rechazada"
+                                }
+                            )
+                        },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = when (authorization.status) {
+                                AuthorizationStatus.APPROVED -> MaterialTheme.colorScheme.primaryContainer
+                                AuthorizationStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
+                                AuthorizationStatus.REJECTED -> MaterialTheme.colorScheme.errorContainer
                             }
                         )
-                    },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = when (authorization.status) {
-                            AuthorizationStatus.APPROVED -> MaterialTheme.colorScheme.primaryContainer
-                            AuthorizationStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
-                            AuthorizationStatus.REJECTED -> MaterialTheme.colorScheme.errorContainer
-                        }
                     )
-                )
+
+                    AssistChip(
+                        onClick = {},
+                        label = {
+                            Text(
+                                when {
+                                    isPaymentLoading -> "Cargando pago…"
+                                    paymentStatus == null -> "Pago: No realizado"
+                                    paymentStatus == PaymentStatus.PAID -> "✓ Pago realizado"
+                                    paymentStatus == PaymentStatus.PENDING -> "⏳ Pago pendiente"
+                                    paymentStatus == PaymentStatus.REJECTED -> "✗ Pago rechazado"
+                                    else -> "Pago iniciado"
+                                }
+                            )
+                        },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = when {
+                                isPaymentLoading || paymentStatus == PaymentStatus.INITIATED || paymentStatus == null ->
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                paymentStatus == PaymentStatus.PAID -> MaterialTheme.colorScheme.primaryContainer
+                                paymentStatus == PaymentStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
+                                else -> MaterialTheme.colorScheme.errorContainer
+                            }
+                        )
+                    )
+                }
             }
 
             Divider()

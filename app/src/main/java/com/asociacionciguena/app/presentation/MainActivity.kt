@@ -23,17 +23,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.lifecycleScope
 import com.asociacionciguena.app.presentation.navigation.AppNavigation
 import com.asociacionciguena.app.presentation.screens.main.MainViewModel
 import com.asociacionciguena.app.presentation.theme.AsociacionCiguenaTheme
 import com.asociacionciguena.app.presentation.theme.PrimaryDark
 import com.asociacionciguena.app.presentation.theme.ThemeViewModel
-import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
 
 /**
  * Activity principal de la aplicación
@@ -41,9 +36,6 @@ import javax.inject.Inject
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
-    @Inject
-    lateinit var auth: FirebaseAuth
 
     private val mainViewModel: MainViewModel by viewModels()
 
@@ -58,15 +50,6 @@ class MainActivity : ComponentActivity() {
 
         // Habilitar edge-to-edge (pantalla completa moderna)
         enableEdgeToEdge()
-
-        // Refrescar token de Firebase Auth al abrir app
-        lifecycleScope.launch {
-            try {
-                auth.currentUser?.reload()?.await()
-            } catch (e: Exception) {
-                // Ignorar si falla
-            }
-        }
 
         // Extraer datos de notificación (soportando tanto foreground como background FCM payloads)
         val notificationType = intent?.getStringExtra("notification_type") ?: intent?.getStringExtra("type")
