@@ -30,7 +30,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.DisposableEffect
-import androidx.activity.compose.BackHandler
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -40,12 +39,6 @@ fun PhotoUploadScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val excursions by viewModel.excursions.collectAsState()
-    // Bloquear navegación mientras se sube
-    val isUploading = uiState is PhotoUploadUiState.Uploading
-
-    BackHandler(enabled = isUploading) {
-        // No hacer nada - bloquear el botón atrás mientras se sube
-    }
     // Android 13+ no necesita permiso para Photo Picker
     val needsPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
 
@@ -93,16 +86,12 @@ fun PhotoUploadScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateBack,
-                        enabled = !isUploading  // ← Deshabilitar mientras se sube
+                        enabled = true
                     ) {
                         Icon(
                             Icons.Default.ArrowBack,
                             contentDescription = "Volver",
-                            tint = if (isUploading) {
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-                            } else {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            }
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                 },
@@ -132,7 +121,7 @@ fun PhotoUploadScreen(
             },
             onRemovePhoto = viewModel::removePhoto,
             onExcursionSelected = viewModel::onExcursionSelected,
-            onUploadClick = { viewModel.uploadPhotos {} },
+            onUploadClick = viewModel::uploadPhotos,
             onClearError = viewModel::clearError,
             modifier = Modifier.padding(paddingValues)
         )
