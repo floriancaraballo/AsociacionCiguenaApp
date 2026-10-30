@@ -51,7 +51,9 @@ fun LocationPickerDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val placesClient = remember { Places.createClient(context) }
+    val placesClient = remember {
+        if (Places.isInitialized()) Places.createClient(context) else null
+    }
     val initialPosition = remember(initialLatitude, initialLongitude) {
         if (initialLatitude != null && initialLongitude != null) {
             LatLng(initialLatitude, initialLongitude)
@@ -100,6 +102,14 @@ fun LocationPickerDialog(
         }
 
         delay(350)
+        val client = placesClient
+        if (client == null) {
+            predictions = emptyList()
+            searchError = "La búsqueda de lugares no está configurada"
+            isSearching = false
+            return@LaunchedEffect
+        }
+
         isSearching = true
         searchError = null
         try {
@@ -109,7 +119,7 @@ fun LocationPickerDialog(
                 .setRegionCode("ES")
                 .setSessionToken(sessionToken)
                 .build()
-            predictions = placesClient.findAutocompletePredictions(request)
+            predictions = client.findAutocompletePredictions(request)
                 .await()
                 .autocompletePredictions
         } catch (_: Exception) {
@@ -167,27 +177,33 @@ fun LocationPickerDialog(
                                         )
                                             .setSessionToken(sessionToken)
                                             .build()
-                                        placesClient.fetchPlace(request)
-                                            .addOnSuccessListener { response ->
-                                                val place = response.place
-                                                val position = place.location
-                                                if (position != null) {
-                                                    selectedPosition = position
-                                                    selectedLocation =
-                                                        place.displayName
-                                                            ?: place.formattedAddress
-                                                            ?: prediction.getFullText(null)
-                                                                .toString()
-                                                    query = selectedLocation
-                                                    predictions = emptyList()
-                                                    sessionToken =
-                                                        AutocompleteSessionToken.newInstance()
+                                        val client = placesClient
+                                        if (client == null) {
+                                            searchError =
+                                                "La búsqueda de lugares no está configurada"
+                                        } else {
+                                            client.fetchPlace(request)
+                                                .addOnSuccessListener { response ->
+                                                    val place = response.place
+                                                    val position = place.location
+                                                    if (position != null) {
+                                                        selectedPosition = position
+                                                        selectedLocation =
+                                                            place.displayName
+                                                                ?: place.formattedAddress
+                                                                ?: prediction.getFullText(null)
+                                                                    .toString()
+                                                        query = selectedLocation
+                                                        predictions = emptyList()
+                                                        sessionToken =
+                                                            AutocompleteSessionToken.newInstance()
+                                                    }
                                                 }
-                                            }
-                                            .addOnFailureListener {
-                                                searchError =
-                                                    "No se pudo obtener la ubicación"
-                                            }
+                                                .addOnFailureListener {
+                                                    searchError =
+                                                        "No se pudo obtener la ubicación"
+                                                }
+                                        }
                                     }
                                     .padding(vertical = 10.dp)
                             ) {

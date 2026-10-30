@@ -39,8 +39,8 @@ android {
             localProperties.getProperty("MAPS_API_KEY", "")
         buildConfigField(
             "String",
-            "PLACES_API_KEY",
-            "\"${localProperties.getProperty("PLACES_API_KEY", "")}\""
+            "MAPS_API_KEY_KEY",
+            "\"${localProperties.getProperty("MAPS_API_KEY_KEY", "")}\""
         )
         vectorDrawables {
             useSupportLibrary = true

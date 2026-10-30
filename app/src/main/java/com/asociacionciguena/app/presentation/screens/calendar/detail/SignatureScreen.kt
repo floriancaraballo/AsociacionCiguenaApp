@@ -38,6 +38,7 @@ fun SignatureScreen(
     // Estados del formulario
     var isMultiAuth by remember { mutableStateOf(false) }
     var minors by remember { mutableStateOf(listOf(MinorAuth())) }
+    var selectedChildNames by remember { mutableStateOf(emptySet<String>()) }
     var currentMinorIndex by remember { mutableStateOf(0) }
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
@@ -125,6 +126,9 @@ fun SignatureScreen(
     // Pre-rellenar datos del tutor cuando se cargue el usuario
     LaunchedEffect(currentUser) {
         currentUser?.let { user ->
+            if (minors.size == 1 && minors.first().minorName.isBlank()) {
+                minors = listOf(minors.first().copy(minorName = user.childrenNames.firstOrNull().orEmpty()))
+            }
             minors = minors.map { minor ->
                 minor.copy(
                     tutorName = user.displayName ?: "",
@@ -248,16 +252,23 @@ fun SignatureScreen(
                         onCheckedChange = {
                             isMultiAuth = it
                             if (it && minors.size == 1) {
-                                // Al activar: crear 3 menores total (el primero + 2 más)
                                 val firstTutor = minors.firstOrNull()
-                                minors = listOf(
-                                    minors.first(),
-                                    MinorAuth(tutorName = firstTutor?.tutorName ?: "", tutorPhone = firstTutor?.tutorPhone ?: ""),
-                                    MinorAuth(tutorName = firstTutor?.tutorName ?: "", tutorPhone = firstTutor?.tutorPhone ?: "")
-                                )
+                                val savedChildren = currentUser?.childrenNames.orEmpty().take(3)
+                                if (savedChildren.isNotEmpty()) {
+                                    selectedChildNames = savedChildren.toSet()
+                                    minors = savedChildren.map { childName ->
+                                        MinorAuth(minorName = childName, tutorName = firstTutor?.tutorName.orEmpty(), tutorPhone = firstTutor?.tutorPhone.orEmpty())
+                                    }
+                                } else {
+                                    minors = listOf(
+                                        minors.first(),
+                                        MinorAuth(tutorName = firstTutor?.tutorName.orEmpty(), tutorPhone = firstTutor?.tutorPhone.orEmpty()),
+                                        MinorAuth(tutorName = firstTutor?.tutorName.orEmpty(), tutorPhone = firstTutor?.tutorPhone.orEmpty())
+                                    )
+                                }
                             } else if (!it && minors.size > 1) {
-                                // Al desactivar: mantener solo el primero
-                                minors = listOf(minors.first())
+                                selectedChildNames = emptySet()
+                                minors = listOf(minors.first().copy(minorName = currentUser?.childrenNames?.firstOrNull().orEmpty()))
                                 currentMinorIndex = 0
                             }
                         }
@@ -265,6 +276,43 @@ fun SignatureScreen(
                 }
             }
             Spacer(Modifier.height(8.dp))
+        }
+
+        if (isMultiAuth && !currentUser?.childrenNames.isNullOrEmpty()) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("¿Qué niños se apuntan?", style = MaterialTheme.typography.titleSmall)
+                    currentUser!!.childrenNames.take(3).forEach { childName ->
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = childName in selectedChildNames,
+                                onCheckedChange = { checked ->
+                                    val updated = if (checked) selectedChildNames + childName else selectedChildNames - childName
+                                    if (updated.isNotEmpty() && updated.size <= 3) {
+                                        selectedChildNames = updated
+                                        val previousByName = minors.associateBy { it.minorName }
+                                        minors = currentUser!!.childrenNames.filter { it in updated }.take(3).map { name ->
+                                            previousByName[name] ?: MinorAuth(
+                                                minorName = name,
+                                                tutorName = minors.firstOrNull()?.tutorName.orEmpty(),
+                                                tutorDni = minors.firstOrNull()?.tutorDni.orEmpty(),
+                                                tutorPhone = minors.firstOrNull()?.tutorPhone.orEmpty(),
+                                                signaturePaths = minors.firstOrNull()?.signaturePaths.orEmpty()
+                                            )
+                                        }
+                                        currentMinorIndex = 0
+                                    }
+                                },
+                                enabled = !isSubmitting
+                            )
+                            Text(childName)
+                        }
+                    }
+                    if (selectedChildNames.isEmpty()) {
+                        Text("Selecciona al menos un niño para continuar.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
         }
 
         // ───────── INDICADOR DE PROGRESO (solo multi-auth) ─────────
@@ -325,7 +373,8 @@ fun SignatureScreen(
                 label = { Text("Nombre del participante ${if (isMultiAuth) "${currentMinorIndex + 1}" else ""} *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                enabled = !isSubmitting
+                enabled = !isSubmitting && currentUser?.childrenNames.orEmpty().isEmpty(),
+                readOnly = currentUser?.childrenNames.orEmpty().isNotEmpty()
             )
         }
 

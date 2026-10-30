@@ -27,8 +27,8 @@ class AsociacionCiguenaApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
-        if (BuildConfig.PLACES_API_KEY.isNotBlank() && !Places.isInitialized()) {
-            Places.initializeWithNewPlacesApiEnabled(this, BuildConfig.PLACES_API_KEY)
+        if (BuildConfig.MAPS_API_KEY_KEY.isNotBlank() && !Places.isInitialized()) {
+            Places.initializeWithNewPlacesApiEnabled(this, BuildConfig.MAPS_API_KEY_KEY)
         }
         // ✅ Crear canal de notificaciones al inicio de la app
         // Esto garantiza que exista antes de que Firebase intente usarlo

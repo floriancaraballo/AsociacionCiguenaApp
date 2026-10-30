@@ -119,7 +119,10 @@ class GalleryViewModel @Inject constructor(
                             ?: emptyMap()
 
                         val excursionsWithPhotos = excursions.map { excursion ->
-                            val photos = photosByExcursion[excursion.id] ?: emptyList()
+                            val photos = (photosByExcursion[excursion.id] ?: emptyList())
+                                .sortedByDescending {
+                                    it.getTimestamp("uploadedAt")?.toDate()?.time ?: Long.MIN_VALUE
+                                }
                             val firstPhoto = photos.firstOrNull()
 
                             ExcursionWithPhotos(

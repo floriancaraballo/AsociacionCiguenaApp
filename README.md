@@ -12,7 +12,7 @@ Proyecto Android desarrollado con Kotlin y Jetpack Compose.
 
 1. Clonar el repositorio y abrirlo con Android Studio.
 2. Dejar que Android Studio cree `local.properties` con la ruta local del SDK.
-3. Copiar `MAPS_API_KEY` y `PLACES_API_KEY` desde `local.properties.example` y
+3. Copiar `MAPS_API_KEY` y `MAPS_API_KEY_KEY` desde `local.properties.example` y
    sustituir los valores de ejemplo por claves autorizadas para desarrollo.
 4. Descargar `google-services.json` desde Firebase Console y guardarlo en
    `app/google-services.json`.

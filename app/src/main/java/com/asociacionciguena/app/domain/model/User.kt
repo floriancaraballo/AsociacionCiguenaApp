@@ -9,5 +9,6 @@ data class User(
     val photoUrl: String? = null,
     val role: String,  // "superadmin", "admin", "monitor" o "socio"
     val createdAt: LocalDateTime,
-    val photoConsents: List<String>  // IDs de excursiones autorizadas
+    val photoConsents: List<String>,  // IDs de excursiones autorizadas
+    val childrenNames: List<String> = emptyList()
 )

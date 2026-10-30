@@ -224,7 +224,9 @@ class CalendarExcursionDetailViewModel @Inject constructor(
                         role = userDoc.getString("role") ?: "socio",
                         photoUrl = userDoc.getString("photoUrl"),
                         createdAt = kotlinx.datetime.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()),
-                        photoConsents = emptyList()
+                        photoConsents = emptyList(),
+                        childrenNames = (userDoc.get("childrenNames") as? List<*>)
+                            ?.filterIsInstance<String>()?.filter { it.isNotBlank() } ?: emptyList()
                     )
                     emit(user)
                 } else {

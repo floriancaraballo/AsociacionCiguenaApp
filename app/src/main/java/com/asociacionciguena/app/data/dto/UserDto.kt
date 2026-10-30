@@ -12,7 +12,8 @@ data class UserDto(
     val photoUrl: String? = null,
     val role: String = "socio",  // "superadmin", "admin", "monitor" o "socio"
     val createdAt: Timestamp? = null,
-    val photoConsents: List<String> = emptyList()  // IDs de excursiones autorizadas
+    val photoConsents: List<String> = emptyList(),  // IDs de excursiones autorizadas
+    val childrenNames: List<String> = emptyList()
 ) {
-    constructor() : this("", "", "", "","",null, emptyList())
+    constructor() : this("", "", "", "","",null, emptyList(), emptyList())
 }

@@ -133,6 +133,7 @@ private fun ProfileEditContent(
     modifier: Modifier = Modifier
 ) {
     val editedName by viewModel.editedName.collectAsState()
+    val editedChildrenNames by viewModel.editedChildrenNames.collectAsState()
     val selectedPhotoUri by viewModel.selectedPhotoUri.collectAsState()
     val uploadProgress by viewModel.uploadProgress.collectAsState()
     val isSaving by viewModel.isSaving.collectAsState()
@@ -286,6 +287,34 @@ private fun ProfileEditContent(
                 Icon(Icons.Default.Person, contentDescription = null)
             }
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        editedChildrenNames.forEachIndexed { index, childName ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = childName,
+                    onValueChange = { viewModel.onChildNameChange(index, it) },
+                    label = { Text(childNameLabel(index)) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    enabled = !isSaving
+                )
+                if (editedChildrenNames.size > 1 || childName.isNotBlank()) {
+                    IconButton(onClick = { viewModel.removeChildName(index) }, enabled = !isSaving) {
+                        Icon(Icons.Default.Delete, contentDescription = "Eliminar nombre")
+                    }
+                }
+            }
+        }
+        if (editedChildrenNames.size < 3) {
+            IconButton(
+                onClick = { viewModel.addChildName() },
+                enabled = !isSaving,
+                modifier = Modifier.align(Alignment.Start)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Añadir hermano")
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -464,8 +493,8 @@ private fun ProfileContent(
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 // Email
                 InfoRow(
@@ -488,6 +517,15 @@ private fun ProfileContent(
                         else -> user.role.replaceFirstChar { it.uppercase() }
                     }
                 )
+
+                if (user.childrenNames.isNotEmpty()) {
+                    Divider()
+                    InfoRow(
+                        icon = Icons.Default.Person,
+                        label = if (user.childrenNames.size == 1) "Nombre hijo" else "Nombre hijos",
+                        value = user.childrenNames.joinToString(separator = "\n")
+                    )
+                }
             }
         }
 
@@ -603,6 +641,12 @@ private fun ProfileContent(
 
         Spacer(modifier = Modifier.height(16.dp))
     }
+}
+
+private fun childNameLabel(index: Int): String = when (index) {
+    0 -> "Nombre socio"
+    1 -> "Nombre segundo socio"
+    else -> "Nombre tercer socio"
 }
 
 @Composable

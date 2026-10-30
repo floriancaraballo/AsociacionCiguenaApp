@@ -16,6 +16,7 @@ fun UserDto.toDomain(): User {
         role = role,
         createdAt = createdAt?.toLocalDateTime()
             ?: Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()),
-        photoConsents = photoConsents
+        photoConsents = photoConsents,
+        childrenNames = childrenNames
     )
 }

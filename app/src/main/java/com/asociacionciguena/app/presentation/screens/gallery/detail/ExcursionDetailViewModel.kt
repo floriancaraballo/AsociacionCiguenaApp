@@ -149,7 +149,7 @@ class ExcursionDetailViewModel @Inject constructor(
                             } catch (_: Exception) {
                                 null
                             }
-                        } ?: emptyList()
+                        }?.sortedByDescending { it.uploadedAt } ?: emptyList()
 
                         _uiState.value = ExcursionDetailUiState.Success(
                             excursion = excursion,

@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.toLocalDateTime
+import java.text.Collator
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -90,10 +92,20 @@ class UserManagementViewModel @Inject constructor(
                     usersList.filter { it.role != "superadmin" }
                 }
 
+                val roleOrder = mapOf(
+                    "superadmin" to 0,
+                    "admin" to 1,
+                    "monitor" to 2,
+                    "socio" to 3
+                )
+                val spanishCollator = Collator.getInstance(Locale.forLanguageTag("es-ES")).apply {
+                    strength = Collator.SECONDARY
+                }
                 val sortedUsers = filteredUsers.sortedWith(
-                    compareByDescending<User> { it.role == "superadmin" }
-                        .thenByDescending { it.role == "admin" }
-                        .thenBy { it.displayName }
+                    compareBy<User> { roleOrder[it.role] ?: roleOrder.size }
+                        .thenComparator { first, second ->
+                            spanishCollator.compare(first.displayName, second.displayName)
+                        }
                 )
 
                 _uiState.value = UserManagementUiState.Success(sortedUsers)

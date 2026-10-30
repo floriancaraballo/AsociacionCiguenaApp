@@ -43,6 +43,9 @@ class ProfileViewModel @Inject constructor(
     private val _editedName = MutableStateFlow("")
     val editedName: StateFlow<String> = _editedName.asStateFlow()
 
+    private val _editedChildrenNames = MutableStateFlow(listOf(""))
+    val editedChildrenNames: StateFlow<List<String>> = _editedChildrenNames.asStateFlow()
+
     private val _selectedPhotoUri = MutableStateFlow<Uri?>(null)
     val selectedPhotoUri: StateFlow<Uri?> = _selectedPhotoUri.asStateFlow()
 
@@ -66,6 +69,7 @@ class ProfileViewModel @Inject constructor(
                     if (user != null) {
                         _uiState.value = ProfileUiState.LoggedIn(user)
                         _editedName.value = user.displayName
+                        _editedChildrenNames.value = user.childrenNames.ifEmpty { listOf("") }
                     } else {
                         _uiState.value = ProfileUiState.NotLoggedIn
                     }
@@ -86,6 +90,7 @@ class ProfileViewModel @Inject constructor(
         val currentState = _uiState.value
         if (currentState is ProfileUiState.LoggedIn) {
             _editedName.value = currentState.user.displayName
+            _editedChildrenNames.value = currentState.user.childrenNames.ifEmpty { listOf("") }
             _selectedPhotoUri.value = null
             _isEditMode.value = true
         }
@@ -99,6 +104,19 @@ class ProfileViewModel @Inject constructor(
 
     fun onNameChange(newName: String) {
         _editedName.value = newName
+    }
+
+    fun onChildNameChange(index: Int, value: String) {
+        _editedChildrenNames.value = _editedChildrenNames.value.toMutableList().also { it[index] = value }
+    }
+
+    fun addChildName() {
+        if (_editedChildrenNames.value.size < 3) _editedChildrenNames.value += ""
+    }
+
+    fun removeChildName(index: Int) {
+        val names = _editedChildrenNames.value.toMutableList().also { it.removeAt(index) }
+        _editedChildrenNames.value = names.ifEmpty { listOf("") }
     }
 
     fun onPhotoSelected(uri: Uri) {
@@ -138,7 +156,8 @@ class ProfileViewModel @Inject constructor(
 
                 // Actualizar en Firestore
                 val updates = hashMapOf<String, Any>(
-                    "displayName" to _editedName.value
+                    "displayName" to _editedName.value.trim(),
+                    "childrenNames" to _editedChildrenNames.value.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
                 )
                 if (newPhotoUrl != null) {
                     updates["photoUrl"] = newPhotoUrl
@@ -175,7 +194,8 @@ class ProfileViewModel @Inject constructor(
                 // Actualizar estado directamente con los nuevos valores
                 val updatedUser = currentState.user.copy(
                     displayName = _editedName.value,
-                    photoUrl = newPhotoUrl ?: currentState.user.photoUrl
+                    photoUrl = newPhotoUrl ?: currentState.user.photoUrl,
+                    childrenNames = _editedChildrenNames.value.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
                 )
                 _uiState.value = ProfileUiState.LoggedIn(updatedUser)
                 println("✅ Estado actualizado con nueva foto: ${updatedUser.photoUrl}")

@@ -164,7 +164,7 @@ class FullscreenMediaViewModel @Inject constructor(
                             } catch (_: Exception) {
                                 null
                             }
-                        } ?: emptyList()
+                        }?.sortedByDescending { it.uploadedAt } ?: emptyList()
 
                         val initialIndex = photos.indexOfFirst { it.id == initialPhotoId }
                             .takeIf { it >= 0 } ?: 0
