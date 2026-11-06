@@ -72,15 +72,17 @@ service cloud.firestore {
       allow update: if request.auth.uid == userId 
                     && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
 
-      // Creación/migración únicamente del documento propio.
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      // Los roles privilegiados se asignan desde los flujos de administración.
+      allow create: if isAuthenticated()
+                    && request.auth.uid == userId
+                    && request.resource.data.get('role', 'socio') == 'socio';
 
       // Eliminación (delete): admin, o el propio usuario si es para borrar el documento temporal durante la migración
       allow delete: if isAdmin() || (isAuthenticated() && resource.data.email == request.auth.token.email);
     }
 
     // Fotos de perfil de usuarios
-    match /users/{userId}/{allPaths=**} {
+    match /users/{userId}/{subcollection}/{documentId}/{allPaths=**} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && request.auth.uid == userId;
     }
@@ -127,6 +129,29 @@ service cloud.firestore {
     // ========================================
     match /uploadBatches/{batchId} {
       allow read, write: if canManageContent();
+    }
+
+    // ========================================
+    // PINES DE MENORES
+    // ========================================
+    // La lista de pines es información interna de gestión. Solo los roles
+    // de contenido (admin, superadmin y monitor) pueden verla o modificarla.
+    match /pins/{pinId} {
+      allow read: if canManageContent();
+      allow create: if canManageContent()
+                    && request.resource.data.keys().hasOnly(['name', 'pinCount', 'createdAt', 'updatedAt'])
+                    && request.resource.data.keys().hasAll(['name', 'pinCount', 'createdAt', 'updatedAt'])
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 100
+                    && request.resource.data.pinCount is int
+                    && request.resource.data.pinCount == 0;
+      allow update: if canManageContent()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                      .hasOnly(['pinCount', 'updatedAt'])
+                    && request.resource.data.pinCount is int
+                    && request.resource.data.pinCount >= 0;
+      allow delete: if canManageContent();
     }
     
     // ========================================
@@ -187,9 +212,11 @@ service cloud.firestore {
                   (resource.data.userId == request.auth.uid ||
                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin']);
 
-      // Solo admins pueden actualizar (aprobar/rechazar)
-      allow update: if request.auth != null &&
-                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
+      // Los permisos de nueva firma solo se escriben desde Cloud Functions.
+      allow update: if isAdmin()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['status', 'validatedAt'])
+                    && request.resource.data.status in ['APPROVED', 'REJECTED'];
 
       // Los admins pueden leer todas las autorizaciones
       allow list: if request.auth != null &&

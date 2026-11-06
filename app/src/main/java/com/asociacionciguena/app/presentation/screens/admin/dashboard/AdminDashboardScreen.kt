@@ -23,6 +23,7 @@ fun AdminDashboardScreen(
     onNavigateToExcursions: () -> Unit,
     onNavigateToPhotos: () -> Unit,
     onNavigateToUsers: () -> Unit,
+    onNavigateToPins: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
     val stats by viewModel.stats.collectAsState()
@@ -123,6 +124,21 @@ fun AdminDashboardScreen(
                         modifier = Modifier.weight(1f),
                         enabled = isAdmin
                     )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    AdminOptionCard(
+                        title = "Gestionar Pines",
+                        icon = Icons.Default.Star,
+                        onClick = onNavigateToPins,
+                        modifier = Modifier.weight(1f),
+                        enabled = isAdmin || isMonitor
+                    )
+
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }

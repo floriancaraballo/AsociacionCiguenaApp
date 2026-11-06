@@ -5,14 +5,17 @@ import android.net.Uri
 import com.asociacionciguena.app.BuildConfig
 import com.asociacionciguena.app.domain.model.SignedAuthorization
 import com.asociacionciguena.app.domain.model.AuthorizationStatus
+import com.asociacionciguena.app.domain.model.AuthorizationSigningStatus
 import com.asociacionciguena.app.util.PdfGenerator
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.functions.FirebaseFunctionsException
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageReference
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
 import java.io.File
@@ -97,6 +100,7 @@ class SignedAuthorizationRepository @Inject constructor(
             ?: return Result.failure(Exception("Usuario no autenticado"))
         val uploadedReferences = mutableListOf<StorageReference>()
         val localFiles = mutableListOf<File>()
+        var reservationRequested = false
 
         return try {
             val batchId = UUID.randomUUID().toString()
@@ -158,6 +162,7 @@ class SignedAuthorizationRepository @Inject constructor(
                 )
             }
 
+            reservationRequested = true
             val callableResult = functions
                 .getHttpsCallable("reserveSignedAuthorizations")
                 .call(
@@ -179,9 +184,20 @@ class SignedAuthorizationRepository @Inject constructor(
             }
             Result.success(ids)
         } catch (e: Exception) {
-            uploadedReferences.forEach { reference ->
-                runCatching { reference.delete().await() }
+            val reservationRejected = e is FirebaseFunctionsException && e.code in setOf(
+                FirebaseFunctionsException.Code.FAILED_PRECONDITION,
+                FirebaseFunctionsException.Code.INVALID_ARGUMENT,
+                FirebaseFunctionsException.Code.NOT_FOUND,
+                FirebaseFunctionsException.Code.PERMISSION_DENIED,
+                FirebaseFunctionsException.Code.UNAUTHENTICATED
+            )
+            // Una respuesta perdida puede corresponder a una reserva ya confirmada.
+            if (!reservationRequested || reservationRejected) {
+                uploadedReferences.forEach { reference ->
+                    runCatching { reference.delete().await() }
+                }
             }
+            if (e is CancellationException) throw e
             android.util.Log.e("SignAuth", "Error reservando autorizaciones", e)
             Result.failure(e)
         } finally {
@@ -262,6 +278,27 @@ class SignedAuthorizationRepository @Inject constructor(
         } catch (e: Exception) {
             false
         }
+    }
+
+    fun observeSigningStatus(excursionId: String, userId: String): Flow<AuthorizationSigningStatus> {
+        return firestore.collection("signedAuthorizations")
+            .whereEqualTo("excursionId", excursionId)
+            .whereEqualTo("userId", userId)
+            .snapshots()
+            .map { snapshot ->
+                val documents = snapshot.documents
+                when {
+                    documents.isEmpty() -> AuthorizationSigningStatus.AVAILABLE
+                    documents.any { it.getString("status") != AuthorizationStatus.REJECTED.name } ->
+                        AuthorizationSigningStatus.SIGNED
+                    documents.any {
+                        it.getTimestamp("resubmissionGrantedAt") != null &&
+                            it.getTimestamp("resubmissionUsedAt") == null
+                    } -> AuthorizationSigningStatus.AVAILABLE
+                    else -> AuthorizationSigningStatus.REJECTED
+                }
+            }
+            .catch { emit(AuthorizationSigningStatus.UNAVAILABLE) }
     }
 
     suspend fun hasAvailableCapacity(excursionId: String, requestedParticipants: Int): Boolean {
@@ -365,7 +402,9 @@ class SignedAuthorizationRepository @Inject constructor(
                             emailSent = doc.getBoolean("emailSent") ?: false,
                             status = AuthorizationStatus.valueOf(
                                 doc.getString("status") ?: "PENDING"
-                            )
+                            ),
+                            resubmissionGranted = doc.getTimestamp("resubmissionGrantedAt") != null,
+                            resubmissionUsed = doc.getTimestamp("resubmissionUsedAt") != null
                         )
                     } catch (e: Exception) {
                         android.util.Log.e("AuthRepo", "❌ Error mapeando documento ${doc.id}: ${e.message}")

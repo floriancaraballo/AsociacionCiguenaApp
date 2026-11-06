@@ -62,8 +62,8 @@ type AuthorizationReservation = {
   isBatchEmail: boolean;
 };
 
-function userNotificationTopic(userId: string): string {
-  return `user_${userId.replace(/[^A-Za-z0-9_\-.~%]/g, "_")}`;
+function userNotificationTopic(userId: string, environment = "release"): string {
+  return `user_${environment}_${userId.replace(/[^A-Za-z0-9_\-.~%]/g, "_")}`;
 }
 
 function generateTemporaryPassword(): string {
@@ -697,10 +697,7 @@ export const requestPasswordReset = onCall({
 /**
  * Enviar notificación cuando se crea una noticia
  */
-export const onNewsCreated = onDocumentCreated({
-  document: "news/{newsId}",
-  region: "europe-west1",
-}, async (event) => {
+async function notifyNews(event: Parameters<Parameters<typeof onDocumentCreated>[1]>[0], environment: string) {
   const snapshot = event.data;
   if (!snapshot) {
     console.log("No data associated with the event");
@@ -724,7 +721,7 @@ export const onNewsCreated = onDocumentCreated({
 
     // ✅ ENVIAR A TOPIC "public" (todos los dispositivos con la app)
 	const message = {
-	  topic: "public",
+	  topic: `public_${environment}`,
 	  notification: {  // ← AÑADIR campo notification
 		title: "📰 Nueva publicación",
 		body: title
@@ -751,12 +748,12 @@ export const onNewsCreated = onDocumentCreated({
   } catch (error) {
     console.error("❌ Error al enviar notificación de noticia:", error);
   }
-});
+}
 
-export const onExcursionCreated = onDocumentCreated({
-  document: "excursions/{excursionId}",
-  region: "europe-west1",
-}, async (event) => {
+export const onNewsCreated = onDocumentCreated({ document: "news/{newsId}", region: "europe-west1" }, (event) => notifyNews(event, "release"));
+export const onDebugNewsCreated = onDocumentCreated({ document: "news/{newsId}", database: "debug", region: "europe-west1" }, (event) => notifyNews(event, "debug"));
+
+async function notifyExcursion(event: Parameters<Parameters<typeof onDocumentCreated>[1]>[0], environment: string) {
   const snapshot = event.data;
   if (!snapshot) {
     console.log("No data associated with the event");
@@ -793,7 +790,7 @@ export const onExcursionCreated = onDocumentCreated({
     const bodyText = dateStr ? `${title} - ${dateStr}` : title;
 
 	const message = {
-	  topic: "public",
+	  topic: `public_${environment}`,
 	  notification: {  // ← AÑADIR campo notification
 		title: "🏔️ Nueva Excursión Programada",
 		body: bodyText
@@ -819,18 +816,16 @@ export const onExcursionCreated = onDocumentCreated({
   } catch (error) {
     console.error("❌ Error al enviar notificación de excursión:", error);
   }
-});
+}
+
+export const onExcursionCreated = onDocumentCreated({ document: "excursions/{excursionId}", region: "europe-west1" }, (event) => notifyExcursion(event, "release"));
+export const onDebugExcursionCreated = onDocumentCreated({ document: "excursions/{excursionId}", database: "debug", region: "europe-west1" }, (event) => notifyExcursion(event, "debug"));
 
 // ==========================================
 // NOTIFICACIÓN AL COMPLETAR BATCH DE FOTOS
 // ==========================================
 
-export const onUploadBatchCompleted = onDocumentUpdated(
-  {
-    document: "uploadBatches/{batchId}",
-    region: "europe-west1"
-  },
-  async (event) => {
+async function notifyUploadBatchCompleted(event: Parameters<Parameters<typeof onDocumentUpdated>[1]>[0], environment: string) {
     try {
       const beforeData = event.data?.before.data();
       const afterData = event.data?.after.data();
@@ -850,7 +845,8 @@ export const onUploadBatchCompleted = onDocumentUpdated(
         console.log(`📸 Upload batch completed: ${photoCount} photos for excursion ${excursionId}`);
 
         // Obtener título de la excursión para el mensaje
-        const excursionDoc = await admin.firestore()
+        const firestore = environment === "debug" ? getFirestore("debug") : admin.firestore();
+        const excursionDoc = await firestore
           .collection("excursions")
           .doc(excursionId)
           .get();
@@ -864,7 +860,7 @@ export const onUploadBatchCompleted = onDocumentUpdated(
 
         // ✅ ENVIAR A TOPIC "authenticated" (solo usuarios logueados)
         const message = {
-		  topic: "authenticated",
+		  topic: `authenticated_${environment}`,
 		  notification: {  // ← AÑADIR campo notification
 			title: "📸 ¡Fotos Nuevas Disponibles!",
 			body: body
@@ -890,8 +886,10 @@ export const onUploadBatchCompleted = onDocumentUpdated(
     } catch (error) {
       console.error("❌ Error en onUploadBatchCompleted:", error);
     }
-  }
-);
+}
+
+export const onUploadBatchCompleted = onDocumentUpdated({ document: "uploadBatches/{batchId}", region: "europe-west1" }, (event) => notifyUploadBatchCompleted(event, "release"));
+export const onDebugUploadBatchCompleted = onDocumentUpdated({ document: "uploadBatches/{batchId}", database: "debug", region: "europe-west1" }, (event) => notifyUploadBatchCompleted(event, "debug"));
 
 // ==========================================
 // ENVÍO DE EMAIL AL FIRMAR AUTORIZACIÓN (FINAL)
@@ -1072,12 +1070,11 @@ export const onAuthorizationSigned = onDocumentCreated(
 // ENVÍO DE EMAIL PARA AUTORIZACIONES MÚLTIPLES (HERMANOS)
 // ==========================================
 
-export const onAuthorizationApproved = onDocumentUpdated(
-  {
-    document: "signedAuthorizations/{authorizationId}",
-    region: "europe-west1",
-  },
-  async (event) => {
+async function notifyAuthorizationApproved(
+  event: Parameters<Parameters<typeof onDocumentUpdated>[1]>[0],
+  firestore: admin.firestore.Firestore,
+  environment: string
+) {
     try {
       const beforeData = event.data?.before.data();
       const afterData = event.data?.after.data();
@@ -1101,9 +1098,9 @@ export const onAuthorizationApproved = onDocumentUpdated(
         return null;
       }
 
-      const userDoc = await admin.firestore().collection("users").doc(userId).get();
+      const userDoc = await firestore.collection("users").doc(userId).get();
       const userFcmToken = userDoc.get("fcmToken") as string | undefined;
-      const deviceTokensSnapshot = await admin.firestore()
+      const deviceTokensSnapshot = await firestore
         .collection("deviceTokens")
         .where("userId", "==", userId)
         .get();
@@ -1119,7 +1116,7 @@ export const onAuthorizationApproved = onDocumentUpdated(
         const fallbackBody = minorName
           ? `La autorizaciÃ³n de ${minorName} para ${excursionTitle} ha sido aprobada.`
           : `Tu autorizaciÃ³n para ${excursionTitle} ha sido aprobada.`;
-        const topic = userNotificationTopic(userId);
+        const topic = userNotificationTopic(userId, environment);
 
         const topicResponse = await admin.messaging().send({
           topic,
@@ -1207,7 +1204,7 @@ export const onAuthorizationApproved = onDocumentUpdated(
         }
 
         await Promise.all(invalidTokens.map((token) =>
-          admin.firestore().collection("deviceTokens").doc(token).set(
+          firestore.collection("deviceTokens").doc(token).set(
             {
               userId: null,
               invalid: true,
@@ -1229,7 +1226,15 @@ export const onAuthorizationApproved = onDocumentUpdated(
       console.error("Error en onAuthorizationApproved:", error);
       return null;
     }
-  }
+}
+
+export const onAuthorizationApproved = onDocumentUpdated(
+  { document: "signedAuthorizations/{authorizationId}", region: "europe-west1" },
+  (event) => notifyAuthorizationApproved(event, admin.firestore(), "release")
+);
+export const onDebugAuthorizationApproved = onDocumentUpdated(
+  { document: "signedAuthorizations/{authorizationId}", database: "debug", region: "europe-west1" },
+  (event) => notifyAuthorizationApproved(event, getFirestore("debug"), "debug")
 );
 
 async function updateExcursionCurrentParticipants(
@@ -1367,10 +1372,63 @@ export const syncDebugExcursionCurrentParticipants = onDocumentWritten(
   }
 );
 
+export const allowAuthorizationResubmission = onCall({
+  region: "europe-west1",
+}, async (request) => {
+  const adminId = request.auth?.uid;
+  if (!adminId) {
+    throw new HttpsError("unauthenticated", "Debes iniciar sesión");
+  }
+
+  const {authorizationId, databaseId} = request.data ?? {};
+  if (typeof authorizationId !== "string" || !authorizationId ||
+      authorizationId.includes("/")) {
+    throw new HttpsError("invalid-argument", "Autorización no válida");
+  }
+
+  const firestore = databaseId === "debug" ?
+    getFirestore("debug") : admin.firestore();
+  const authorizations = firestore.collection("signedAuthorizations");
+  const authorizationRef = authorizations.doc(authorizationId);
+  await firestore.runTransaction(async (transaction) => {
+    const actor = await transaction.get(firestore.collection("users").doc(adminId));
+    if (!["admin", "superadmin"].includes(actor.get("role"))) {
+      throw new HttpsError("permission-denied", "No tienes permiso para reabrir firmas");
+    }
+
+    const authorization = await transaction.get(authorizationRef);
+    if (authorization.get("status") !== "REJECTED") {
+      throw new HttpsError("failed-precondition", "La autorización debe estar rechazada");
+    }
+    if (authorization.get("resubmissionUsedAt")) {
+      throw new HttpsError("failed-precondition", "Ya se usó el permiso de esta autorización");
+    }
+
+    const userAuthorizations = await transaction.get(authorizations
+      .where("excursionId", "==", authorization.get("excursionId"))
+      .where("userId", "==", authorization.get("userId")));
+    if (userAuthorizations.docs.some((doc) => doc.get("status") !== "REJECTED")) {
+      throw new HttpsError("failed-precondition", "El usuario ya tiene una autorización activa");
+    }
+    if (userAuthorizations.docs.some((doc) =>
+      doc.get("status") === "REJECTED" &&
+      doc.get("resubmissionGrantedAt") && !doc.get("resubmissionUsedAt")
+    )) {
+      return;
+    }
+
+    transaction.update(authorizationRef, {
+      resubmissionGrantedAt: admin.firestore.FieldValue.serverTimestamp(),
+      resubmissionGrantedBy: adminId,
+    });
+  });
+});
+
 export const reserveSignedAuthorizations = onCall({
   region: "europe-west1",
 }, async (request) => {
-  if (!request.auth) {
+  const userId = request.auth?.uid;
+  if (!userId) {
     throw new HttpsError("unauthenticated", "Debes iniciar sesion");
   }
 
@@ -1403,7 +1461,7 @@ export const reserveSignedAuthorizations = onCall({
     "batchId",
   ];
   const hasInvalidAuthorization = authorizations.some((authorization) =>
-    requiredFields.some((field) =>
+    !authorization || requiredFields.some((field) =>
       typeof authorization[field] !== "string" ||
       String(authorization[field]).trim().length === 0
     )
@@ -1438,10 +1496,25 @@ export const reserveSignedAuthorizations = onCall({
     const activeAuthorizationsQuery = firestore
       .collection("signedAuthorizations")
       .where("excursionId", "==", excursionId);
-    const activeAuthorizations = await transaction.get(
+    const excursionAuthorizations = await transaction.get(
       activeAuthorizationsQuery
     );
-    const activeAuthorizationCount = activeAuthorizations.docs.filter((doc) =>
+    const userAuthorizations = excursionAuthorizations.docs.filter((doc) =>
+      doc.get("userId") === userId
+    );
+    const resubmission = userAuthorizations.find((doc) =>
+      doc.get("status") === "REJECTED" &&
+      doc.get("resubmissionGrantedAt") && !doc.get("resubmissionUsedAt")
+    );
+    if (userAuthorizations.some((doc) => doc.get("status") !== "REJECTED") ||
+        (userAuthorizations.length > 0 && !resubmission)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "No tienes permiso para volver a firmar esta autorización"
+      );
+    }
+
+    const activeAuthorizationCount = excursionAuthorizations.docs.filter((doc) =>
       ACTIVE_AUTHORIZATION_STATUSES.includes(doc.get("status"))
     ).length;
     const currentParticipants = Math.max(
@@ -1460,14 +1533,24 @@ export const reserveSignedAuthorizations = onCall({
 
     authorizations.forEach((authorization, index) => {
       transaction.create(authorizationRefs[index], {
-        ...authorization,
+        ...Object.fromEntries(requiredFields.map((field) =>
+          [field, authorization[field]]
+        )),
+        minorName: typeof authorization.minorName === "string" ?
+          authorization.minorName : null,
+        isBatchEmail: authorization.isBatchEmail === true,
         excursionId,
-        userId: request.auth!.uid,
+        userId,
         signedAt: admin.firestore.FieldValue.serverTimestamp(),
         emailSent: false,
         status: "PENDING",
       });
     });
+    if (resubmission) {
+      transaction.update(resubmission.ref, {
+        resubmissionUsedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
 
     const excursionUpdate: Record<string, unknown> = {
       currentParticipants: nextParticipants,

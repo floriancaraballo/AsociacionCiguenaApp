@@ -36,6 +36,7 @@ sealed class Screen(val route: String) {
         fun createRoute(newsId: String) = "news_detail/$newsId"
     }
     object UserManagement : Screen("user_management")
+    object PinManagement : Screen("admin_pins")
 
     object ExcursionDetail : Screen("excursion_detail/{excursionId}") {
         fun createRoute(excursionId: String) = "excursion_detail/$excursionId"

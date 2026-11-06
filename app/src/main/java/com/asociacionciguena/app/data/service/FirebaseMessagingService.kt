@@ -15,6 +15,7 @@ import android.graphics.Rect
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.asociacionciguena.app.AsociacionCiguenaApp
+import com.asociacionciguena.app.BuildConfig
 import com.asociacionciguena.app.R
 import com.asociacionciguena.app.presentation.MainActivity
 import com.google.firebase.auth.FirebaseAuth
@@ -29,7 +30,7 @@ import kotlinx.coroutines.tasks.await
 
 class FirebaseMessagingService : FirebaseMessagingService() {
 
-    private val firestore by lazy { FirebaseFirestore.getInstance() }
+    private val firestore by lazy { FirebaseFirestore.getInstance(BuildConfig.FIRESTORE_DATABASE_ID) }
     private val auth by lazy { FirebaseAuth.getInstance() }
 
     companion object {
@@ -39,8 +40,8 @@ class FirebaseMessagingService : FirebaseMessagingService() {
         private const val NOTIFICATION_ID = 1
 
         // ✅ NUEVO: Topics para segmentar notificaciones
-        private const val TOPIC_PUBLIC = "public"
-        private const val TOPIC_AUTHENTICATED = "authenticated"
+        private val TOPIC_PUBLIC = "public_${BuildConfig.NOTIFICATION_ENVIRONMENT}"
+        private val TOPIC_AUTHENTICATED = "authenticated_${BuildConfig.NOTIFICATION_ENVIRONMENT}"
     }
 
     override fun onNewToken(token: String) {
@@ -49,6 +50,8 @@ class FirebaseMessagingService : FirebaseMessagingService() {
         android.util.Log.d("FCM_TOPIC", "🔑 Nuevo token generado: ${token.take(20)}...")
 
         // ✅ 1. Suscribirse SIEMPRE a topic público (noticias/calendario para todos)
+        unsubscribeFromTopic("public")
+        unsubscribeFromTopic("authenticated")
         subscribeToTopic(TOPIC_PUBLIC)
 
         // ✅ 2. Si hay usuario logueado, suscribir a topic privado (fotos)
@@ -97,7 +100,7 @@ class FirebaseMessagingService : FirebaseMessagingService() {
     }
 
     private fun userNotificationTopic(userId: String): String {
-        return "user_${userId.replace(Regex("[^A-Za-z0-9_\\-.~%]"), "_")}"
+        return "user_${BuildConfig.NOTIFICATION_ENVIRONMENT}_${userId.replace(Regex("[^A-Za-z0-9_\\-.~%]"), "_")}"
     }
 
     fun unsubscribeFromTopic(topic: String) {
@@ -114,6 +117,7 @@ class FirebaseMessagingService : FirebaseMessagingService() {
     // ✅ NUEVO: Llamar cuando el usuario se loguea
     fun onUserLogin() {
         android.util.Log.d("FCM_TOPIC", "🔐 Usuario logueado: suscribiendo a '$TOPIC_AUTHENTICATED'")
+        unsubscribeFromTopic("authenticated")
         subscribeToTopic(TOPIC_AUTHENTICATED)
         auth.currentUser?.uid?.let { subscribeToTopic(userNotificationTopic(it)) }
 

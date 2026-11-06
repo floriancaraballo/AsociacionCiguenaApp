@@ -1,6 +1,7 @@
 package com.asociacionciguena.app.data.manager
 
 import android.os.Build
+import com.asociacionciguena.app.BuildConfig
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -23,9 +24,9 @@ class FCMTokenManager @Inject constructor(
 ) {
     private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val notificationFirestore: FirebaseFirestore by lazy {
-        FirebaseFirestore.getInstance()
-    }
+    private val topicEnvironment = BuildConfig.NOTIFICATION_ENVIRONMENT
+    private val publicTopic = "public_$topicEnvironment"
+    private val authenticatedTopic = "authenticated_$topicEnvironment"
 
     /**
      * Synchronize the FCM token without tying network work to a screen lifecycle.
@@ -93,17 +94,11 @@ class FCMTokenManager @Inject constructor(
             .set(tokenData, SetOptions.merge())
             .await()
 
-        if (firestore != notificationFirestore) {
-            notificationFirestore.collection("deviceTokens")
-                .document(token)
-                .set(tokenData, SetOptions.merge())
-                .await()
-        }
     }
 
     private suspend fun shouldRotateInvalidatedToken(userId: String): Boolean {
         return try {
-            val userDoc = notificationFirestore.collection("users")
+            val userDoc = firestore.collection("users")
                 .document(userId)
                 .get()
                 .await()
@@ -127,7 +122,7 @@ class FCMTokenManager @Inject constructor(
     private suspend fun saveUserNotificationToken(userId: String, token: String) {
         val tokenData = mapOf(
             "fcmToken" to token,
-            "fcmTopics" to listOf("public", "authenticated", userNotificationTopic(userId)),
+            "fcmTopics" to listOf(publicTopic, authenticatedTopic, userNotificationTopic(userId)),
             "fcmTokenUpdatedAt" to FieldValue.serverTimestamp(),
             "fcmTokenInvalidatedAt" to FieldValue.delete()
         )
@@ -137,28 +132,25 @@ class FCMTokenManager @Inject constructor(
             .set(tokenData, SetOptions.merge())
             .await()
 
-        if (firestore != notificationFirestore) {
-            notificationFirestore.collection("users")
-                .document(userId)
-                .set(tokenData, SetOptions.merge())
-                .await()
-        }
     }
 
     /**
      * Eliminar token (al cerrar sesión)
      */
     private suspend fun subscribeToNotificationTopics(userId: String?) {
-        messaging.subscribeToTopic("public").await()
+        // Quita la suscripción compartida anterior, que mezclaba instalaciones debug/release.
+        messaging.unsubscribeFromTopic("public").await()
+        messaging.unsubscribeFromTopic("authenticated").await()
+        messaging.subscribeToTopic(publicTopic).await()
 
         if (userId != null) {
-            messaging.subscribeToTopic("authenticated").await()
+            messaging.subscribeToTopic(authenticatedTopic).await()
             messaging.subscribeToTopic(userNotificationTopic(userId)).await()
         }
     }
 
     private fun userNotificationTopic(userId: String): String {
-        return "user_${userId.replace(Regex("[^A-Za-z0-9_\\-.~%]"), "_")}"
+        return "user_${topicEnvironment}_${userId.replace(Regex("[^A-Za-z0-9_\\-.~%]"), "_")}"
     }
 
     suspend fun deleteToken() {
@@ -172,6 +164,7 @@ class FCMTokenManager @Inject constructor(
 
                 clearUserNotificationToken(userId)
                 messaging.unsubscribeFromTopic(userNotificationTopic(userId)).await()
+                messaging.unsubscribeFromTopic(authenticatedTopic).await()
             } catch (e: Exception) {
                 android.util.Log.e("FCMTokenManager", "Error eliminando token: ${e.message}")
             }
@@ -189,12 +182,6 @@ class FCMTokenManager @Inject constructor(
             .set(clearData, SetOptions.merge())
             .await()
 
-        if (firestore != notificationFirestore) {
-            notificationFirestore.collection("deviceTokens")
-                .document(token)
-                .set(clearData, SetOptions.merge())
-                .await()
-        }
     }
 
     private suspend fun clearUserNotificationToken(userId: String) {
@@ -210,11 +197,5 @@ class FCMTokenManager @Inject constructor(
             .update(clearData)
             .await()
 
-        if (firestore != notificationFirestore) {
-            notificationFirestore.collection("users")
-                .document(userId)
-                .update(clearData)
-                .await()
-        }
     }
 }

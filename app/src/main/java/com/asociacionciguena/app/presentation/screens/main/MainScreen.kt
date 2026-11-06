@@ -26,6 +26,7 @@ import com.asociacionciguena.app.presentation.screens.auth.LoginScreen
 import com.asociacionciguena.app.presentation.screens.gallery.GalleryScreen
 import com.asociacionciguena.app.presentation.screens.profile.ProfileScreen
 import com.asociacionciguena.app.presentation.screens.admin.dashboard.AdminDashboardScreen
+import com.asociacionciguena.app.presentation.screens.admin.pins.PinManagementScreen
 import com.asociacionciguena.app.presentation.screens.admin.news.NewsFormScreen
 import com.asociacionciguena.app.presentation.screens.admin.news.NewsManagementScreen
 import com.asociacionciguena.app.presentation.screens.admin.excursions.ExcursionFormScreen
@@ -227,6 +228,9 @@ fun MainScreen(
                             onNavigateToAuthorizations = { excursionId, excursionTitle ->
                                 navController.navigate(Screen.AuthorizationsList.createRoute(excursionId, excursionTitle))
                             },
+                            onNavigateToPayments = { excursionId, excursionTitle ->
+                                navController.navigate(Screen.PaymentsList.createRoute(excursionId, excursionTitle))
+                            }
                         )
                     }
                     // ───────── NUEVA RUTA: Pago con TPV (Redsys) ─────────
@@ -389,6 +393,9 @@ fun MainScreen(
                             onNavigateToUsers = {
                                 navController.navigate(Screen.UserManagement.route)
                             },
+                            onNavigateToPins = {
+                                navController.navigate(Screen.PinManagement.route)
+                            },
                             onNavigateBack = {
                                 navController.popBackStack()
                             }
@@ -463,6 +470,12 @@ fun MainScreen(
                             onNavigateBack = {
                                 navController.popBackStack()
                             }
+                        )
+                    }
+
+                    composable(Screen.PinManagement.route) {
+                        PinManagementScreen(
+                            onNavigateBack = { navController.popBackStack() }
                         )
                     }
 

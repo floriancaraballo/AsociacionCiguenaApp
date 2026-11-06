@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.asociacionciguena.app.BuildConfig
 import com.asociacionciguena.app.domain.model.Excursion
+import com.asociacionciguena.app.domain.model.AuthorizationSigningStatus
 import com.asociacionciguena.app.domain.model.RegistrationClosureReason
 import com.asociacionciguena.app.domain.model.RegistrationClosureSource
 import com.asociacionciguena.app.domain.model.User
@@ -255,6 +256,13 @@ class CalendarExcursionDetailViewModel @Inject constructor(
             emit(hasSigned)
         }
     }
+
+    fun observeSigningStatus(userId: String): Flow<AuthorizationSigningStatus> =
+        if (userId.isEmpty()) {
+            flow { emit(AuthorizationSigningStatus.AVAILABLE) }
+        } else {
+            signedAuthorizationRepository.observeSigningStatus(excursionId, userId)
+        }
 
     fun hasUserApprovedAuthorization(userId: String): Flow<Boolean> = flow {
         if (userId.isEmpty()) {

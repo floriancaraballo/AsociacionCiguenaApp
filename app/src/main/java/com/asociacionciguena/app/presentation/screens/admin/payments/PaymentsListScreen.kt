@@ -71,6 +71,9 @@ fun PaymentsListScreen(
     onNavigateBack: () -> Unit
 ) {
     val payments by viewModel.payments.collectAsState()
+    val proofPayments = remember(payments) {
+        payments.filter { !it.paymentProofUrl.isNullOrBlank() }
+    }
     val isLoading by viewModel.isLoading.collectAsState()
     val message by viewModel.message.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -112,12 +115,12 @@ fun PaymentsListScreen(
         ) {
             PaymentSummaryCard(
                 excursionTitle = excursionTitle,
-                payments = payments,
+                payments = proofPayments,
                 isLoading = isLoading,
                 modifier = Modifier.padding(16.dp)
             )
 
-            if (payments.isEmpty() && !isLoading) {
+            if (proofPayments.isEmpty() && !isLoading) {
                 EmptyPayments()
             } else {
                 LazyColumn(
@@ -125,7 +128,7 @@ fun PaymentsListScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(payments, key = { it.id }) { payment ->
+                    items(proofPayments, key = { it.id }) { payment ->
                         PaymentCard(
                             payment = payment,
                             onApprove = { viewModel.approvePayment(payment.id, excursionId) },

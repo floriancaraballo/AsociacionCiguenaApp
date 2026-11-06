@@ -25,11 +25,20 @@ data class SignedAuthorization(
     // Metadatos
     val signedAt: LocalDateTime? = null,
     val emailSent: Boolean = false,
-    val status: AuthorizationStatus = AuthorizationStatus.PENDING
+    val status: AuthorizationStatus = AuthorizationStatus.PENDING,
+    val resubmissionGranted: Boolean = false,
+    val resubmissionUsed: Boolean = false
 )
 
 enum class AuthorizationStatus {
     PENDING,    // Firmada, pendiente de revisión admin
     APPROVED,   // Aprobada por admin
     REJECTED    // Rechazada por admin
+}
+
+enum class AuthorizationSigningStatus {
+    AVAILABLE,
+    SIGNED,
+    REJECTED,
+    UNAVAILABLE
 }

@@ -32,7 +32,9 @@ fun AuthorizationsListScreen(
     LaunchedEffect(excursionId) {
         android.util.Log.d("AuthListDebug", "🚀 Screen iniciado - excursionId: $excursionId")
     }
-    val authorizations by viewModel.getAuthorizations(excursionId).collectAsState(initial = emptyList())
+    val authorizations by remember(viewModel, excursionId) {
+        viewModel.getAuthorizations(excursionId)
+    }.collectAsState(initial = emptyList())
     val paymentsViewModel: PaymentsListViewModel = hiltViewModel()
     val payments by paymentsViewModel.payments.collectAsState()
     val paymentsLoading by paymentsViewModel.isLoading.collectAsState()
@@ -40,6 +42,16 @@ fun AuthorizationsListScreen(
     var showDocPreview by remember { mutableStateOf(false) }
     var docDownloadUrl by remember { mutableStateOf<String?>(null) }
     var docFileName by remember { mutableStateOf<String?>(null) }
+    var authorizationToReopen by remember(excursionId) { mutableStateOf<SignedAuthorization?>(null) }
+    var isReopening by remember(excursionId) { mutableStateOf(false) }
+    val usersWithActiveAuthorization = remember(authorizations) {
+        authorizations.filter { it.status != AuthorizationStatus.REJECTED }.map { it.userId }.toSet()
+    }
+    val usersWithResubmission = remember(authorizations) {
+        authorizations.filter {
+            it.status == AuthorizationStatus.REJECTED && it.resubmissionGranted && !it.resubmissionUsed
+        }.map { it.userId }.toSet()
+    }
     val context = LocalContext.current
 
     LaunchedEffect(excursionId) {
@@ -202,7 +214,12 @@ fun AuthorizationsListScreen(
                         android.util.Log.d("AuthCard", "✅ Mostrando botones de aprobar/rechazar")
                         AuthorizationCard(
                             authorization = authorization,
-                            paymentStatus = payments.firstOrNull { it.userId == authorization.userId }?.status,
+                            paymentStatus = payments
+                                .filter { it.userId == authorization.userId }
+                                .let { userPayments ->
+                                    userPayments.firstOrNull { it.status == PaymentStatus.PAID }?.status
+                                        ?: userPayments.firstOrNull()?.status
+                                },
                             isPaymentLoading = paymentsLoading,
                             onDownloadPdf = { url ->
                                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -213,6 +230,16 @@ fun AuthorizationsListScreen(
                             },
                             onReject = { authId ->
                                 viewModel.rejectAuthorization(authId)
+                            },
+                            onAllowResubmission = if (
+                                authorization.status == AuthorizationStatus.REJECTED &&
+                                !authorization.resubmissionUsed &&
+                                authorization.userId !in usersWithActiveAuthorization &&
+                                authorization.userId !in usersWithResubmission
+                            ) {
+                                { authorizationToReopen = authorization }
+                            } else {
+                                null
                             }
                         )
                     }
@@ -220,6 +247,40 @@ fun AuthorizationsListScreen(
             }
         }
     }
+    authorizationToReopen?.let { authorization ->
+        AlertDialog(
+            onDismissRequest = { if (!isReopening) authorizationToReopen = null },
+            title = { Text("Permitir una nueva firma") },
+            text = {
+                Text(
+                    "${authorization.tutorName} podrá enviar una nueva autorización para " +
+                        "$excursionTitle si la inscripción está abierta y hay plazas."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isReopening,
+                    onClick = {
+                        isReopening = true
+                        viewModel.allowResubmission(authorization.id) { message ->
+                            isReopening = false
+                            authorizationToReopen = null
+                            android.widget.Toast.makeText(
+                                context, message, android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                ) { Text("Permitir nueva firma") }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isReopening,
+                    onClick = { authorizationToReopen = null }
+                ) { Text("Cancelar") }
+            }
+        )
+    }
+
     // ───────── DIALOG: Preview del documento generado ─────────
     if (showDocPreview && docDownloadUrl != null) {
         AlertDialog(
@@ -326,7 +387,8 @@ private fun AuthorizationCard(
     isPaymentLoading: Boolean,
     onDownloadPdf: (String) -> Unit,
     onApprove: (String) -> Unit,
-    onReject: (String) -> Unit
+    onReject: (String) -> Unit,
+    onAllowResubmission: (() -> Unit)?
 ) {
     Card(
         modifier = Modifier.fillMaxWidth()
@@ -351,10 +413,18 @@ private fun AuthorizationCard(
                     )
                 }
 
-                // Chip de estado (igual que antes)
                 Column(horizontalAlignment = Alignment.End) {
                     AssistChip(
-                        onClick = {},
+                        onClick = { onAllowResubmission?.invoke() },
+                        trailingIcon = onAllowResubmission?.let {
+                            {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = "Permitir una nueva firma",
+                                    modifier = Modifier.size(AssistChipDefaults.IconSize)
+                                )
+                            }
+                        },
                         label = {
                             Text(
                                 when (authorization.status) {
@@ -372,6 +442,11 @@ private fun AuthorizationCard(
                             }
                         )
                     )
+                    if (authorization.status == AuthorizationStatus.REJECTED &&
+                        authorization.resubmissionGranted && !authorization.resubmissionUsed
+                    ) {
+                        Text("Nueva firma habilitada", style = MaterialTheme.typography.labelSmall)
+                    }
 
                     AssistChip(
                         onClick = {},

@@ -2,14 +2,17 @@ package com.asociacionciguena.app.presentation.screens.admin.authorizations
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.asociacionciguena.app.BuildConfig
 import com.asociacionciguena.app.data.repository.SignedAuthorizationRepository
 import com.asociacionciguena.app.domain.model.SignedAuthorization
 import com.asociacionciguena.app.domain.model.AuthorizationStatus
 import com.google.firebase.Firebase
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.functions
+import com.google.firebase.functions.FirebaseFunctionsException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -77,6 +80,35 @@ class AuthorizationsListViewModel @Inject constructor(
             } catch (e: Exception) {
                 android.util.Log.e("AuthViewModel", "❌ Exception: ${e.message}")
             }
+        }
+    }
+
+    fun allowResubmission(authorizationId: String, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val message = try {
+                Firebase.functions("europe-west1")
+                    .getHttpsCallable("allowAuthorizationResubmission")
+                    .call(
+                        mapOf(
+                            "authorizationId" to authorizationId,
+                            "databaseId" to BuildConfig.FIRESTORE_DATABASE_ID
+                        )
+                    )
+                    .await()
+                "Nueva firma habilitada"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: FirebaseFunctionsException) {
+                when (e.code) {
+                    FirebaseFunctionsException.Code.FAILED_PRECONDITION,
+                    FirebaseFunctionsException.Code.PERMISSION_DENIED ->
+                        e.message ?: "No se pudo habilitar la nueva firma"
+                    else -> "No se pudo confirmar que la nueva firma esté habilitada"
+                }
+            } catch (e: Exception) {
+                "No se pudo confirmar que la nueva firma esté habilitada"
+            }
+            onResult(message)
         }
     }
 

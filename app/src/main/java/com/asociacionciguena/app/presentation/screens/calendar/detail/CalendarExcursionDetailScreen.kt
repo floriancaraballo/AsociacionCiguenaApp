@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.asociacionciguena.app.domain.model.PaymentStatus
+import com.asociacionciguena.app.domain.model.AuthorizationSigningStatus
 import com.asociacionciguena.app.domain.model.RegistrationClosureReason
 import com.asociacionciguena.app.presentation.components.CachedSubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
@@ -33,7 +34,8 @@ fun CalendarExcursionDetailScreen(
     viewModel: CalendarExcursionDetailViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
     onNavigateToEditExcursion: (String) -> Unit,
-    onNavigateToAuthorizations: (String, String) -> Unit = { _, _ -> }
+    onNavigateToAuthorizations: (String, String) -> Unit = { _, _ -> },
+    onNavigateToPayments: (String, String) -> Unit = { _, _ -> }
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -57,6 +59,11 @@ fun CalendarExcursionDetailScreen(
                                 }) {
                                     Icon(Icons.Default.Description, "Ver Autorizaciones")
                                 }
+                            }
+                            IconButton(onClick = {
+                                onNavigateToPayments(state.excursion.id, state.excursion.title)
+                            }) {
+                                Icon(Icons.Default.ReceiptLong, "Ver comprobantes")
                             }
                             IconButton(onClick = {
                                 onNavigateToEditExcursion(state.excursion.id)
@@ -404,7 +411,12 @@ private fun ExcursionDetailContent(
                         }
                     }
                 }
-                if (showPaymentSheet && currentUser != null && hasApprovedAuthorization) {
+                if (
+                    showPaymentSheet &&
+                    currentUser != null &&
+                    hasApprovedAuthorization &&
+                    paymentStatus?.status != PaymentStatus.PAID
+                ) {
                     PaymentBottomSheet(
                         excursionTitle = excursion.title,
                         amount = paymentAmount,
@@ -426,7 +438,11 @@ private fun ExcursionDetailContent(
             // Sección de firma de autorización
             if (!excursion.authorizationPdfUrl.isNullOrBlank()) {
                 val currentUser by viewModel.currentUser.collectAsState()
-                val hasSigned by viewModel.hasUserSignedAuthorization(currentUser?.id ?: "").collectAsState(initial = false)
+                val userId = currentUser?.id.orEmpty()
+                val signingStatus by remember(viewModel, userId) {
+                    viewModel.observeSigningStatus(userId)
+                }.collectAsState(initial = null)
+                val hasSigned = signingStatus == AuthorizationSigningStatus.SIGNED
                 val showAuthSuccess by viewModel.showAuthSuccess.collectAsState()
 
                 Divider(modifier = Modifier.padding(vertical = 16.dp))
@@ -463,6 +479,16 @@ private fun ExcursionDetailContent(
                                     Text("Ya has firmado esta autorización", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                 }
                             }
+                        } else if (signingStatus == AuthorizationSigningStatus.REJECTED) {
+                            Text("Autorización rechazada", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "La administración puede habilitar una nueva firma.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        } else if (signingStatus == AuthorizationSigningStatus.UNAVAILABLE) {
+                            Text("No se pudo comprobar si puedes firmar la autorización.")
+                        } else if (signingStatus == null) {
+                            Text("Comprobando el estado de la autorización…")
                         } else {
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
