@@ -1,7 +1,11 @@
 package com.asociacionciguena.app.presentation.screens.admin.authorizations
 
+import android.app.DownloadManager
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -82,8 +86,6 @@ fun AuthorizationsListScreen(
                             isGeneratingDoc = true
                             viewModel.generateMinorsListDocx(
                                 excursionId = excursionId,
-                                excursionTitle = excursionTitle,
-                                excursionDate = "",  // ← Si tienes la fecha, pásala aquí
                                 onSuccess = { url, fileName ->
                                     docDownloadUrl = url
                                     docFileName = fileName
@@ -100,7 +102,9 @@ fun AuthorizationsListScreen(
                                 }
                             )
                         },
-                        enabled = authorizations.isNotEmpty() && !isGeneratingDoc
+                        enabled = !isGeneratingDoc && authorizations.any {
+                            it.status == AuthorizationStatus.APPROVED && !it.minorName.isNullOrBlank()
+                        }
                     ) {
                         if (isGeneratingDoc) {
                             CircularProgressIndicator(
@@ -303,18 +307,46 @@ fun AuthorizationsListScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        // 💾 Descargar / Abrir documento
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(docDownloadUrl)).apply {
-                            type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        val url = docDownloadUrl ?: return@Button
+                        try {
+                            val uri = Uri.parse(url)
+                            require(uri.scheme == "https" && !uri.host.isNullOrBlank())
+
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                val baseName = docFileName.orEmpty()
+                                    .removeSuffix(".docx")
+                                    .replace(Regex("[^a-zA-Z0-9_-]"), "_")
+                                    .take(80)
+                                    .ifBlank { "lista" }
+                                val fileName = "${baseName}_${System.currentTimeMillis()}.docx"
+                                val request = DownloadManager.Request(uri)
+                                    .setTitle("Lista de participantes")
+                                    .setMimeType("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                                    .setNotificationVisibility(
+                                        DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+                                    )
+                                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                                val downloadManager = checkNotNull(context.getSystemService(DownloadManager::class.java))
+                                check(downloadManager.enqueue(request) > 0)
+                                Toast.makeText(context, "Descarga iniciada", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val intent = Intent(Intent.ACTION_VIEW, uri)
+                                    .addCategory(Intent.CATEGORY_BROWSABLE)
+                                context.startActivity(intent)
+                            }
+                            showDocPreview = false
+                        } catch (_: RuntimeException) {
+                            Toast.makeText(
+                                context,
+                                "No se pudo iniciar la descarga de la lista",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
-                        context.startActivity(intent)
-                        showDocPreview = false
                     }
                 ) {
                     Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Descargar / Abrir")
+                    Text("Descargar")
                 }
             },
             dismissButton = {

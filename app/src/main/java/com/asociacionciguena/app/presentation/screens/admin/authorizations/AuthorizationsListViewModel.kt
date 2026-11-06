@@ -117,8 +117,6 @@ class AuthorizationsListViewModel @Inject constructor(
      */
     fun generateMinorsListDocx(
         excursionId: String,
-        excursionTitle: String,
-        excursionDate: String,
         onSuccess: (downloadUrl: String, fileName: String) -> Unit,
         onError: (String) -> Unit
     ) {
@@ -130,8 +128,7 @@ class AuthorizationsListViewModel @Inject constructor(
                 val result = generateDoc.call(
                     mapOf(
                         "excursionId" to excursionId,
-                        "excursionTitle" to excursionTitle,
-                        "excursionDate" to excursionDate
+                        "databaseId" to BuildConfig.FIRESTORE_DATABASE_ID
                     )
                 ).await()
 
@@ -145,8 +142,12 @@ class AuthorizationsListViewModel @Inject constructor(
                     onError("No se pudo obtener la URL de descarga")
                 }
 
-            } catch (e: Exception) {
-                onError("Error al generar documento: ${e.message}")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: FirebaseFunctionsException) {
+                onError(e.message ?: "No se pudo generar la lista Word")
+            } catch (_: Exception) {
+                onError("No se pudo generar la lista Word")
             }
         }
     }

@@ -1,111 +1,147 @@
-// ───────── IMPORTS NECESARIOS ─────────
 import * as admin from "firebase-admin";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { Document, Packer, Paragraph, TextRun, AlignmentType } from "docx";
+import {getFirestore, Timestamp} from "firebase-admin/firestore";
+import {HttpsError, onCall} from "firebase-functions/v2/https";
+import {randomUUID} from "node:crypto";
+import {readFile} from "node:fs/promises";
+import {join} from "node:path";
+import JSZip from "jszip";
 
-// Inicializar Firebase Admin
-admin.initializeApp();
+const docxContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const dateFormatter = new Intl.DateTimeFormat("es-ES", {
+  dateStyle: "long",
+  timeZone: "Europe/Madrid",
+});
 
-// ───────── FUNCIÓN PRINCIPAL ─────────
+function escapeWordText(value: string): string {
+  return value
+    .replace(/[^\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu, " ")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+export async function renderParticipantsDocx(
+  title: string,
+  date: string,
+  names: readonly string[]
+): Promise<Buffer> {
+  const template = await readFile(join(__dirname, "../templates/participants.docx"));
+  const archive = await JSZip.loadAsync(template);
+  const documentPath = "word/document.xml";
+  const documentXml = await archive.file(documentPath)?.async("string");
+  if (!documentXml) {
+    throw new Error("Falta el contenido de la plantilla de participantes");
+  }
+
+  const slots = new Map([
+    ["{{EXCURSION_TITLE}}", escapeWordText(title)],
+    ["{{EXCURSION_DATE}}", escapeWordText(date)],
+  ]);
+  const documentWithParticipants = documentXml.replace(
+    /<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g,
+    (paragraph) => {
+      if (paragraph.includes("{{PARTICIPANT}}")) {
+        return names.map((name) =>
+          paragraph.replace("{{PARTICIPANT}}", () => escapeWordText(name))
+        ).join("");
+      }
+      return paragraph.replace(
+        /\{\{EXCURSION_(?:TITLE|DATE)\}\}/g,
+        (slot) => slots.get(slot)!
+      );
+    }
+  );
+
+  archive.file(documentPath, documentWithParticipants);
+  return archive.generateAsync({type: "nodebuffer", compression: "DEFLATE"});
+}
+
 export const generateMinorsListDocx = onCall({
   region: "europe-west1",
 }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Debes estar autenticado");
+  const userId = request.auth?.uid;
+  if (!userId) {
+    throw new HttpsError("unauthenticated", "Debes iniciar sesión");
   }
 
-  const { excursionId, excursionTitle, excursionDate } = request.data as {
-    excursionId: string;
-    excursionTitle: string;
-    excursionDate: string;
-  };
-
-  if (!excursionId) {
-    throw new HttpsError("invalid-argument", "Falta excursionId");
+  const {excursionId, databaseId} = request.data ?? {};
+  if (typeof excursionId !== "string" || !excursionId.trim() || excursionId.includes("/")) {
+    throw new HttpsError("invalid-argument", "Excursión no válida");
   }
 
+  const firestore = databaseId === "debug" ? getFirestore("debug") : admin.firestore();
   try {
-    console.log(`📄 Generando lista Word para: ${excursionTitle}`);
+    const user = await firestore.collection("users").doc(userId).get();
+    if (!["admin", "superadmin"].includes(user.get("role"))) {
+      throw new HttpsError("permission-denied", "No tienes permiso para exportar participantes");
+    }
 
-    // 1. Obtener autorizaciones de Firestore (ordenadas por fecha de firma)
-    const authorizationsSnapshot = await admin.firestore()
-      .collection("signedAuthorizations")
-      .where("excursionId", "==", excursionId)
-      .orderBy("signedAt", "asc")
-      .get();
+    const [excursion, authorizations] = await Promise.all([
+      firestore.collection("excursions").doc(excursionId).get(),
+      firestore.collection("signedAuthorizations")
+        .where("excursionId", "==", excursionId)
+        .select("status", "minorName", "signedAt")
+        .get(),
+    ]);
+    if (!excursion.exists) {
+      throw new HttpsError("not-found", "Excursión no encontrada");
+    }
 
-    const minors = authorizationsSnapshot.docs
-      .map((doc: any) => doc.data())
-      .filter((auth: any) => auth.minorName)
-      .map((auth: any) => ({
-        name: auth.minorName as string,
-      }));
-
-    console.log(`📋 ${minors.length} participantes encontrados`);
-
-    // 2. Crear documento Word SOLO con la lista numerada
-    const doc = new Document({
-      sections: [{
-        properties: {},
-        children: [
-          // Lista simple de niños (sin títulos, sin cabeceras)
-          ...minors.map((minor, index) => 
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `${index + 1}.  ${minor.name}`,
-                  size: 24,  // 12pt
-                  font: "Arial",
-                }),
-              ],
-              spacing: { 
-                after: 50,  // Espacio entre líneas
-                line: 360,  // Interlineado
-              },
-            })
-          ),
-        ],
-      }],
+    const participants = authorizations.docs.flatMap((authorization) => {
+      const name = authorization.get("minorName");
+      if (authorization.get("status") !== "APPROVED" ||
+          typeof name !== "string" || !name.trim()) {
+        return [];
+      }
+      const signedAt = authorization.get("signedAt");
+      if (!(signedAt instanceof Timestamp)) {
+        throw new HttpsError("failed-precondition", "Una autorización aprobada no tiene fecha de firma válida");
+      }
+      return [{id: authorization.id, name: name.trim(), signedAt}];
     });
+    if (participants.length === 0) {
+      throw new HttpsError("failed-precondition", "No hay autorizaciones de menores aprobadas para esta excursión");
+    }
+    participants.sort((first, second) =>
+      first.signedAt.seconds - second.signedAt.seconds ||
+      first.signedAt.nanoseconds - second.signedAt.nanoseconds ||
+      first.id.localeCompare(second.id, "en")
+    );
 
-    console.log(`📝 Documento creado, generando buffer...`);
-    const buffer = await Packer.toBuffer(doc);
-    console.log(`✅ Buffer generado: ${buffer.length} bytes`);
-    
-    // 3. Subir a Firebase Storage
-    const fileName = `lists/lista_${excursionTitle.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 50).toLowerCase()}_${Date.now()}.docx`;
-    const bucket = admin.storage().bucket();
-    const fileRef = bucket.file(fileName);
-    
-    console.log(`📤 Subiendo a Storage: ${fileName}`);
-    
-    await fileRef.save(buffer, {
-      metadata: { 
-        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        cacheControl: "private, max-age=3600"
-      },
+    const title = excursion.get("title");
+    const start = excursion.get("date");
+    const end = excursion.get("endDate");
+    if (typeof title !== "string" || !title.trim() || !(start instanceof Timestamp)) {
+      throw new HttpsError("failed-precondition", "La excursión debe tener título y fecha");
+    }
+    const startDate = dateFormatter.format(start.toDate());
+    const endDate = end instanceof Timestamp && end.toMillis() > start.toMillis() ?
+      dateFormatter.format(end.toDate()) :
+      startDate;
+    const date = startDate === endDate ? startDate : `${startDate} – ${endDate}`;
+    const buffer = await renderParticipantsDocx(
+      title.trim().toLocaleUpperCase("es-ES"),
+      date,
+      participants.map(({name}) => name)
+    );
+
+    const fileName = `lista_${title.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 80)}.docx`;
+    const file = admin.storage().bucket().file(`lists/${randomUUID()}.docx`);
+    await file.save(buffer, {
+      metadata: {contentType: docxContentType, cacheControl: "private, no-store"},
       predefinedAcl: "private",
     });
-    
-    console.log(`✅ Archivo subido, generando URL firmada...`);
-    
-    // 4. Generar URL firmada
-    const [url] = await fileRef.getSignedUrl({
+    const [downloadUrl] = await file.getSignedUrl({
       action: "read",
-      expires: Date.now() + 60 * 60 * 1000, // 1 hora
+      expires: Date.now() + 60 * 60 * 1000,
     });
-    
-    console.log(`✅ Documento generado: ${fileName}`);
-    
-    return {
-      success: true,
-      downloadUrl: url,
-      fileName: `lista_${excursionTitle.replace(/[^a-zA-Z0-9]/g, "_")}.docx`,
-      minorsCount: minors.length,
-    };
 
-  } catch (error: any) {
-    console.error("❌ Error generando documento:", error);
-    throw new HttpsError("internal", `Error al generar el documento Word: ${error.message}`);
+    return {success: true, downloadUrl, fileName, minorsCount: participants.length};
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error("Error al exportar la lista de participantes", error);
+    throw new HttpsError("internal", "No se pudo generar la lista Word");
   }
 });
