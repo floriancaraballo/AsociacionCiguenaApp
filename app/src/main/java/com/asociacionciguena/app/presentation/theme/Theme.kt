@@ -65,7 +65,14 @@ private val LightColorScheme = lightColorScheme(
     background = Background,
     onBackground = OnBackground,
     surface = Surface,
-    onSurface = OnSurface
+    onSurface = OnSurface,
+    // Superficies neutras compartidas por tarjetas, paneles y navegación.
+    surfaceContainerLowest = Surface,
+    surfaceContainerLow = Surface,
+    surfaceContainer = Surface,
+    surfaceContainerHigh = Surface,
+    surfaceContainerHighest = Surface,
+    surfaceTint = Color.Transparent
 )
 
 @Composable

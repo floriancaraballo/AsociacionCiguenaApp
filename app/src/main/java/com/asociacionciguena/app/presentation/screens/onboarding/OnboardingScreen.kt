@@ -242,7 +242,7 @@ private fun LegalTermsPage(
                 .fillMaxWidth()
                 .weight(1f),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = MaterialTheme.colorScheme.surface
             )
         ) {
             Column(

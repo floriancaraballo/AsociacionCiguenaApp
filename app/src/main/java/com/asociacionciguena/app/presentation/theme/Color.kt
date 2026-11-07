@@ -22,9 +22,9 @@ val TertiaryContainer = Color(0xFFFFDBC8)
 val OnTertiaryContainer = Color(0xFF2B1700)
 
 // Colores de fondo y superficie
-val Background = Color(0xFFFDFCFF)
+val Background = Color(0xFFF2F5FA)
 val OnBackground = Color(0xFF1A1C1E)
-val Surface = Color(0xFFFDFCFF)
+val Surface = Color(0xFFFFFFFF)
 val OnSurface = Color(0xFF1A1C1E)
 
 // Colores de error
