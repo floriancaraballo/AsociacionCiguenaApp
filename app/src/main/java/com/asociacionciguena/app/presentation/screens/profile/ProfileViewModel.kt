@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import com.asociacionciguena.app.data.manager.FCMTokenManager
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.tasks.await
@@ -174,12 +175,12 @@ class ProfileViewModel @Inject constructor(
                 println("✅ Perfil guardado en Firestore")  // ← DEBUG
 
                 // Actualizar perfil de Firebase Auth también
-                val profileUpdates = com.google.firebase.auth.userProfileChangeRequest {
-                    displayName = _editedName.value
+                val profileUpdates = UserProfileChangeRequest.Builder().apply {
+                    setDisplayName(_editedName.value)
                     if (newPhotoUrl != null) {
-                        photoUri = Uri.parse(newPhotoUrl)
+                        setPhotoUri(Uri.parse(newPhotoUrl))
                     }
-                }
+                }.build()
                 auth.currentUser?.updateProfile(profileUpdates)?.await()
 // IMPORTANTE: Refrescar el token para que los cambios se sincronicen
                 auth.currentUser?.reload()?.await()

@@ -181,7 +181,7 @@ private fun StatsOverviewCard(
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             StatRow(
                 icon = Icons.Default.Article,

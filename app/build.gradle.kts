@@ -1,5 +1,5 @@
 import java.util.Properties
-
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
@@ -8,7 +8,6 @@ plugins {
     alias(libs.plugins.google.services)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
-    alias(libs.plugins.kotlin.serialization)
 }
 
 // Cargar keystore properties
@@ -18,10 +17,10 @@ val localPropertiesFile: File = rootProject.file("local.properties")
 val localProperties = Properties()
 
 if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(keystorePropertiesFile.inputStream())
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 if (localPropertiesFile.exists()) {
-    localProperties.load(localPropertiesFile.inputStream())
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
 
 android {
@@ -102,17 +101,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // ✅ Reemplaza el bloque kotlinOptions por esto:
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-            freeCompilerArgs.addAll(
-                "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
-                "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi"
-            )
-        }
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
@@ -122,6 +110,16 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+        optIn.addAll(
+            "androidx.compose.material3.ExperimentalMaterial3Api",
+            "androidx.compose.foundation.ExperimentalFoundationApi"
+        )
     }
 }
 
@@ -137,7 +135,6 @@ dependencies {
     // JETPACK COMPOSE (UI) - SIN VERSIONES FIJAS (el BOM las gestiona)
     // ========================================
     implementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(platform(libs.androidx.compose.bom))
 
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
@@ -159,28 +156,18 @@ dependencies {
     // FIREBASE - SIN VERSIONES FIJAS (el BOM las gestiona)
     // ========================================
     implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.auth.ktx)
-    implementation(libs.firebase.firestore.ktx)
-    implementation(libs.firebase.storage.ktx)
-    implementation(libs.firebase.analytics.ktx)
-    // ✅ Dependencia directa con versión:
-    implementation("com.google.firebase:firebase-functions-ktx:21.0.0")
-    implementation("com.google.firebase:firebase-messaging-ktx:23.4.1")
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.storage)
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.functions)
+    implementation(libs.firebase.messaging)
 
     // ========================================
     // NETWORKING & IMAGES
     // ========================================
     implementation(libs.coil.compose)
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.converter.gson)
     implementation(libs.okhttp)
-    implementation(libs.okhttp.logging.interceptor)
-
-    // ========================================
-    // SERIALIZACIÓN & JSON
-    // ========================================
-    implementation(libs.kotlinx.serialization.json)
-    implementation(libs.gson)
 
     // ========================================
     // DATASTORE & COROUTINES
@@ -193,8 +180,6 @@ dependencies {
     // ACCOMPANIST
     // ========================================
     implementation(libs.accompanist.permissions)
-    implementation(libs.accompanist.systemuicontroller)
-    // ✅ Eliminado: accompanist-swiperefresh (usamos PullToRefreshBox nativo)
 
     // ========================================
     // SPLASH & UTILS
@@ -205,20 +190,17 @@ dependencies {
     implementation(libs.google.places)
     implementation(libs.google.material)
     implementation("id.zelory:compressor:3.0.1")
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation(libs.androidx.work.runtime)
 
     // ========================================
     // PDF Generation (para la app, no para Cloud Functions)
     // ========================================
     implementation("com.itextpdf:itext7-core:7.2.5")  // ← Comentado si no lo usas en Android
 
-    // ✅ WebView para pagos
-    implementation("com.google.accompanist:accompanist-webview:0.34.0")
-
     // Media3 (ExoPlayer) para reproducción de vídeo
-    implementation("androidx.media3:media3-exoplayer:1.2.1")
-    implementation("androidx.media3:media3-ui:1.2.1")
-    implementation("androidx.media3:media3-common:1.2.1")
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.common)
 
     // ========================================
     // TESTING
@@ -235,8 +217,6 @@ dependencies {
     kspAndroidTest(libs.hilt.android.compiler)
 
     testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.mockk)
-    androidTestImplementation(libs.mockk.android)
 
     // ========================================
     // DEBUG TOOLS

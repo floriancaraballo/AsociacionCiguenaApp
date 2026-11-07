@@ -1,5 +1,7 @@
-import * as admin from "firebase-admin";
-import {getFirestore} from "firebase-admin/firestore";
+import {initializeApp} from "firebase-admin/app";
+import {getAuth} from "firebase-admin/auth";
+import {FieldValue, Firestore, getFirestore, Timestamp} from "firebase-admin/firestore";
+import {getMessaging, MulticastMessage} from "firebase-admin/messaging";
 import {randomBytes} from "node:crypto";
 import {
   onDocumentCreated,
@@ -9,7 +11,7 @@ import {
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import { generateMinorsListDocx } from "./generateMinorsList";
 
-admin.initializeApp();
+initializeApp();
 
 // ✅ IMPORTAR funciones de pago
 import { createPaymentIntent } from './payments/createPaymentIntent';
@@ -31,7 +33,7 @@ interface PendingUserDocument {
   email: string;
   displayName: string;
   role: string;
-  createdAt: admin.firestore.Timestamp;
+  createdAt: Timestamp;
   needsRegistration: boolean;
 }
 
@@ -39,7 +41,7 @@ interface InvitationUserData {
   email: string;
   displayName: string;
   role: string;
-  createdAt?: admin.firestore.Timestamp;
+  createdAt?: Timestamp;
 }
 
 const HOSTING_BASE_URL = "https://asociacion-ciguena-188da.web.app";
@@ -379,7 +381,7 @@ function buildPasswordResetEmail(email: string, actionLink: string) {
 
 async function ensureAuthUser(userData: InvitationUserData) {
   try {
-    const authUser = await admin.auth().createUser({
+    const authUser = await getAuth().createUser({
       email: userData.email,
       password: generateTemporaryPassword(),
       displayName: userData.displayName,
@@ -390,7 +392,7 @@ async function ensureAuthUser(userData: InvitationUserData) {
     return authUser;
   } catch (authError: any) {
     if (authError.code === "auth/email-already-exists") {
-      const existingUser = await admin.auth().getUserByEmail(userData.email);
+      const existingUser = await getAuth().getUserByEmail(userData.email);
       console.log(`Usuario ya existe en Auth con UID: ${existingUser.uid}`);
       return existingUser;
     }
@@ -400,11 +402,11 @@ async function ensureAuthUser(userData: InvitationUserData) {
 }
 
 async function sendInvitationEmail(authUid: string, userData: InvitationUserData) {
-  const rawLink = await admin.auth().generatePasswordResetLink(userData.email);
+  const rawLink = await getAuth().generatePasswordResetLink(userData.email);
   const actionLink = buildCustomAuthActionLink(rawLink);
   const emailTemplate = buildInvitationEmail(userData, actionLink);
 
-  await admin.firestore().collection("mail").add({
+  await getFirestore().collection("mail").add({
     to: userData.email,
     message: {
       subject: emailTemplate.emailSubject,
@@ -413,22 +415,22 @@ async function sendInvitationEmail(authUid: string, userData: InvitationUserData
     },
   });
 
-  await admin.firestore()
+  await getFirestore()
     .collection("users")
     .doc(authUid)
     .set({
       invitationSent: true,
-      invitationSentAt: admin.firestore.FieldValue.serverTimestamp(),
-      invitationError: admin.firestore.FieldValue.delete(),
+      invitationSentAt: FieldValue.serverTimestamp(),
+      invitationError: FieldValue.delete(),
     }, {merge: true});
 }
 
 async function sendPasswordResetEmail(email: string) {
-  const rawLink = await admin.auth().generatePasswordResetLink(email);
+  const rawLink = await getAuth().generatePasswordResetLink(email);
   const actionLink = buildCustomAuthActionLink(rawLink);
   const emailTemplate = buildPasswordResetEmail(email, actionLink);
 
-  await admin.firestore().collection("mail").add({
+  await getFirestore().collection("mail").add({
     to: email,
     message: {
       subject: emailTemplate.emailSubject,
@@ -469,7 +471,7 @@ export const onPendingUserCreated = onDocumentCreated({
       invitationSent: false,
     };
 
-    await admin.firestore()
+    await getFirestore()
       .collection("users")
       .doc(authUser.uid)
       .set(userDocData);
@@ -570,7 +572,7 @@ export const onPendingUserCreated = onDocumentCreated({
       </html>
     `;
 
-    await admin.firestore().collection("mail").add({
+    await getFirestore().collection("mail").add({
       to: userData.email,
       message: {
         subject: emailSubject,
@@ -578,12 +580,12 @@ export const onPendingUserCreated = onDocumentCreated({
       },
     });
 
-    await admin.firestore()
+    await getFirestore()
       .collection("users")
       .doc(authUser.uid)
       .update({
         invitationSent: true,
-        invitationSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        invitationSentAt: FieldValue.serverTimestamp(),
       });
     */
 
@@ -614,7 +616,7 @@ export const resendInvitation = onCall({
   }
 
   const callerUid = request.auth.uid;
-  const callerDoc = await admin.firestore()
+  const callerDoc = await getFirestore()
     .collection("users")
     .doc(callerUid)
     .get();
@@ -629,7 +631,7 @@ export const resendInvitation = onCall({
 
   const userId = request.data.userId;
 
-  const userDoc = await admin.firestore()
+  const userDoc = await getFirestore()
     .collection("users")
     .doc(userId)
     .get();
@@ -673,7 +675,7 @@ export const requestPasswordReset = onCall({
   }
 
   try {
-    await admin.auth().getUserByEmail(email);
+    await getAuth().getUserByEmail(email);
     await sendPasswordResetEmail(email);
   } catch (error: any) {
     if (error?.code !== "auth/user-not-found") {
@@ -742,7 +744,7 @@ async function notifyNews(event: Parameters<Parameters<typeof onDocumentCreated>
 	  }
 	};
 
-    const response = await admin.messaging().send(message);
+    const response = await getMessaging().send(message);
     console.log(`✅ Notificación de noticia enviada: ${response}`);
 
   } catch (error) {
@@ -810,7 +812,7 @@ async function notifyExcursion(event: Parameters<Parameters<typeof onDocumentCre
 	  }
 	};
 
-    const response = await admin.messaging().send(message);
+    const response = await getMessaging().send(message);
     console.log(`✅ Notificación de excursión enviada: ${response}`);
 
   } catch (error) {
@@ -845,7 +847,7 @@ async function notifyUploadBatchCompleted(event: Parameters<Parameters<typeof on
         console.log(`📸 Upload batch completed: ${photoCount} photos for excursion ${excursionId}`);
 
         // Obtener título de la excursión para el mensaje
-        const firestore = environment === "debug" ? getFirestore("debug") : admin.firestore();
+        const firestore = environment === "debug" ? getFirestore("debug") : getFirestore();
         const excursionDoc = await firestore
           .collection("excursions")
           .doc(excursionId)
@@ -880,7 +882,7 @@ async function notifyUploadBatchCompleted(event: Parameters<Parameters<typeof on
 		  }
 		};	
 
-        const response = await admin.messaging().send(message);
+        const response = await getMessaging().send(message);
         console.log(`✅ Notificación de fotos enviada a topic "authenticated": ${response}`);
       }
     } catch (error) {
@@ -988,7 +990,7 @@ export const onAuthorizationSigned = onDocumentCreated(
       `;
       
       // Enviar email al tutor CON adjunto
-      await admin.firestore().collection("mail").add({
+      await getFirestore().collection("mail").add({
         to: tutorEmail,  // ← Email del tutor
         message: {
           subject: userEmailSubject,
@@ -1041,7 +1043,7 @@ export const onAuthorizationSigned = onDocumentCreated(
       `;
       
       // ✅ CORREGIDO: Enviar a associationEmail con subject/body correctos
-      await admin.firestore().collection("mail").add({
+      await getFirestore().collection("mail").add({
         to: associationEmail,  // ← ✅ associationEmail (NO tutorEmail)
         message: {
           subject: adminEmailSubject,  // ← ✅ adminEmailSubject
@@ -1054,7 +1056,7 @@ export const onAuthorizationSigned = onDocumentCreated(
       // Marcar como enviado
       await snapshot.ref.update({
         emailSent: true,
-        emailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        emailSentAt: FieldValue.serverTimestamp(),
       });
       
 	  return null;
@@ -1072,7 +1074,7 @@ export const onAuthorizationSigned = onDocumentCreated(
 
 async function notifyAuthorizationApproved(
   event: Parameters<Parameters<typeof onDocumentUpdated>[1]>[0],
-  firestore: admin.firestore.Firestore,
+  firestore: Firestore,
   environment: string
 ) {
     try {
@@ -1118,7 +1120,7 @@ async function notifyAuthorizationApproved(
           : `Tu autorizaciÃ³n para ${excursionTitle} ha sido aprobada.`;
         const topic = userNotificationTopic(userId, environment);
 
-        const topicResponse = await admin.messaging().send({
+        const topicResponse = await getMessaging().send({
           topic,
           notification: {
             title: "AutorizaciÃ³n aprobada",
@@ -1152,7 +1154,7 @@ async function notifyAuthorizationApproved(
         ? `La autorización de ${minorName} para ${excursionTitle} ha sido aprobada.`
         : `Tu autorización para ${excursionTitle} ha sido aprobada.`;
 
-      const message: admin.messaging.MulticastMessage = {
+      const message: MulticastMessage = {
         tokens,
         notification: {
           title: "Autorización aprobada",
@@ -1175,7 +1177,7 @@ async function notifyAuthorizationApproved(
         },
       };
 
-      const response = await admin.messaging().sendEachForMulticast(message);
+      const response = await getMessaging().sendEachForMulticast(message);
       const invalidTokens: string[] = [];
 
       response.responses.forEach((sendResponse, index) => {
@@ -1198,8 +1200,8 @@ async function notifyAuthorizationApproved(
         const latestUserDoc = await userDoc.ref.get();
         if (invalidTokens.includes(latestUserDoc.get("fcmToken") as string)) {
           await userDoc.ref.update({
-            fcmToken: admin.firestore.FieldValue.delete(),
-            fcmTokenInvalidatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            fcmToken: FieldValue.delete(),
+            fcmTokenInvalidatedAt: FieldValue.serverTimestamp(),
           });
         }
 
@@ -1208,7 +1210,7 @@ async function notifyAuthorizationApproved(
             {
               userId: null,
               invalid: true,
-              invalidatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              invalidatedAt: FieldValue.serverTimestamp(),
             },
             {merge: true}
           )
@@ -1230,7 +1232,7 @@ async function notifyAuthorizationApproved(
 
 export const onAuthorizationApproved = onDocumentUpdated(
   { document: "signedAuthorizations/{authorizationId}", region: "europe-west1" },
-  (event) => notifyAuthorizationApproved(event, admin.firestore(), "release")
+  (event) => notifyAuthorizationApproved(event, getFirestore(), "release")
 );
 export const onDebugAuthorizationApproved = onDocumentUpdated(
   { document: "signedAuthorizations/{authorizationId}", database: "debug", region: "europe-west1" },
@@ -1239,7 +1241,7 @@ export const onDebugAuthorizationApproved = onDocumentUpdated(
 
 async function updateExcursionCurrentParticipants(
   excursionId: string,
-  firestore = admin.firestore()
+  firestore = getFirestore()
 ) {
   if (!excursionId) {
     return;
@@ -1274,21 +1276,21 @@ async function updateExcursionCurrentParticipants(
     const shouldClose = maxParticipants > 0 && currentParticipants >= maxParticipants;
     const update: Record<string, unknown> = {
       currentParticipants,
-      currentParticipantsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      currentParticipantsUpdatedAt: FieldValue.serverTimestamp(),
     };
 
     if (shouldClose && !isManuallyClosed) {
       update.registrationClosed = true;
       update.registrationClosureReason = CAPACITY_FULL;
       update.registrationClosureSource = AUTOMATIC;
-      update.registrationClosedAt = admin.firestore.FieldValue.serverTimestamp();
-      update.registrationClosedBy = admin.firestore.FieldValue.delete();
+      update.registrationClosedAt = FieldValue.serverTimestamp();
+      update.registrationClosedBy = FieldValue.delete();
     } else if (isAutomaticallyClosed) {
       update.registrationClosed = false;
-      update.registrationClosureReason = admin.firestore.FieldValue.delete();
-      update.registrationClosureSource = admin.firestore.FieldValue.delete();
-      update.registrationClosedAt = admin.firestore.FieldValue.delete();
-      update.registrationClosedBy = admin.firestore.FieldValue.delete();
+      update.registrationClosureReason = FieldValue.delete();
+      update.registrationClosureSource = FieldValue.delete();
+      update.registrationClosedAt = FieldValue.delete();
+      update.registrationClosedBy = FieldValue.delete();
     }
 
     transaction.set(excursionRef, update, {merge: true});
@@ -1387,7 +1389,7 @@ export const allowAuthorizationResubmission = onCall({
   }
 
   const firestore = databaseId === "debug" ?
-    getFirestore("debug") : admin.firestore();
+    getFirestore("debug") : getFirestore();
   const authorizations = firestore.collection("signedAuthorizations");
   const authorizationRef = authorizations.doc(authorizationId);
   await firestore.runTransaction(async (transaction) => {
@@ -1418,7 +1420,7 @@ export const allowAuthorizationResubmission = onCall({
     }
 
     transaction.update(authorizationRef, {
-      resubmissionGrantedAt: admin.firestore.FieldValue.serverTimestamp(),
+      resubmissionGrantedAt: FieldValue.serverTimestamp(),
       resubmissionGrantedBy: adminId,
     });
   });
@@ -1472,7 +1474,7 @@ export const reserveSignedAuthorizations = onCall({
 
   const normalizedDatabaseId = databaseId === "debug" ? "debug" : "(default)";
   const firestore = normalizedDatabaseId === "(default)" ?
-    admin.firestore() :
+    getFirestore() :
     getFirestore(normalizedDatabaseId);
   const excursionRef = firestore.collection("excursions").doc(excursionId);
   const authorizationRefs = authorizations.map(() =>
@@ -1541,29 +1543,29 @@ export const reserveSignedAuthorizations = onCall({
         isBatchEmail: authorization.isBatchEmail === true,
         excursionId,
         userId,
-        signedAt: admin.firestore.FieldValue.serverTimestamp(),
+        signedAt: FieldValue.serverTimestamp(),
         emailSent: false,
         status: "PENDING",
       });
     });
     if (resubmission) {
       transaction.update(resubmission.ref, {
-        resubmissionUsedAt: admin.firestore.FieldValue.serverTimestamp(),
+        resubmissionUsedAt: FieldValue.serverTimestamp(),
       });
     }
 
     const excursionUpdate: Record<string, unknown> = {
       currentParticipants: nextParticipants,
-      currentParticipantsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      currentParticipantsUpdatedAt: FieldValue.serverTimestamp(),
     };
     if (maxParticipants > 0 && nextParticipants >= maxParticipants) {
       excursionUpdate.registrationClosed = true;
       excursionUpdate.registrationClosureReason = CAPACITY_FULL;
       excursionUpdate.registrationClosureSource = AUTOMATIC;
       excursionUpdate.registrationClosedAt =
-        admin.firestore.FieldValue.serverTimestamp();
+        FieldValue.serverTimestamp();
       excursionUpdate.registrationClosedBy =
-        admin.firestore.FieldValue.delete();
+        FieldValue.delete();
     }
     transaction.set(excursionRef, excursionUpdate, {merge: true});
   });
@@ -1595,10 +1597,10 @@ export const reconcileExcursionRegistrationState = onDocumentUpdated(
     if (isAutomaticallyClosed && maxParticipants > currentParticipants) {
       await event.data!.after.ref.set({
         registrationClosed: false,
-        registrationClosureReason: admin.firestore.FieldValue.delete(),
-        registrationClosureSource: admin.firestore.FieldValue.delete(),
-        registrationClosedAt: admin.firestore.FieldValue.delete(),
-        registrationClosedBy: admin.firestore.FieldValue.delete(),
+        registrationClosureReason: FieldValue.delete(),
+        registrationClosureSource: FieldValue.delete(),
+        registrationClosedAt: FieldValue.delete(),
+        registrationClosedBy: FieldValue.delete(),
       }, {merge: true});
     } else if (maxParticipants > 0 &&
         currentParticipants >= maxParticipants &&
@@ -1607,8 +1609,8 @@ export const reconcileExcursionRegistrationState = onDocumentUpdated(
         registrationClosed: true,
         registrationClosureReason: CAPACITY_FULL,
         registrationClosureSource: AUTOMATIC,
-        registrationClosedAt: admin.firestore.FieldValue.serverTimestamp(),
-        registrationClosedBy: admin.firestore.FieldValue.delete(),
+        registrationClosedAt: FieldValue.serverTimestamp(),
+        registrationClosedBy: FieldValue.delete(),
       }, {merge: true});
     }
 
@@ -1639,10 +1641,10 @@ export const reconcileDebugExcursionRegistrationState = onDocumentUpdated(
     if (isAutomaticallyClosed && maxParticipants > currentParticipants) {
       await event.data!.after.ref.set({
         registrationClosed: false,
-        registrationClosureReason: admin.firestore.FieldValue.delete(),
-        registrationClosureSource: admin.firestore.FieldValue.delete(),
-        registrationClosedAt: admin.firestore.FieldValue.delete(),
-        registrationClosedBy: admin.firestore.FieldValue.delete(),
+        registrationClosureReason: FieldValue.delete(),
+        registrationClosureSource: FieldValue.delete(),
+        registrationClosedAt: FieldValue.delete(),
+        registrationClosedBy: FieldValue.delete(),
       }, {merge: true});
     } else if (maxParticipants > 0 &&
         currentParticipants >= maxParticipants &&
@@ -1651,8 +1653,8 @@ export const reconcileDebugExcursionRegistrationState = onDocumentUpdated(
         registrationClosed: true,
         registrationClosureReason: CAPACITY_FULL,
         registrationClosureSource: AUTOMATIC,
-        registrationClosedAt: admin.firestore.FieldValue.serverTimestamp(),
-        registrationClosedBy: admin.firestore.FieldValue.delete(),
+        registrationClosedAt: FieldValue.serverTimestamp(),
+        registrationClosedBy: FieldValue.delete(),
       }, {merge: true});
     }
 
@@ -1680,7 +1682,7 @@ export const getExcursionParticipantCount = onCall({
     "debug" :
     "(default)";
   const firestore = normalizedDatabaseId === "(default)" ?
-    admin.firestore() :
+    getFirestore() :
     getFirestore(normalizedDatabaseId);
   const authorizationsSnapshot = await firestore
     .collection("signedAuthorizations")
@@ -1716,7 +1718,7 @@ export const sendBatchAuthorizationEmail = onCall({
     const authorizationsData: any[] = [];
     
     for (const authId of authorizationIds) {
-      const authDoc = await admin.firestore()
+      const authDoc = await getFirestore()
         .collection("signedAuthorizations")
         .doc(authId)
         .get();
@@ -1817,7 +1819,7 @@ export const sendBatchAuthorizationEmail = onCall({
     }));
 
     // 6. Enviar email al tutor CON múltiples adjuntos
-    await admin.firestore().collection("mail").add({
+    await getFirestore().collection("mail").add({
       to: tutorEmail,
       message: {
         subject: emailSubject,
@@ -1913,7 +1915,7 @@ export const sendBatchAuthorizationEmail = onCall({
 	  </html>
 	`;
 
-    await admin.firestore().collection("mail").add({
+    await getFirestore().collection("mail").add({
       to: associationEmail,
       message: {
         subject: adminEmailSubject,
@@ -1925,12 +1927,12 @@ export const sendBatchAuthorizationEmail = onCall({
     console.log(`✅ Email admin enviado con ${attachments.length} adjuntos`);
 
     // 8. Marcar autorizaciones como email enviado
-    const batch = admin.firestore().batch();
+    const batch = getFirestore().batch();
     for (const authId of authorizationIds) {
-      const authRef = admin.firestore().collection("signedAuthorizations").doc(authId);
+      const authRef = getFirestore().collection("signedAuthorizations").doc(authId);
       batch.update(authRef, {
         emailSent: true,
-        emailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        emailSentAt: FieldValue.serverTimestamp(),
         isBatchEmail: true  // ← Marcador para saber que fue email múltiple
       });
     }

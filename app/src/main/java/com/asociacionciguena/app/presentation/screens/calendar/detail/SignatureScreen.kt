@@ -219,7 +219,7 @@ fun SignatureScreen(
         // ───────── TÍTULO EXCURSIÓN ─────────
         item {
             Text(excursionTitle, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            Divider()
+            HorizontalDivider()
         }
 
         // ───────── TOGGLE MULTI-AUTORIZACIÓN (hasta 3 menores) ─────────
@@ -379,7 +379,7 @@ fun SignatureScreen(
         }
 
         // ───────── SEPARADOR Y TÍTULO DE TUTOR ─────────
-        item { Divider() }
+        item { HorizontalDivider() }
         item {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Text("Datos del Tutor Legal", style = MaterialTheme.typography.titleSmall)
@@ -436,7 +436,7 @@ fun SignatureScreen(
                 readOnly = isMultiAuth && currentMinorIndex > 0
             )
         }
-        item { Divider() }
+        item { HorizontalDivider() }
 
         // ───────── FIRMA ─────────
         item {
@@ -512,7 +512,7 @@ fun SignatureScreen(
                 }
             }
         }
-        item { Divider() }
+        item { HorizontalDivider() }
 
         // ───────── INFO LEGAL CENTRADA ─────────
         item {

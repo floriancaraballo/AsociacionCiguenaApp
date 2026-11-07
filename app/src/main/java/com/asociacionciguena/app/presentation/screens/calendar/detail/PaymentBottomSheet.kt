@@ -96,7 +96,7 @@ fun PaymentBottomSheet(
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             // Sección existente: Datos bancarios (transferencia)
             Text(
@@ -120,7 +120,7 @@ fun PaymentBottomSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Divider()
+            HorizontalDivider()
 
             Text(
                 text = "Transferencia bancaria",
@@ -177,7 +177,7 @@ fun PaymentBottomSheet(
                             }
                         }
 
-                        Divider()
+                        HorizontalDivider()
 
                         // Titular
                         Column {
@@ -219,7 +219,7 @@ fun PaymentBottomSheet(
                             )
                         }
 
-                        Divider()
+                        HorizontalDivider()
 
                         Button(
                             onClick = {
@@ -239,7 +239,7 @@ fun PaymentBottomSheet(
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             // Opción 3: Subir comprobante
             Text(

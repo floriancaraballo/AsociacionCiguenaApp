@@ -1,5 +1,5 @@
-import * as admin from "firebase-admin";
 import {getFirestore, Timestamp} from "firebase-admin/firestore";
+import {getStorage} from "firebase-admin/storage";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import {randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
@@ -69,7 +69,7 @@ export const generateMinorsListDocx = onCall({
     throw new HttpsError("invalid-argument", "Excursión no válida");
   }
 
-  const firestore = databaseId === "debug" ? getFirestore("debug") : admin.firestore();
+  const firestore = databaseId === "debug" ? getFirestore("debug") : getFirestore();
   try {
     const user = await firestore.collection("users").doc(userId).get();
     if (!["admin", "superadmin"].includes(user.get("role"))) {
@@ -126,7 +126,7 @@ export const generateMinorsListDocx = onCall({
     );
 
     const fileName = `lista_${title.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 80)}.docx`;
-    const file = admin.storage().bucket().file(`lists/${randomUUID()}.docx`);
+    const file = getStorage().bucket().file(`lists/${randomUUID()}.docx`);
     await file.save(buffer, {
       metadata: {contentType: docxContentType, cacheControl: "private, no-store"},
       predefinedAcl: "private",

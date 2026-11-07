@@ -337,7 +337,7 @@ private fun ExcursionDetailContent(
                 val paymentAmount = price * paymentParticipantCount
                 var showPaymentSheet by remember { mutableStateOf(false) }
 
-                Divider(modifier = Modifier.padding(vertical = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = when {
                     isUploadingPaymentProof -> MaterialTheme.colorScheme.secondaryContainer
@@ -445,7 +445,7 @@ private fun ExcursionDetailContent(
                 val hasSigned = signingStatus == AuthorizationSigningStatus.SIGNED
                 val showAuthSuccess by viewModel.showAuthSuccess.collectAsState()
 
-                Divider(modifier = Modifier.padding(vertical = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
                 Text("Autorización", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
 
                 // 🔍 DEBUG: Verificar estados

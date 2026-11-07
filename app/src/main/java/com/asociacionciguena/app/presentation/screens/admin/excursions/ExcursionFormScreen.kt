@@ -742,7 +742,7 @@ private fun ExcursionFormContent(
             }
         }
         // ← NUEVO: Sección de PDF de Autorización
-        Divider(modifier = Modifier.padding(vertical = 8.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
         Text(
             text = "Autorización PDF (opcional)",

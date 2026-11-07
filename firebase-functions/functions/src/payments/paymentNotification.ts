@@ -1,5 +1,4 @@
-import * as admin from "firebase-admin";
-import {getFirestore} from "firebase-admin/firestore";
+import {FieldValue, getFirestore} from "firebase-admin/firestore";
 import {onRequest} from "firebase-functions/v2/https";
 import {getPaymentConfig} from "../config/paymentConfig";
 import {
@@ -76,7 +75,7 @@ export const paymentNotification = onRequest(
 
       const isApproved = isApprovedResponse(responseCode);
       const firestore = databaseId === "(default)" ?
-        admin.firestore() :
+        getFirestore() :
         getFirestore(databaseId);
       const paymentByOrderSnap = await firestore
         .collection("payments")
@@ -89,19 +88,19 @@ export const paymentNotification = onRequest(
         redsysResponse: responseCode,
         redsysAmount: amount,
         redsysMerchantCode: merchantCode,
-        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        processedAt: FieldValue.serverTimestamp(),
         validationSource: "redsys",
       };
 
       if (isApproved) {
         paymentUpdate.status = "PAID";
-        paymentUpdate.validatedAt = admin.firestore.FieldValue.serverTimestamp();
+        paymentUpdate.validatedAt = FieldValue.serverTimestamp();
       } else {
         paymentUpdate.status = "REJECTED";
-        paymentUpdate.validatedAt = admin.firestore.FieldValue.delete();
+        paymentUpdate.validatedAt = FieldValue.delete();
         paymentUpdate.redsysLastFailedResponse = responseCode;
         paymentUpdate.redsysLastFailedAt =
-          admin.firestore.FieldValue.serverTimestamp();
+          FieldValue.serverTimestamp();
       }
 
       await paymentRef.set(
@@ -126,7 +125,7 @@ export const paymentNotification = onRequest(
                 amount: paymentData.amount,
                 orderId: order,
                 status: "PAID",
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
               },
               {merge: true}
             );

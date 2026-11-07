@@ -503,7 +503,7 @@ private fun ProfileContent(
                     value = user.email
                 )
 
-                Divider()
+                HorizontalDivider()
 
                 // Rol
                 InfoRow(
@@ -519,7 +519,7 @@ private fun ProfileContent(
                 )
 
                 if (user.childrenNames.isNotEmpty()) {
-                    Divider()
+                    HorizontalDivider()
                     InfoRow(
                         icon = Icons.Default.Person,
                         label = if (user.childrenNames.size == 1) "Nombre hijo" else "Nombre hijos",

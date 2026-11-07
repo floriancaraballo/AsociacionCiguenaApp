@@ -507,7 +507,7 @@ private fun AuthorizationCard(
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             // ───────── BOTONES DE ACCIÓN (solo si está pendiente) ─────────
             if (authorization.status == AuthorizationStatus.PENDING) {

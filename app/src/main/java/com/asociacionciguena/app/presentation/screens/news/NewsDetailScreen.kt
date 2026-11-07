@@ -1,5 +1,6 @@
 package com.asociacionciguena.app.presentation.screens.news
 
+import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -12,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,11 +32,7 @@ import com.asociacionciguena.app.presentation.components.CachedSubcomposeAsyncIm
 import com.asociacionciguena.app.presentation.components.ImageLoadingPlaceholder
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import com.asociacionciguena.app.presentation.components.ZoomableImage
-import kotlinx.datetime.toJavaLocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-import androidx.compose.material.icons.filled.Share
-import android.content.Context
+import com.asociacionciguena.app.util.formatDate
 
 @Composable
 fun NewsDetailScreen(
@@ -183,7 +181,7 @@ private fun NewsDetailContent(
                 )
             }
 
-            Divider()
+            HorizontalDivider()
 
             Text(
                 text = news.content,
@@ -416,10 +414,4 @@ private fun shareNews(context: Context, news: com.asociacionciguena.app.domain.m
     }
 
     context.startActivity(Intent.createChooser(shareIntent, "Compartir publicación"))
-}
-
-private fun formatDate(date: kotlinx.datetime.LocalDateTime): String {
-    val javaDate = date.toJavaLocalDateTime()
-    val formatter = DateTimeFormatter.ofPattern("EEEE, dd 'de' MMMM 'de' yyyy", Locale("es", "ES"))
-    return javaDate.format(formatter).replaceFirstChar { it.uppercase() }
 }

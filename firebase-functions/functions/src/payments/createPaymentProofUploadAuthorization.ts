@@ -1,6 +1,5 @@
-import * as admin from "firebase-admin";
+import {FieldValue, getFirestore, Timestamp} from "firebase-admin/firestore";
 import {randomBytes} from "node:crypto";
-import {getFirestore} from "firebase-admin/firestore";
 import {
   CallableRequest,
   HttpsError,
@@ -53,7 +52,7 @@ export const createPaymentProofUploadAuthorization = onCall(
     }
 
     const sourceFirestore = databaseId === "(default)" ?
-      admin.firestore() :
+      getFirestore() :
       getFirestore(databaseId);
     const authorizationSnapshot = await sourceFirestore
       .collection("signedAuthorizations")
@@ -80,11 +79,11 @@ export const createPaymentProofUploadAuthorization = onCall(
     }
 
     const uploadAuthorizationId = randomBytes(24).toString("hex");
-    const expiresAt = admin.firestore.Timestamp.fromMillis(
+    const expiresAt = Timestamp.fromMillis(
       Date.now() + UPLOAD_AUTHORIZATION_TTL_MS
     );
 
-    await admin.firestore()
+    await getFirestore()
       .collection("paymentProofUploadAuthorizations")
       .doc(uploadAuthorizationId)
       .set({
@@ -92,7 +91,7 @@ export const createPaymentProofUploadAuthorization = onCall(
         excursionId,
         authorizationId,
         databaseId,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
         expiresAt,
       });
 

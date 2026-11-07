@@ -1,5 +1,4 @@
-import * as admin from "firebase-admin";
-import {getFirestore} from "firebase-admin/firestore";
+import {FieldValue, getFirestore} from "firebase-admin/firestore";
 import {HttpsError, CallableRequest, onCall} from "firebase-functions/v2/https";
 import {getPaymentConfig} from "../config/paymentConfig";
 import {createRedsysSignature} from "./redsysSignature";
@@ -94,7 +93,7 @@ export const createPaymentIntent = onCall(
     }
 
     const firestore = databaseId === "(default)" ?
-      admin.firestore() :
+      getFirestore() :
       getFirestore(databaseId);
     const excursionRef = firestore.collection("excursions").doc(excursionId);
     const excursionSnap = await excursionRef.get();
@@ -231,11 +230,11 @@ export const createPaymentIntent = onCall(
       excursionTitle: excursion?.title || "",
       paymentMethod: "redsys",
       databaseId,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
 
     if (!existingPaymentSnap.exists) {
-      paymentDocument.createdAt = admin.firestore.FieldValue.serverTimestamp();
+      paymentDocument.createdAt = FieldValue.serverTimestamp();
     }
 
     await paymentRef.set(paymentDocument, {merge: true});

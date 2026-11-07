@@ -5,13 +5,24 @@ import kotlinx.datetime.toJavaLocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+private val spanishLocale = Locale.forLanguageTag("es-ES")
+private val singleDateFormatter = DateTimeFormatter.ofPattern(
+    "EEEE, dd 'de' MMMM 'de' yyyy",
+    spanishLocale
+)
+private val dayFormatter = DateTimeFormatter.ofPattern("EEEE d", spanishLocale)
+private val dayMonthFormatter = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", spanishLocale)
+private val fullDateFormatter = DateTimeFormatter.ofPattern(
+    "EEEE d 'de' MMMM 'de' yyyy",
+    spanishLocale
+)
+
 /**
  * Formatea una fecha LocalDateTime al formato: "Lunes, 15 de Marzo de 2026"
  */
 fun formatDate(date: LocalDateTime): String {
-    val javaDate = date.toJavaLocalDateTime()
-    val formatter = DateTimeFormatter.ofPattern("EEEE, dd 'de' MMMM 'de' yyyy", Locale("es", "ES"))
-    return javaDate.format(formatter).replaceFirstChar { it.uppercase() }
+    return date.toJavaLocalDateTime().format(singleDateFormatter)
+        .replaceFirstChar { it.uppercase() }
 }
 
 /**
@@ -33,23 +44,10 @@ fun formatDateRange(startDate: LocalDateTime, endDate: LocalDateTime?): String {
         return formatDate(startDate)
     }
 
-    val formatterDay = DateTimeFormatter.ofPattern("EEEE d", Locale("es", "ES"))
-    val formatterDayMonth = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", Locale("es", "ES"))
-    val formatterFull = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM 'de' yyyy", Locale("es", "ES"))
-
-    return if (startJava.year == endJava.year) {
-        if (startJava.monthValue == endJava.monthValue) {
-            val startStr = startJava.format(formatterDay)
-            val endStr = endJava.format(formatterFull)
-            "Del $startStr al $endStr".replaceFirstChar { it.uppercase() }
-        } else {
-            val startStr = startJava.format(formatterDayMonth)
-            val endStr = endJava.format(formatterFull)
-            "Del $startStr al $endStr".replaceFirstChar { it.uppercase() }
-        }
-    } else {
-        val startStr = startJava.format(formatterFull)
-        val endStr = endJava.format(formatterFull)
-        "Del $startStr al $endStr".replaceFirstChar { it.uppercase() }
+    val startFormatter = when {
+        startJava.year != endJava.year -> fullDateFormatter
+        startJava.monthValue != endJava.monthValue -> dayMonthFormatter
+        else -> dayFormatter
     }
+    return "Del ${startJava.format(startFormatter)} al ${endJava.format(fullDateFormatter)}"
 }
