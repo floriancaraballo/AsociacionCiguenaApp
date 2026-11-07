@@ -3,12 +3,15 @@ package com.asociacionciguena.app.presentation.screens.admin.news
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.domain.model.News
@@ -42,30 +45,32 @@ fun NewsManagementScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Gestión de Publicaciones") },
+                title = { Text("Publicaciones") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { onNavigateToForm("new") }
-            ) {
-                Icon(Icons.Default.Add, "¡Nueva publicación!")
-            }
+            ExtendedFloatingActionButton(
+                onClick = { onNavigateToForm("new") },
+                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                text = { Text("Nueva publicación") },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
         }
     ) { paddingValues ->
         when (val state = uiState) {
             is NewsManagementUiState.Loading -> {
-                LoadingIndicator()
+                LoadingIndicator(modifier = Modifier.fillMaxSize().padding(paddingValues))
             }
 
             is NewsManagementUiState.Success -> {
@@ -158,7 +163,8 @@ private fun NewsListContent(
                     }
                 }
             },
-            singleLine = true
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp)
         )
 
         // Chips de filtro
@@ -210,7 +216,7 @@ private fun NewsListContent(
                     )
                     if (news.isEmpty()) {
                         Text(
-                            text = "Pulsa + para crear una",
+                            text = "Pulsa Nueva publicación para crear una",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -220,7 +226,7 @@ private fun NewsListContent(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 items(
@@ -255,28 +261,29 @@ private fun NewsManagementCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
             // Header con título y badge
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = news.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f)
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
                 )
 
                 // Badge público/o
                 AssistChip(
                     onClick = onToggleVisibility,
                     label = {
-                        Text(if (news.isPublic) "Público" else "o")
+                        Text(if (news.isPublic) "Pública" else "Privada")
                     },
                     leadingIcon = {
                         Icon(

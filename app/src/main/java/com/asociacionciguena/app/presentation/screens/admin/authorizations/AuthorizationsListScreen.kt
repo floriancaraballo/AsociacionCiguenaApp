@@ -9,7 +9,9 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,7 +25,6 @@ import com.asociacionciguena.app.domain.model.SignedAuthorization
 import com.asociacionciguena.app.domain.model.AuthorizationStatus
 import com.asociacionciguena.app.domain.model.PaymentStatus
 import com.asociacionciguena.app.presentation.screens.admin.payments.PaymentsListViewModel
-import com.asociacionciguena.app.presentation.components.LoadingIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,62 +70,37 @@ fun AuthorizationsListScreen(
         }
     }
 
+    val generateDocument: () -> Unit = {
+        isGeneratingDoc = true
+        viewModel.generateMinorsListDocx(
+            excursionId = excursionId,
+            onSuccess = { url, fileName ->
+                docDownloadUrl = url
+                docFileName = fileName
+                isGeneratingDoc = false
+                showDocPreview = true
+            },
+            onError = { error ->
+                isGeneratingDoc = false
+                Toast.makeText(context, "❌ $error", Toast.LENGTH_LONG).show()
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Autorizaciones Firmadas") },
+                title = { Text("Autorizaciones") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Volver")
-                    }
-                },
-                // ✅ AÑADIR ESTE BLOQUE:
-                actions = {
-                    // Botón generar lista Word
-                    IconButton(
-                        onClick = {
-                            isGeneratingDoc = true
-                            viewModel.generateMinorsListDocx(
-                                excursionId = excursionId,
-                                onSuccess = { url, fileName ->
-                                    docDownloadUrl = url
-                                    docFileName = fileName
-                                    isGeneratingDoc = false
-                                    showDocPreview = true
-                                },
-                                onError = { error ->
-                                    isGeneratingDoc = false
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        "❌ $error",
-                                        android.widget.Toast.LENGTH_LONG
-                                    ).show()
-                                }
-                            )
-                        },
-                        enabled = !isGeneratingDoc && authorizations.any {
-                            it.status == AuthorizationStatus.APPROVED && !it.minorName.isNullOrBlank()
-                        }
-                    ) {
-                        if (isGeneratingDoc) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                Icons.Default.Description,
-                                contentDescription = "Generar lista Word",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         }
@@ -134,56 +110,12 @@ fun AuthorizationsListScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Header con stats
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = excursionTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Column {
-                            Text(
-                                text = "${authorizations.size}",
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = "Firmadas",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-
-                        Column {
-                            Text(
-                                text = "${authorizations.count { it.status == AuthorizationStatus.APPROVED }}",
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = "Aprobadas",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
-                }
-            }
+            AuthorizationSummary(
+                excursionTitle = excursionTitle,
+                authorizations = authorizations,
+                isGeneratingDoc = isGeneratingDoc,
+                onGenerateDocument = generateDocument
+            )
 
             // Lista de autorizaciones
             if (authorizations.isEmpty()) {
@@ -212,9 +144,9 @@ fun AuthorizationsListScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(authorizations) { authorization ->
+                    items(authorizations, key = { it.id }) { authorization ->
                         android.util.Log.d("AuthCard", "✅ Mostrando botones de aprobar/rechazar")
                         AuthorizationCard(
                             authorization = authorization,
@@ -412,6 +344,69 @@ fun AuthorizationsListScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AuthorizationSummary(
+    excursionTitle: String,
+    authorizations: List<SignedAuthorization>,
+    isGeneratingDoc: Boolean,
+    onGenerateDocument: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                excursionTitle,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AuthorizationStatusLabel(
+                    "${authorizations.count { it.status == AuthorizationStatus.PENDING }} pendientes",
+                    MaterialTheme.colorScheme.secondaryContainer,
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                AuthorizationStatusLabel(
+                    "${authorizations.count { it.status == AuthorizationStatus.APPROVED }} aprobadas",
+                    MaterialTheme.colorScheme.primaryContainer,
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                AuthorizationStatusLabel(
+                    "${authorizations.count { it.status == AuthorizationStatus.REJECTED }} rechazadas",
+                    MaterialTheme.colorScheme.errorContainer,
+                    MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+            Button(
+                onClick = onGenerateDocument,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isGeneratingDoc && authorizations.any {
+                    it.status == AuthorizationStatus.APPROVED && !it.minorName.isNullOrBlank()
+                }
+            ) {
+                if (isGeneratingDoc) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(18.dp))
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(if (isGeneratingDoc) "Generando lista…" else "Generar lista Word")
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AuthorizationCard(
     authorization: SignedAuthorization,
@@ -423,116 +418,91 @@ private fun AuthorizationCard(
     onAllowResubmission: (() -> Unit)?
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ───────── FILA SUPERIOR: Nombre del menor + Estado ─────────
-            Row(
+            Text(
+                text = authorization.minorName?.takeIf { it.isNotBlank() } ?: "Menor sin nombre",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // ✅ Nombre del menor DESTACADO (primero y más visible)
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = authorization.minorName?.takeIf { it.isNotBlank() } ?: "Menor sin nombre",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,  // ← Color destacado
-                        fontWeight = FontWeight.Bold  // ← Negrita para más énfasis
-                    )
-                }
-
-                Column(horizontalAlignment = Alignment.End) {
-                    AssistChip(
-                        onClick = { onAllowResubmission?.invoke() },
-                        trailingIcon = onAllowResubmission?.let {
-                            {
-                                Icon(
-                                    Icons.Default.Refresh,
-                                    contentDescription = "Permitir una nueva firma",
-                                    modifier = Modifier.size(AssistChipDefaults.IconSize)
-                                )
-                            }
-                        },
-                        label = {
-                            Text(
-                                when (authorization.status) {
-                                    AuthorizationStatus.APPROVED -> "✓ Aprobada"
-                                    AuthorizationStatus.PENDING -> "⏳ Pendiente"
-                                    AuthorizationStatus.REJECTED -> "✗ Rechazada"
-                                }
-                            )
-                        },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = when (authorization.status) {
-                                AuthorizationStatus.APPROVED -> MaterialTheme.colorScheme.primaryContainer
-                                AuthorizationStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
-                                AuthorizationStatus.REJECTED -> MaterialTheme.colorScheme.errorContainer
-                            }
-                        )
-                    )
-                    if (authorization.status == AuthorizationStatus.REJECTED &&
-                        authorization.resubmissionGranted && !authorization.resubmissionUsed
-                    ) {
-                        Text("Nueva firma habilitada", style = MaterialTheme.typography.labelSmall)
+                Text("Autorización", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 6.dp))
+                AuthorizationStatusLabel(
+                    text = when (authorization.status) {
+                        AuthorizationStatus.APPROVED -> "✓ Aprobada"
+                        AuthorizationStatus.PENDING -> "Pendiente"
+                        AuthorizationStatus.REJECTED -> "Rechazada"
+                    },
+                    containerColor = when (authorization.status) {
+                        AuthorizationStatus.APPROVED -> MaterialTheme.colorScheme.primaryContainer
+                        AuthorizationStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
+                        AuthorizationStatus.REJECTED -> MaterialTheme.colorScheme.errorContainer
+                    },
+                    contentColor = when (authorization.status) {
+                        AuthorizationStatus.APPROVED -> MaterialTheme.colorScheme.onPrimaryContainer
+                        AuthorizationStatus.PENDING -> MaterialTheme.colorScheme.onSecondaryContainer
+                        AuthorizationStatus.REJECTED -> MaterialTheme.colorScheme.onErrorContainer
                     }
-
-                    AssistChip(
-                        onClick = {},
-                        label = {
-                            Text(
-                                when {
-                                    isPaymentLoading -> "Cargando pago…"
-                                    paymentStatus == null -> "Pago: No realizado"
-                                    paymentStatus == PaymentStatus.PAID -> "✓ Pago realizado"
-                                    paymentStatus == PaymentStatus.PENDING -> "⏳ Pago pendiente"
-                                    paymentStatus == PaymentStatus.REJECTED -> "✗ Pago rechazado"
-                                    else -> "Pago iniciado"
-                                }
-                            )
-                        },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = when {
-                                isPaymentLoading || paymentStatus == PaymentStatus.INITIATED || paymentStatus == null ->
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                paymentStatus == PaymentStatus.PAID -> MaterialTheme.colorScheme.primaryContainer
-                                paymentStatus == PaymentStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
-                                else -> MaterialTheme.colorScheme.errorContainer
-                            }
-                        )
-                    )
-                }
+                )
             }
-
-            HorizontalDivider()
-
-            // ───────── BOTONES DE ACCIÓN (solo si está pendiente) ─────────
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text("Pago", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 6.dp))
+                AuthorizationStatusLabel(
+                    text = when {
+                        isPaymentLoading -> "Cargando…"
+                        paymentStatus == null -> "No realizado"
+                        paymentStatus == PaymentStatus.PAID -> "✓ Realizado"
+                        paymentStatus == PaymentStatus.PENDING -> "Pendiente de validación"
+                        paymentStatus == PaymentStatus.REJECTED -> "Rechazado"
+                        else -> "Iniciado"
+                    },
+                    containerColor = when {
+                        isPaymentLoading || paymentStatus == PaymentStatus.INITIATED || paymentStatus == null -> MaterialTheme.colorScheme.surfaceVariant
+                        paymentStatus == PaymentStatus.PAID -> MaterialTheme.colorScheme.primaryContainer
+                        paymentStatus == PaymentStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
+                        else -> MaterialTheme.colorScheme.errorContainer
+                    },
+                    contentColor = when {
+                        isPaymentLoading || paymentStatus == PaymentStatus.INITIATED || paymentStatus == null -> MaterialTheme.colorScheme.onSurfaceVariant
+                        paymentStatus == PaymentStatus.PAID -> MaterialTheme.colorScheme.onPrimaryContainer
+                        paymentStatus == PaymentStatus.PENDING -> MaterialTheme.colorScheme.onSecondaryContainer
+                        else -> MaterialTheme.colorScheme.onErrorContainer
+                    }
+                )
+            }
+            if (authorization.status == AuthorizationStatus.REJECTED &&
+                authorization.resubmissionGranted && !authorization.resubmissionUsed
+            ) {
+                Text("Nueva firma habilitada", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
             if (authorization.status == AuthorizationStatus.PENDING) {
-                Row(
+                FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(top = 8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
-                        onClick = { onApprove(authorization.id) },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
+                    Button(onClick = { onApprove(authorization.id) }) {
                         Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("Aprobar")
                     }
-
                     OutlinedButton(
                         onClick = { onReject(authorization.id) },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                     ) {
                         Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
@@ -540,13 +510,43 @@ private fun AuthorizationCard(
                     }
                 }
             }
-
-            // ───────── CONTACTO DEL TUTOR (al final, como pediste) ─────────
-            Text(
-                text = "📧 ${authorization.tutorEmail} • 📞 ${authorization.tutorPhone}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (onAllowResubmission != null) {
+                OutlinedButton(onClick = onAllowResubmission, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Permitir nueva firma")
+                }
+            }
+            if (authorization.tutorEmail.isNotBlank() || authorization.tutorPhone.isNotBlank()) {
+                HorizontalDivider()
+                if (authorization.tutorEmail.isNotBlank()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Email, contentDescription = "Email del tutor", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text(authorization.tutorEmail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    }
+                }
+                if (authorization.tutorPhone.isNotBlank()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Phone, contentDescription = "Teléfono del tutor", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text(authorization.tutorPhone, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun AuthorizationStatusLabel(
+    text: String,
+    containerColor: androidx.compose.ui.graphics.Color,
+    contentColor: androidx.compose.ui.graphics.Color
+) {
+    Surface(color = containerColor, contentColor = contentColor, shape = RoundedCornerShape(8.dp)) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+        )
     }
 }

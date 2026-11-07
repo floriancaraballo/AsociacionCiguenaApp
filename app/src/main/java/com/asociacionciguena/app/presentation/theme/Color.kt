@@ -27,6 +27,15 @@ val OnBackground = Color(0xFF1A1C1E)
 val Surface = Color(0xFFFFFFFF)
 val OnSurface = Color(0xFF1A1C1E)
 
+// Superficies del tema oscuro: fondo, tarjetas y paneles elevados.
+val DarkBackground = Color(0xFF111820)
+val DarkSurface = Color(0xFF202C39)
+val DarkElevatedSurface = Color(0xFF293849)
+val DarkOnSurface = Color(0xFFE6EDF5)
+val DarkOnSurfaceVariant = Color(0xFFBCCBDD)
+val DarkOutline = Color(0xFF8C9BAB)
+val DarkOutlineVariant = Color(0xFF3E5063)
+
 // Colores de error
 val ErrorColor = Color(0xFFBA1A1A)
 val OnErrorColor = Color(0xFFFFFFFF)

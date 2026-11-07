@@ -9,12 +9,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -82,23 +85,23 @@ fun PhotoUploadScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Subir archivos multimedia") },
+                title = { Text("Fotos y vídeos") },
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateBack,
                         enabled = true
                     ) {
                         Icon(
-                            Icons.Default.ArrowBack,
+                            Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Volver",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         }
@@ -213,9 +216,11 @@ private fun PhotoUploadContent(
         if (uiState is PhotoUploadUiState.Idle) {
             OutlinedCard(
                 onClick = onSelectPhotos,
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
+                    .heightIn(min = 180.dp)
             ) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -230,8 +235,9 @@ private fun PhotoUploadContent(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Seleccionar Fotos/Vídeos",
-                        style = MaterialTheme.typography.titleMedium
+                    text = "Seleccionar fotos y vídeos",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
                     )
                     Text(
                         text = "Hasta 20 archivos",
@@ -272,7 +278,9 @@ private fun PermissionRequestCard(
     onRequestPermission: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -322,15 +330,19 @@ private fun PhotosSelectedContent(
     onRemove: (Uri) -> Unit
 ) {
     // Header con contador
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
             modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 text = "${uris.size} elemento${if (uris.size != 1) "s" else ""} seleccionado${if (uris.size != 1) "s" else ""}",
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
             )
 
             TextButton(onClick = onAddMore) {
@@ -343,9 +355,9 @@ private fun PhotosSelectedContent(
 
     // Grid de fotos
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        columns = GridCells.Fixed(2),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.height(300.dp)
     ) {
         items(
@@ -353,7 +365,7 @@ private fun PhotosSelectedContent(
             key = { it.toString() }
         ) { uri ->
             Box {
-                Card(modifier = Modifier.aspectRatio(1f)) {
+                Card(modifier = Modifier.aspectRatio(1f), shape = RoundedCornerShape(14.dp)) {
                     MediaPreview(uri = uri, modifier = Modifier.fillMaxSize())
                 }
 
@@ -407,7 +419,11 @@ private fun UploadingContent(
     currentPhoto: Int,
     totalPhotos: Int
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
         Column(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -507,12 +523,17 @@ private fun ExcursionSelector(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "Excursión *",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text = "Excursión de destino *",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.height(8.dp))

@@ -6,17 +6,20 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.SubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import kotlinx.datetime.*
@@ -102,7 +105,7 @@ fun ExcursionFormScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(if (viewModel.isEditMode) "Editar Excursión" else "Nueva Excursión")
+                    Text(if (viewModel.isEditMode) "Editar excursión" else "Nueva excursión")
                 },
                 navigationIcon = {
                     IconButton(onClick = {
@@ -112,20 +115,20 @@ fun ExcursionFormScreen(
                             onNavigateBack()
                         }
                     }) {
-                        Icon(Icons.Default.ArrowBack, "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         }
     ) { paddingValues ->
         when (uiState) {
             is ExcursionFormUiState.Loading -> {
-                LoadingIndicator()
+                LoadingIndicator(modifier = Modifier.fillMaxSize().padding(paddingValues))
             }
 
             else -> {
@@ -354,11 +357,12 @@ private fun ExcursionFormContent(
 
         Card(
             modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
                 containerColor = if (registrationClosed) {
                     MaterialTheme.colorScheme.errorContainer
                 } else {
-                    MaterialTheme.colorScheme.primaryContainer
+                    MaterialTheme.colorScheme.surface
                 }
             )
         ) {
@@ -373,8 +377,9 @@ private fun ExcursionFormContent(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "Estado de inscripciones",
-                            style = MaterialTheme.typography.titleMedium
+                            "Inscripciones",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             if (registrationClosed) "Autorizaciones cerradas"
@@ -430,294 +435,202 @@ private fun ExcursionFormContent(
             }
         }
 
-        OutlinedTextField(
-            value = title,
-            onValueChange = onTitleChange,
-            label = { Text("Título *") },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isSaving,
-            singleLine = true
-        )
+        ExcursionFormSection(title = "Información de la excursión", icon = Icons.Default.Edit) {
+            OutlinedTextField(
+                value = title,
+                onValueChange = onTitleChange,
+                label = { Text("Título *") },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isSaving,
+                singleLine = true
+            )
 
-        OutlinedTextField(
-            value = description,
-            onValueChange = onDescriptionChange,
-            label = { Text("Descripción *") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(150.dp),
-            enabled = !isSaving,
-            maxLines = 7
-        )
-
-        OutlinedTextField(
-            value = location,
-            onValueChange = onLocationChange,
-            label = { Text("Ubicación *") },
-            leadingIcon = {
-                Icon(Icons.Default.LocationOn, contentDescription = null)
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isSaving,
-            singleLine = true
-        )
-
-        OutlinedButton(
-            onClick = onSelectLocationClick,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isSaving
-        ) {
-            Icon(Icons.Default.Map, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                if (latitude != null && longitude != null) {
-                    "Cambiar punto en el mapa"
-                } else {
-                    "Seleccionar punto en el mapa"
-                }
+            OutlinedTextField(
+                value = description,
+                onValueChange = onDescriptionChange,
+                label = { Text("Descripción *") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp),
+                enabled = !isSaving,
+                maxLines = 7
             )
         }
 
-        Text(
-            text = if (latitude != null && longitude != null) {
-                "Punto seleccionado: %.6f, %.6f".format(
-                    Locale.US,
-                    latitude,
-                    longitude
-                )
-            } else {
-                "Busca un lugar o selecciona directamente un punto en el mapa."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        ExcursionFormSection(title = "Ubicación", icon = Icons.Default.LocationOn) {
+            OutlinedTextField(
+                value = location,
+                onValueChange = onLocationChange,
+                label = { Text("Ubicación *") },
+                leadingIcon = {
+                    Icon(Icons.Default.LocationOn, contentDescription = null)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isSaving,
+                singleLine = true
+            )
 
-        // AÑADIR AQUÍ ↓
-        // Campo de precio
-        OutlinedTextField(
-            value = price,
-            onValueChange = onPriceChange,
-            label = { Text("Precio (opcional)") },
-            placeholder = { Text("0.00") },
-            leadingIcon = {
-                Text("€", style = MaterialTheme.typography.bodyLarge)
-            },
-            supportingText = {
-                Text("Déjalo vacío si la excursión es gratuita")
-            },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Decimal
-            ),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        OutlinedTextField(
-            value = maxParticipants,
-            onValueChange = onMaxParticipantsChange,
-            label = { Text("Máximo de participantes *") },
-            leadingIcon = {
-                Icon(Icons.Default.Groups, contentDescription = null)
-            },
-            supportingText = {
-                Text("Cuenta autorizaciones pendientes y aprobadas")
-            },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Number
-            ),
-            singleLine = true,
-            enabled = !isSaving,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        OutlinedCard(
-            onClick = { if (!isSaving) onDatePickerClick() },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            OutlinedButton(
+                onClick = onSelectLocationClick,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isSaving
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Fecha *",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = date?.let { formatDateForDisplay(it) } ?: "Selecciona una fecha",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (date != null)
-                            MaterialTheme.colorScheme.onSurface
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Icon(
-                    imageVector = Icons.Default.CalendarMonth,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+                Icon(Icons.Default.Map, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    if (latitude != null && longitude != null) {
+                        "Cambiar punto en el mapa"
+                    } else {
+                        "Seleccionar punto en el mapa"
+                    }
                 )
             }
-        }
-        // End date selector
-        OutlinedCard(
-            onClick = { if (!isSaving) onEndDatePickerClick() },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Fecha de fin *",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+
+            Text(
+                text = if (latitude != null && longitude != null) {
+                    "Punto seleccionado: %.6f, %.6f".format(
+                        Locale.US,
+                        latitude,
+                        longitude
                     )
-                    Text(
-                        text = endDate?.let { formatDateForDisplay(it) } ?: "Selecciona una fecha de fin",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (endDate != null)
-                            MaterialTheme.colorScheme.onSurface
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Icon(
-                    imageVector = Icons.Default.CalendarMonth,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
+                } else {
+                    "Busca un lugar o selecciona directamente un punto en el mapa."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
-
-        Text(
-            text = "Imagen de la Excursión (opcional)",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-// Mostrar error de subida de imagen
-        if (imageUploadState is ImageUploadState.Error) {
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                ),
+        ExcursionFormSection(title = "Fechas", icon = Icons.Default.CalendarMonth) {
+            OutlinedCard(
+                onClick = { if (!isSaving) onDatePickerClick() },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = (imageUploadState as ImageUploadState.Error).message,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = onClearImageError) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Cerrar",
-                            tint = MaterialTheme.colorScheme.onErrorContainer
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Fecha *",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = date?.let { formatDateForDisplay(it) } ?: "Selecciona una fecha",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (date != null)
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            // End date selector
+            OutlinedCard(
+                onClick = { if (!isSaving) onEndDatePickerClick() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Fecha de fin *",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = endDate?.let { formatDateForDisplay(it) } ?: "Selecciona una fecha de fin",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (endDate != null)
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
 
-        when {
-            // Imagen subiendo
-            imageUploadState is ImageUploadState.Uploading -> {
+        ExcursionFormSection(title = "Precio y plazas", icon = Icons.Default.Groups) {
+            OutlinedTextField(
+                value = price,
+                onValueChange = onPriceChange,
+                label = { Text("Precio (opcional)") },
+                placeholder = { Text("0.00") },
+                leadingIcon = {
+                    Text("€", style = MaterialTheme.typography.bodyLarge)
+                },
+                supportingText = {
+                    Text("Déjalo vacío si la excursión es gratuita")
+                },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Decimal
+                ),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = maxParticipants,
+                onValueChange = onMaxParticipantsChange,
+                label = { Text("Máximo de participantes *") },
+                leadingIcon = {
+                    Icon(Icons.Default.Groups, contentDescription = null)
+                },
+                supportingText = {
+                    Text("Cuenta autorizaciones pendientes y aprobadas")
+                },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number
+                ),
+                singleLine = true,
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        ExcursionFormSection(title = "Imagen (opcional)", icon = Icons.Default.Image) {
+            // Mostrar error de subida de imagen
+            if (imageUploadState is ImageUploadState.Error) {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
-                    )
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
+                    Row(
                         modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "Subiendo imagen...",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = "${((imageUploadState as ImageUploadState.Uploading).progress * 100).toInt()}%",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        LinearProgressIndicator(
-                            progress = (imageUploadState as ImageUploadState.Uploading).progress,
-                            modifier = Modifier.fillMaxWidth()
+                        Text(
+                            text = (imageUploadState as ImageUploadState.Error).message,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f)
                         )
-                    }
-                }
-            }
-
-            // Imagen ya subida
-            imageUrl.isNotBlank() -> {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                ) {
-                    Box {
-                        SubcomposeAsyncImage(
-                            model = imageUrl,
-                            contentDescription = "Preview",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                            loading = {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator()
-                                }
-                            },
-                            error = {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.BrokenImage,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            }
-                        )
-
-                        // Botón eliminar imagen
-                        IconButton(
-                            onClick = onRemoveImageClick,
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(8.dp),
-                            colors = IconButtonDefaults.iconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        ) {
+                        IconButton(onClick = onClearImageError) {
                             Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Eliminar imagen",
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Cerrar",
                                 tint = MaterialTheme.colorScheme.onErrorContainer
                             )
                         }
@@ -725,167 +638,254 @@ private fun ExcursionFormContent(
                 }
             }
 
-            // Sin imagen
-            else -> {
-                OutlinedButton(
-                    onClick = onUploadImageClick,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isSaving && imageUploadState !is ImageUploadState.Uploading
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Image,
-                        contentDescription = null
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Subir Imagen desde Dispositivo")
-                }
-            }
-        }
-        // ← NUEVO: Sección de PDF de Autorización
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-        Text(
-            text = "Autorización PDF (opcional)",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        Text(
-            text = "Sube un PDF con la autorización que los usuarios podrán descargar",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        // Mostrar error de subida de PDF
-        if (pdfUploadState is PdfUploadState.Error) {
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = pdfUploadState.message,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = onClearPdfError) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Cerrar",
-                            tint = MaterialTheme.colorScheme.onErrorContainer
+            when {
+                // Imagen subiendo
+                imageUploadState is ImageUploadState.Uploading -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
                         )
-                    }
-                }
-            }
-        }
-
-        when {
-            // PDF subiendo
-            pdfUploadState is PdfUploadState.Uploading -> {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                text = "Subiendo PDF...",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = "${(pdfUploadState.progress * 100).toInt()}%",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        LinearProgressIndicator(
-                            progress = pdfUploadState.progress,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            }
-
-            // PDF ya subido
-            authorizationPdfUrl != null -> {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PictureAsPdf,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.size(32.dp)
-                            )
-                            Column {
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 Text(
-                                    text = "PDF Subido",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                    text = "Subiendo imagen...",
+                                    style = MaterialTheme.typography.bodyMedium
                                 )
                                 Text(
-                                    text = "Autorización disponible",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                    text = "${((imageUploadState as ImageUploadState.Uploading).progress * 100).toInt()}%",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = (imageUploadState as ImageUploadState.Uploading).progress,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+
+                // Imagen ya subida
+                imageUrl.isNotBlank() -> {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                    ) {
+                        Box {
+                            SubcomposeAsyncImage(
+                                model = imageUrl,
+                                contentDescription = "Preview",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                                loading = {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator()
+                                    }
+                                },
+                                error = {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.BrokenImage,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp),
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                            )
+
+                            // Botón eliminar imagen
+                            IconButton(
+                                onClick = onRemoveImageClick,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(8.dp),
+                                colors = IconButtonDefaults.iconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Eliminar imagen",
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
                                 )
                             }
                         }
-                        IconButton(
-                            onClick = onRemovePdfClick,
-                            enabled = !isSaving
-                        ) {
+                    }
+                }
+
+                // Sin imagen
+                else -> {
+                    OutlinedButton(
+                        onClick = onUploadImageClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSaving && imageUploadState !is ImageUploadState.Uploading
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Image,
+                            contentDescription = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Subir Imagen desde Dispositivo")
+                    }
+                }
+            }
+        }
+
+        ExcursionFormSection(title = "Autorización PDF (opcional)", icon = Icons.Default.PictureAsPdf) {
+            Text(
+                text = "Sube un PDF con la autorización que los usuarios podrán descargar",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            // Mostrar error de subida de PDF
+            if (pdfUploadState is PdfUploadState.Error) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = pdfUploadState.message,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = onClearPdfError) {
                             Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Eliminar PDF",
-                                tint = MaterialTheme.colorScheme.error
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Cerrar",
+                                tint = MaterialTheme.colorScheme.onErrorContainer
                             )
                         }
                     }
                 }
             }
 
-            // Sin PDF
-            else -> {
-                OutlinedButton(
-                    onClick = onUploadPdfClick,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isSaving && pdfUploadState !is PdfUploadState.Uploading
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Upload,
-                        contentDescription = null
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Subir Autorización PDF")
+            when {
+                // PDF subiendo
+                pdfUploadState is PdfUploadState.Uploading -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "Subiendo PDF...",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = "${(pdfUploadState.progress * 100).toInt()}%",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = pdfUploadState.progress,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+
+                // PDF ya subido
+                authorizationPdfUrl != null -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PictureAsPdf,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "PDF Subido",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                                    )
+                                    Text(
+                                        text = "Autorización disponible",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                                    )
+                                }
+                            }
+                            IconButton(
+                                onClick = onRemovePdfClick,
+                                enabled = !isSaving
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Eliminar PDF",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Sin PDF
+                else -> {
+                    OutlinedButton(
+                        onClick = onUploadPdfClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSaving && pdfUploadState !is PdfUploadState.Uploading
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Upload,
+                            contentDescription = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Subir Autorización PDF")
+                    }
                 }
             }
         }
@@ -921,6 +921,30 @@ private fun ExcursionFormContent(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+private fun ExcursionFormSection(
+    title: String,
+    icon: ImageVector,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            }
+            content()
+        }
     }
 }
 

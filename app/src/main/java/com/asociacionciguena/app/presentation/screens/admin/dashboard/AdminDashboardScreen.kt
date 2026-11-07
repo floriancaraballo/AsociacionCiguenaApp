@@ -2,8 +2,11 @@ package com.asociacionciguena.app.presentation.screens.admin.dashboard
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,7 +17,7 @@ import androidx.hilt.navigation.compose.hiltViewModel// ✅ Añadir estos:
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 
 @Composable
 fun AdminDashboardScreen(
@@ -41,7 +44,7 @@ fun AdminDashboardScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
                     }
                 },
                 actions = {
@@ -50,8 +53,10 @@ fun AdminDashboardScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         }
@@ -80,66 +85,45 @@ fun AdminDashboardScreen(
                 Text(
                     text = "Gestión",
                     style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 8.dp)
                 )
 
-                // Grid 2x2
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    AdminOptionCard(
-                        title = "Gestionar Publicaciones",
-                        icon = Icons.Default.Article,
-                        onClick = onNavigateToNews,
-                        modifier = Modifier.weight(1f),
-                        enabled = isAdmin || isMonitor
-                    )
-
-                    AdminOptionCard(
-                        title = "Gestionar Excursiones",
-                        icon = Icons.Default.CalendarMonth,
-                        onClick = onNavigateToExcursions,
-                        modifier = Modifier.weight(1f),
-                        enabled = isAdmin
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    AdminOptionCard(
-                        title = "Subir Fotos",
-                        icon = Icons.Default.Photo,
-                        onClick = onNavigateToPhotos,
-                        modifier = Modifier.weight(1f),
-                        enabled = isAdmin || isMonitor
-                    )
-
-                    AdminOptionCard(
-                        title = "Gestionar Usuarios",
-                        icon = Icons.Default.People,
-                        onClick = onNavigateToUsers,
-                        modifier = Modifier.weight(1f),
-                        enabled = isAdmin
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    AdminOptionCard(
-                        title = "Gestionar Pines",
-                        icon = Icons.Default.Star,
-                        onClick = onNavigateToPins,
-                        modifier = Modifier.weight(1f),
-                        enabled = isAdmin || isMonitor
-                    )
-
-                    Spacer(modifier = Modifier.weight(1f))
-                }
+                AdminOptionCard(
+                    title = "Publicaciones",
+                    description = "Crear y editar publicaciones",
+                    icon = Icons.AutoMirrored.Filled.Article,
+                    onClick = onNavigateToNews,
+                    enabled = isAdmin || isMonitor
+                )
+                AdminOptionCard(
+                    title = "Excursiones",
+                    description = "Gestionar actividades e inscripciones",
+                    icon = Icons.Default.CalendarMonth,
+                    onClick = onNavigateToExcursions,
+                    enabled = isAdmin
+                )
+                AdminOptionCard(
+                    title = "Fotos y vídeos",
+                    description = "Añadir archivos a la galería",
+                    icon = Icons.Default.PhotoLibrary,
+                    onClick = onNavigateToPhotos,
+                    enabled = isAdmin || isMonitor
+                )
+                AdminOptionCard(
+                    title = "Usuarios",
+                    description = "Gestionar los usuarios de la asociación",
+                    icon = Icons.Default.People,
+                    onClick = onNavigateToUsers,
+                    enabled = isAdmin
+                )
+                AdminOptionCard(
+                    title = "Pines",
+                    description = "Gestionar el contador de pines",
+                    icon = Icons.Default.Star,
+                    onClick = onNavigateToPins,
+                    enabled = isAdmin || isMonitor
+                )
             }
         }
     }
@@ -154,6 +138,7 @@ private fun StatsOverviewCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -170,6 +155,7 @@ private fun StatsOverviewCard(
                 Text(
                     text = "Resumen",
                     style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
@@ -184,10 +170,10 @@ private fun StatsOverviewCard(
             HorizontalDivider()
 
             StatRow(
-                icon = Icons.Default.Article,
+                icon = Icons.AutoMirrored.Filled.Article,
                 label = "Publicaciones",
                 value = "${stats.totalNews}",
-                detail = "${stats.publicNews} públicas • ${stats.privateNews} as"
+                detail = "${stats.publicNews} públicas • ${stats.privateNews} privadas"
             )
 
             StatRow(
@@ -264,6 +250,7 @@ private fun StatRow(
 @Composable
 private fun AdminOptionCard(
     title: String,
+    description: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -271,36 +258,49 @@ private fun AdminOptionCard(
 ) {
     Card(
         onClick = onClick,
-        modifier = modifier.aspectRatio(1f),
-        enabled = enabled
+        modifier = modifier.fillMaxWidth(),
+        enabled = enabled,
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            disabledContainerColor = MaterialTheme.colorScheme.surface
+        )
     ) {
-        Column(
+        Row(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .heightIn(min = 80.dp)
                 .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = title,
-                modifier = Modifier.size(48.dp),
+                contentDescription = null,
+                modifier = Modifier.size(28.dp),
                 tint = if (enabled)
                     MaterialTheme.colorScheme.primary
                 else
                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center,  // ← AÑADIDO
-                color = if (enabled)
-                    MaterialTheme.colorScheme.onSurface
-                else
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+            }
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             )
         }
     }

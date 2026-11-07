@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -58,7 +59,7 @@ fun ProfileScreen(
                 },
                 title = {
                     Text(
-                        text = if (isEditMode) "Editar Perfil" else "Mi Perfil",
+                        text = if (isEditMode) "Editar perfil" else "Mi perfil",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -81,7 +82,7 @@ fun ProfileScreen(
     ) { paddingValues ->
         when (val state = uiState) {
             is ProfileUiState.Loading -> {
-                LoadingIndicator()
+                LoadingIndicator(modifier = Modifier.fillMaxSize().padding(paddingValues))
             }
 
             is ProfileUiState.LoggedIn -> {
@@ -149,64 +150,84 @@ private fun ProfileEditContent(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
 
-        // Avatar editable
-        Box(
-            modifier = Modifier.size(120.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            // Imagen actual o seleccionada
-            when {
-                // Foto nueva seleccionada
-                selectedPhotoUri != null -> {
-                    AsyncImage(
-                        model = selectedPhotoUri,
-                        contentDescription = "Foto de perfil",
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(CircleShape)
-                            .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                // Foto actual del usuario
-                user.photoUrl != null && user.photoUrl.isNotBlank() -> {
-                    val imageLoadFailed = remember { mutableStateOf(false) }
-
-                    if (!imageLoadFailed.value) {
-                        SubcomposeAsyncImage(
-                            model = user.photoUrl,
+        ProfileCard {
+            // Avatar editable
+            Box(
+                modifier = Modifier.size(120.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                // Imagen actual o seleccionada
+                when {
+                    // Foto nueva seleccionada
+                    selectedPhotoUri != null -> {
+                        AsyncImage(
+                            model = selectedPhotoUri,
                             contentDescription = "Foto de perfil",
                             modifier = Modifier
                                 .size(120.dp)
                                 .clip(CircleShape)
                                 .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                            contentScale = ContentScale.Crop,
-                            loading = {
-                                Box(
-                                    modifier = Modifier
-                                        .size(120.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primaryContainer),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(32.dp),
-                                        strokeWidth = 3.dp,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                }
-                            },
-                            error = {
-                                imageLoadFailed.value = true
-                            }
+                            contentScale = ContentScale.Crop
                         )
-                    } else {
-                        // Mostrar icono si falla la carga
+                    }
+                    // Foto actual del usuario
+                    user.photoUrl != null && user.photoUrl.isNotBlank() -> {
+                        val imageLoadFailed = remember { mutableStateOf(false) }
+
+                        if (!imageLoadFailed.value) {
+                            SubcomposeAsyncImage(
+                                model = user.photoUrl,
+                                contentDescription = "Foto de perfil",
+                                modifier = Modifier
+                                    .size(120.dp)
+                                    .clip(CircleShape)
+                                    .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                                contentScale = ContentScale.Crop,
+                                loading = {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(120.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(32.dp),
+                                            strokeWidth = 3.dp,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
+                                },
+                                error = {
+                                    imageLoadFailed.value = true
+                                }
+                            )
+                        } else {
+                            // Mostrar icono si falla la carga
+                            Box(
+                                modifier = Modifier
+                                    .size(120.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                    .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
+                    // Sin foto - mostrar icono genérico
+                    else -> {
                         Box(
                             modifier = Modifier
                                 .size(120.dp)
@@ -224,114 +245,92 @@ private fun ProfileEditContent(
                         }
                     }
                 }
-                // Sin foto - mostrar icono genérico
-                else -> {
-                    Box(
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                            .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
+
+                // Botón cambiar foto
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable {
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = "Cambiar foto",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
 
-            // Botón cambiar foto
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable {
-                        photoPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CameraAlt,
-                    contentDescription = "Cambiar foto",
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(20.dp)
-                )
+            if (selectedPhotoUri != null) {
+                TextButton(onClick = { viewModel.removeSelectedPhoto() }) {
+                    Text("Quitar foto seleccionada")
+                }
             }
+
         }
 
-        if (selectedPhotoUri != null) {
-            Spacer(modifier = Modifier.height(8.dp))
-            TextButton(onClick = { viewModel.removeSelectedPhoto() }) {
-                Text("Quitar foto seleccionada")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Campo de nombre
-        OutlinedTextField(
-            value = editedName,
-            onValueChange = { viewModel.onNameChange(it) },
-            label = { Text("Nombre") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = {
-                Icon(Icons.Default.Person, contentDescription = null)
-            }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-        editedChildrenNames.forEachIndexed { index, childName ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = childName,
-                    onValueChange = { viewModel.onChildNameChange(index, it) },
-                    label = { Text(childNameLabel(index)) },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                    enabled = !isSaving
-                )
-                if (editedChildrenNames.size > 1 || childName.isNotBlank()) {
-                    IconButton(onClick = { viewModel.removeChildName(index) }, enabled = !isSaving) {
-                        Icon(Icons.Default.Delete, contentDescription = "Eliminar nombre")
+        ProfileCard(horizontalAlignment = Alignment.Start) {
+            Text("Datos personales", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            // Campo de nombre
+            OutlinedTextField(
+                value = editedName,
+                onValueChange = { viewModel.onNameChange(it) },
+                label = { Text("Nombre") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = {
+                    Icon(Icons.Default.Person, contentDescription = null)
+                }
+            )
+            editedChildrenNames.forEachIndexed { index, childName ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = childName,
+                        onValueChange = { viewModel.onChildNameChange(index, it) },
+                        label = { Text(childNameLabel(index)) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        enabled = !isSaving
+                    )
+                    if (editedChildrenNames.size > 1 || childName.isNotBlank()) {
+                        IconButton(onClick = { viewModel.removeChildName(index) }, enabled = !isSaving) {
+                            Icon(Icons.Default.Delete, contentDescription = "Eliminar nombre")
+                        }
                     }
                 }
             }
-        }
-        if (editedChildrenNames.size < 3) {
-            IconButton(
-                onClick = { viewModel.addChildName() },
-                enabled = !isSaving,
-                modifier = Modifier.align(Alignment.Start)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Añadir hermano")
+            if (editedChildrenNames.size < 3) {
+                IconButton(
+                    onClick = { viewModel.addChildName() },
+                    enabled = !isSaving,
+                    modifier = Modifier.align(Alignment.Start)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Añadir hermano")
+                }
             }
+
+            // Email (no editable)
+            OutlinedTextField(
+                value = user.email,
+                onValueChange = {},
+                label = { Text("Email") },
+                enabled = false,
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = {
+                    Icon(Icons.Default.Email, contentDescription = null)
+                }
+            )
+
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Email (no editable)
-        OutlinedTextField(
-            value = user.email,
-            onValueChange = {},
-            label = { Text("Email") },
-            enabled = false,
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = {
-                Icon(Icons.Default.Email, contentDescription = null)
-            }
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
 
         // Barra de progreso
         if (isSaving && uploadProgress > 0) {
@@ -404,35 +403,53 @@ private fun ProfileContent(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
 
-        // Avatar
-        Box(
-            modifier = Modifier.size(120.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            if (user.photoUrl != null && user.photoUrl.isNotBlank()) {
-                val imageLoadFailed = remember { mutableStateOf(false) }
+        ProfileCard {
+            // Avatar
+            Box(
+                modifier = Modifier.size(96.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (user.photoUrl != null && user.photoUrl.isNotBlank()) {
+                    val imageLoadFailed = remember { mutableStateOf(false) }
 
-                if (!imageLoadFailed.value) {
-                    AsyncImage(
-                        model = user.photoUrl,
-                        contentDescription = "Foto de perfil",
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(CircleShape)
-                            .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                        contentScale = ContentScale.Crop,
-                        onError = { imageLoadFailed.value = true }
-                    )
+                    if (!imageLoadFailed.value) {
+                        AsyncImage(
+                            model = user.photoUrl,
+                            contentDescription = "Foto de perfil",
+                            modifier = Modifier
+                                .size(96.dp)
+                                .clip(CircleShape)
+                                .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                            contentScale = ContentScale.Crop,
+                            onError = { imageLoadFailed.value = true }
+                        )
+                    } else {
+                        // Mostrar icono si falla la carga
+                        Box(
+                            modifier = Modifier
+                                .size(96.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
                 } else {
-                    // Mostrar icono si falla la carga
+                    // Icono por defecto si no hay foto
                     Box(
                         modifier = Modifier
-                            .size(120.dp)
+                            .size(96.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
@@ -440,62 +457,45 @@ private fun ProfileContent(
                         Icon(
                             imageVector = Icons.Default.Person,
                             contentDescription = null,
-                            modifier = Modifier.size(64.dp),
+                            modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                 }
-            } else {
-                // Icono por defecto si no hay foto
-                Box(
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+            }
+
+            // Nombre
+            Text(
+                text = user.displayName,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            // Botón editar perfil
+            OutlinedButton(onClick = onEditClick) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Editar perfil")
             }
         }
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Nombre
-        Text(
-            text = user.displayName,
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Botón editar perfil
-        TextButton(onClick = onEditClick) {
-            Icon(
-                imageVector = Icons.Default.Edit,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Editar perfil")
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
 
         // Card de información
         Card(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(
                 modifier = Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
+                Text("Datos personales", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 // Email
                 InfoRow(
                     icon = Icons.Default.Email,
@@ -529,36 +529,38 @@ private fun ProfileContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
         // Botón Panel Admin (solo si es admin)
         if (user.role in listOf("admin", "superadmin", "monitor")) {
-            Button(
+            Card(
                 onClick = onNavigateToAdminPanel,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.tertiary
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiary,
+                    contentColor = MaterialTheme.colorScheme.onTertiary
                 )
             ) {
-                Icon(
-                    imageVector = Icons.Default.AdminPanelSettings,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(if (user.role == "monitor") "Panel de Monitor" else "Panel de Administración")
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiary)
+                    Text(
+                        if (user.role == "monitor") "Panel de Monitor" else "Panel de Administración",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiary)
+                }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
         }
-
-        Spacer(modifier = Modifier.height(32.dp))
 
         // Sección de Configuración
         Card(
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -567,7 +569,8 @@ private fun ProfileContent(
                 Text(
                     text = "Configuración",
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 // Toggle de tema oscuro
@@ -577,6 +580,7 @@ private fun ProfileContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
+                        modifier = Modifier.weight(1f),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -610,8 +614,6 @@ private fun ProfileContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
         // Botón de cerrar sesión
         Button(
             onClick = onLogoutClick,
@@ -619,7 +621,8 @@ private fun ProfileContent(
                 .fillMaxWidth()
                 .height(50.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.error
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError
             ),
             enabled = !isLoggingOut
         ) {
@@ -635,11 +638,28 @@ private fun ProfileContent(
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Cerrar Sesión")
+                Text("Cerrar sesión")
             }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(16.dp))
+@Composable
+private fun ProfileCard(
+    horizontalAlignment: Alignment.Horizontal = Alignment.CenterHorizontally,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            horizontalAlignment = horizontalAlignment,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content
+        )
     }
 }
 

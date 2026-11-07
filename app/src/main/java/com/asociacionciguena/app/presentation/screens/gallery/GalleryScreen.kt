@@ -4,18 +4,17 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -23,9 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.presentation.components.ErrorMessage
-import com.asociacionciguena.app.presentation.components.LoadingIndicator
 import kotlinx.datetime.LocalDateTime
-import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.CalendarToday
 import com.asociacionciguena.app.presentation.components.CachedSubcomposeAsyncImage
 import com.asociacionciguena.app.presentation.screens.gallery.components.GalleryCardSkeleton
@@ -41,26 +38,23 @@ fun GalleryScreen(
 
     Scaffold(
         topBar = {
-            val accentColor = MaterialTheme.colorScheme.tertiary
-            TopAppBar(
-                modifier = Modifier.drawBehind {
-                    val strokeWidth = 2.dp.toPx()
-                    val y = size.height - strokeWidth / 2
-                    drawLine(accentColor, Offset(0f, y), Offset(size.width, y), strokeWidth)
-                },
-                title = {
-                    Text(
-                        text = "Galería",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                },
-                expandedHeight = 56.dp,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
+            Surface(
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
+                Column(Modifier.fillMaxWidth().statusBarsPadding()) {
+                    Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                        Text("ASOCIACIÓN CIGÜEÑA", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            "Galería",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                    HorizontalDivider(thickness = 2.dp, color = MaterialTheme.colorScheme.tertiary)
+                }
+            }
         }
     ) { paddingValues ->
         when (val state = uiState) {
@@ -120,11 +114,21 @@ private fun GalleryContent(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(items = excursions, key = { it.excursion.id }) { item ->
-                ExcursionCard(
-                    excursionWithPhotos = item,
-                    onClick = { onExcursionClick(item.excursion.id) }
-                )
+            excursions.groupBy { it.excursion.date.year }.forEach { (year, albums) ->
+                item(key = "year_$year") {
+                    Text(
+                        year.toString(),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+                items(items = albums, key = { it.excursion.id }) { item ->
+                    ExcursionCard(
+                        excursionWithPhotos = item,
+                        onClick = { onExcursionClick(item.excursion.id) }
+                    )
+                }
             }
         }
     }
@@ -135,116 +139,94 @@ private fun ExcursionCard(
     excursionWithPhotos: ExcursionWithPhotos,
     onClick: () -> Unit
 ) {
+    val coverUrl = excursionWithPhotos.firstPhotoUrl?.takeIf { it.isNotBlank() }
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Imagen de la excursión o placeholder
-            Card(
-                modifier = Modifier.size(80.dp),
-                colors = if (excursionWithPhotos.firstPhotoUrl == null) {
-                    CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                } else {
-                    CardDefaults.cardColors()
-                }
-            ) {
-                if (excursionWithPhotos.firstPhotoUrl != null) {
-                    GalleryMediaPreview(
-                        mediaUrl = excursionWithPhotos.firstPhotoUrl,
-                        thumbnailUrl = excursionWithPhotos.firstPhotoThumbnailUrl,
-                        mediaType = excursionWithPhotos.firstPhotoMediaType,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    // Placeholder cuando no hay fotos
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+        if (coverUrl != null) {
+            Box(Modifier.fillMaxWidth().height(160.dp)) {
+                GalleryMediaPreview(
+                    mediaUrl = coverUrl,
+                    thumbnailUrl = excursionWithPhotos.firstPhotoThumbnailUrl,
+                    mediaType = excursionWithPhotos.firstPhotoMediaType,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (excursionWithPhotos.firstPhotoMediaType == "video") {
+                    Surface(
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.PhotoLibrary,
-                            contentDescription = null,
-                            modifier = Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Text("Vídeo", style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                 }
             }
-
-            // Info de la excursión
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+        }
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = excursionWithPhotos.excursion.title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                 Text(
-                    text = excursionWithPhotos.excursion.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    text = formatDate(excursionWithPhotos.excursion.date),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-
+            }
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = RoundedCornerShape(8.dp)
+            ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Photo,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = if (excursionWithPhotos.photoCount > 0) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
+                    Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
                     Text(
-                        text = if (excursionWithPhotos.photoCount == 0) {
-                            "Sin fotos"
-                        } else {
-                            "${excursionWithPhotos.photoCount} foto${if (excursionWithPhotos.photoCount != 1) "s" else ""}"
+                        text = when (val count = excursionWithPhotos.photoCount) {
+                            0 -> "Sin fotos ni vídeos"
+                            1 -> "1 archivo"
+                            else -> "$count archivos"
                         },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (excursionWithPhotos.photoCount > 0) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
-                }
-
-                // Fecha
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarToday,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = formatDate(excursionWithPhotos.excursion.date),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.labelMedium
                     )
                 }
             }
-
-            // Icono de flecha
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier.heightIn(min = 44.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Ver álbum",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            }
         }
     }
 }

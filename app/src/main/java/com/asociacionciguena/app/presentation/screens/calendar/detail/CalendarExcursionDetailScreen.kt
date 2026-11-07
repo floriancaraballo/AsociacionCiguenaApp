@@ -6,9 +6,12 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -43,10 +47,10 @@ fun CalendarExcursionDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Detalle de Excursión") },
+                title = { Text("Excursión") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
                     }
                 },
                 actions = {
@@ -63,7 +67,7 @@ fun CalendarExcursionDetailScreen(
                             IconButton(onClick = {
                                 onNavigateToPayments(state.excursion.id, state.excursion.title)
                             }) {
-                                Icon(Icons.Default.ReceiptLong, "Ver comprobantes")
+                                    Icon(Icons.AutoMirrored.Filled.ReceiptLong, "Ver comprobantes")
                             }
                             IconButton(onClick = {
                                 onNavigateToEditExcursion(state.excursion.id)
@@ -74,17 +78,17 @@ fun CalendarExcursionDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         }
     ) { paddingValues ->
         when (val state = uiState) {
             is CalendarExcursionDetailUiState.Loading -> {
-                LoadingIndicator()
+                LoadingIndicator(modifier = Modifier.fillMaxSize().padding(paddingValues))
             }
 
             is CalendarExcursionDetailUiState.Success -> {
@@ -190,22 +194,34 @@ private fun ExcursionDetailContent(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        // Imagen de la excursión
         if (!excursion.imageUrl.isNullOrBlank()) {
-            Card(modifier = Modifier.fillMaxWidth().height(250.dp)) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().height(200.dp),
+                shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp)
+            ) {
                 CachedSubcomposeAsyncImage(
                     imageUrl = excursion.imageUrl,
                     contentDescription = excursion.title,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    loading = { Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
+                    contentScale = ContentScale.Crop
                 )
             }
         }
-
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            // Título
-            Text(text = excursion.title, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+            ExcursionSummary(
+                excursion = excursion,
+                onLocationClick = {
+                    onLocationClick(excursion.location, excursion.latitude, excursion.longitude)
+                },
+                paymentContent = {
+                    ExcursionPayment(
+                        excursion = excursion,
+                        viewModel = viewModel,
+                        navController = navController,
+                        isCapacityFull = isCapacityFull
+                    )
+                }
+            )
 
             if (isRegistrationClosed) {
                 Card(
@@ -244,53 +260,6 @@ private fun ExcursionDetailContent(
                 }
             }
 
-            // Fecha
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
-                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CalendarToday, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                    Column {
-                        Text("Fecha", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                        Text(formatDateRange(excursion.date, excursion.endDate), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                    }
-                }
-            }
-
-            // Ubicación
-            Card(
-                onClick = {
-                    onLocationClick(
-                        excursion.location,
-                        excursion.latitude,
-                        excursion.longitude
-                    )
-                },
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                )
-            ) {
-                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.LocationOn, null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Ubicación", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                        Text(excursion.location, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                        Text(
-                            "Abrir en mapas",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
-                    }
-                    Icon(
-                        Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = "Abrir ubicación en mapas",
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
-            }
-
-            // Descripción
-            Text("Descripción", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            Text(excursion.description, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-
             if (hasParticipantLimit) {
                 Card(
                     colors = CardDefaults.cardColors(
@@ -323,118 +292,6 @@ private fun ExcursionDetailContent(
                 }
             }
 
-            // Sección de pago
-            excursion.price?.let { price ->
-                val currentUser by viewModel.currentUser.collectAsState()
-                val paymentStatus by viewModel.getPaymentStatus(currentUser?.id ?: "").collectAsState(initial = null)
-                val hasSignedForPayment by viewModel.hasUserSignedAuthorization(currentUser?.id ?: "").collectAsState(initial = false)
-                val hasApprovedAuthorization by viewModel.hasUserApprovedAuthorization(currentUser?.id ?: "").collectAsState(initial = false)
-                val approvedAuthorizationCount by viewModel.getApprovedAuthorizationCount(currentUser?.id ?: "").collectAsState(initial = 0)
-                val isUploadingPaymentProof by viewModel.isUploadingPaymentProof.collectAsState()
-                val isPaymentBlockedByCapacity = isCapacityFull && !hasSignedForPayment
-                val isPaymentBlockedByAuthorization = currentUser != null && !hasApprovedAuthorization
-                val paymentParticipantCount = approvedAuthorizationCount.coerceAtLeast(1)
-                val paymentAmount = price * paymentParticipantCount
-                var showPaymentSheet by remember { mutableStateOf(false) }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-
-                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = when {
-                    isUploadingPaymentProof -> MaterialTheme.colorScheme.secondaryContainer
-                    paymentStatus?.status == PaymentStatus.PAID -> MaterialTheme.colorScheme.primaryContainer
-                    paymentStatus?.status == PaymentStatus.INITIATED -> MaterialTheme.colorScheme.surfaceVariant
-                    paymentStatus?.status == PaymentStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
-                    paymentStatus?.status == PaymentStatus.REJECTED -> MaterialTheme.colorScheme.errorContainer
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                })) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Column {
-                                Text("Precio", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(String.format("%.2f€", paymentAmount), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-                                if (approvedAuthorizationCount > 1) {
-                                    Text("${approvedAuthorizationCount} participantes x ${String.format("%.2f€", price)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                            if (isUploadingPaymentProof) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(28.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                paymentStatus?.status
-                                    ?.takeUnless { it == PaymentStatus.INITIATED }
-                                    ?.let { PaymentStatusBadge(it) }
-                            }
-                        }
-                        if (isUploadingPaymentProof) {
-                            Text(
-                                "Subiendo comprobante...",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        } else {
-                            when(paymentStatus?.status) {
-                                PaymentStatus.PAID -> Text("✓ Pago confirmado", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                PaymentStatus.INITIATED -> {
-                                    if (isPaymentBlockedByCapacity) {
-                                        Text("No se puede pagar porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    } else if (isPaymentBlockedByAuthorization) {
-                                        Text("Podrás pagar cuando tu autorización esté aprobada.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    } else {
-                                        Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Pagar excursión") }
-                                    }
-                                }
-                                PaymentStatus.PENDING -> Text("Tu comprobante está pendiente de validación", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                PaymentStatus.REJECTED -> {
-                                    Text("Comprobante rechazado. Contacta con un administrador.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
-                                    if (isPaymentBlockedByCapacity) {
-                                        Text("No se puede reintentar el pago porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
-                                    } else if (isPaymentBlockedByAuthorization) {
-                                        Text("Podrás subir el comprobante cuando tu autorización esté aprobada.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
-                                    } else {
-                                        Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Intentar de nuevo") }
-                                    }
-                                }
-                                null -> {
-                                    if (isPaymentBlockedByCapacity) {
-                                        Text("No se puede pagar porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    } else if (isPaymentBlockedByAuthorization) {
-                                        Text("Podrás subir el comprobante cuando tu autorización esté aprobada.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    } else if (currentUser != null) {
-                                        Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Pagar excursión") }
-                                    } else {
-                                        Text("Inicia sesión para pagar", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                if (
-                    showPaymentSheet &&
-                    currentUser != null &&
-                    hasApprovedAuthorization &&
-                    paymentStatus?.status != PaymentStatus.PAID
-                ) {
-                    PaymentBottomSheet(
-                        excursionTitle = excursion.title,
-                        amount = paymentAmount,
-                        userName = currentUser?.displayName ?: "",
-                        excursionId = excursion.id,  // ← Asegúrate de pasar esto
-                        onDismiss = { showPaymentSheet = false },
-                        onUploadProof = { uri ->
-                            viewModel.uploadPaymentProof(excursion.id, paymentAmount, uri)
-                            showPaymentSheet = false
-                        },
-                        onNavigateToPayment = { excursionId, amount ->
-                            showPaymentSheet = false
-                            navController.navigate(Screen.Payment.createRoute(excursionId, amount))
-                        }
-                    )
-                }
-            }
-
             // Sección de firma de autorización
             if (!excursion.authorizationPdfUrl.isNullOrBlank()) {
                 val currentUser by viewModel.currentUser.collectAsState()
@@ -444,9 +301,6 @@ private fun ExcursionDetailContent(
                 }.collectAsState(initial = null)
                 val hasSigned = signingStatus == AuthorizationSigningStatus.SIGNED
                 val showAuthSuccess by viewModel.showAuthSuccess.collectAsState()
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-                Text("Autorización", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
 
                 // 🔍 DEBUG: Verificar estados
                 LaunchedEffect(hasSigned, showAuthSuccess) {
@@ -469,18 +323,23 @@ private fun ExcursionDetailContent(
                         viewModel.dismissAuthSuccess() }
                 }
 
-                Card(colors = CardDefaults.cardColors(containerColor = if (hasSigned) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Autorización", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                         if (hasSigned) {
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
                                 Column {
-                                    Text("Autorización Firmada", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                    Text("Ya has firmado esta autorización", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                    Text("Autorización firmada", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                                    Text("Ya has firmado esta autorización", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         } else if (signingStatus == AuthorizationSigningStatus.REJECTED) {
-                            Text("Autorización rechazada", style = MaterialTheme.typography.titleMedium)
+                            Text("Autorización rechazada", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
                             Text(
                                 "La administración puede habilitar una nueva firma.",
                                 style = MaterialTheme.typography.bodySmall
@@ -527,6 +386,191 @@ private fun ExcursionDetailContent(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ExcursionPayment(
+    excursion: com.asociacionciguena.app.domain.model.Excursion,
+    viewModel: CalendarExcursionDetailViewModel,
+    navController: NavHostController,
+    isCapacityFull: Boolean
+) {
+    // Sección de pago
+    excursion.price?.let { price ->
+        val currentUser by viewModel.currentUser.collectAsState()
+        val paymentStatus by viewModel.getPaymentStatus(currentUser?.id ?: "").collectAsState(initial = null)
+        val hasSignedForPayment by viewModel.hasUserSignedAuthorization(currentUser?.id ?: "").collectAsState(initial = false)
+        val hasApprovedAuthorization by viewModel.hasUserApprovedAuthorization(currentUser?.id ?: "").collectAsState(initial = false)
+        val approvedAuthorizationCount by viewModel.getApprovedAuthorizationCount(currentUser?.id ?: "").collectAsState(initial = 0)
+        val isUploadingPaymentProof by viewModel.isUploadingPaymentProof.collectAsState()
+        val isPaymentBlockedByCapacity = isCapacityFull && !hasSignedForPayment
+        val isPaymentBlockedByAuthorization = currentUser != null && !hasApprovedAuthorization
+        val paymentParticipantCount = approvedAuthorizationCount.coerceAtLeast(1)
+        val paymentAmount = price * paymentParticipantCount
+        var showPaymentSheet by remember { mutableStateOf(false) }
+
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (approvedAuthorizationCount > 1) {
+                Text(
+                    "Total para $approvedAuthorizationCount participantes: ${String.format("%.2f €", paymentAmount)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (!isUploadingPaymentProof) {
+                paymentStatus?.status
+                    ?.takeUnless { it == PaymentStatus.INITIATED }
+                    ?.let { PaymentStatusBadge(it) }
+            }
+            if (isUploadingPaymentProof) {
+                CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+                Text(
+                    "Subiendo comprobante...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                when(paymentStatus?.status) {
+                    PaymentStatus.PAID -> Text("✓ Pago confirmado", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                    PaymentStatus.INITIATED -> {
+                        if (isPaymentBlockedByCapacity) {
+                            Text("No se puede pagar porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else if (isPaymentBlockedByAuthorization) {
+                            Text("Podrás pagar cuando tu autorización esté aprobada.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Pagar excursión") }
+                        }
+                    }
+                    PaymentStatus.PENDING -> Text("Tu comprobante está pendiente de validación", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    PaymentStatus.REJECTED -> {
+                        Text("Comprobante rechazado. Contacta con un administrador.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        if (isPaymentBlockedByCapacity) {
+                            Text("No se puede reintentar el pago porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        } else if (isPaymentBlockedByAuthorization) {
+                            Text("Podrás subir el comprobante cuando tu autorización esté aprobada.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        } else {
+                            Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Intentar de nuevo") }
+                        }
+                    }
+                    null -> {
+                        if (isPaymentBlockedByCapacity) {
+                            Text("No se puede pagar porque las plazas están completas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else if (isPaymentBlockedByAuthorization) {
+                            Text("Podrás subir el comprobante cuando tu autorización esté aprobada.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else if (currentUser != null) {
+                            Button(onClick = { showPaymentSheet = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Payment, null); Spacer(Modifier.width(8.dp)); Text("Pagar excursión") }
+                        } else {
+                            Text("Inicia sesión para pagar", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+        if (
+            showPaymentSheet &&
+            currentUser != null &&
+            hasApprovedAuthorization &&
+            paymentStatus?.status != PaymentStatus.PAID
+        ) {
+            PaymentBottomSheet(
+                excursionTitle = excursion.title,
+                amount = paymentAmount,
+                userName = currentUser?.displayName ?: "",
+                excursionId = excursion.id,  // ← Asegúrate de pasar esto
+                onDismiss = { showPaymentSheet = false },
+                onUploadProof = { uri ->
+                    viewModel.uploadPaymentProof(excursion.id, paymentAmount, uri)
+                    showPaymentSheet = false
+                },
+                onNavigateToPayment = { excursionId, amount ->
+                    showPaymentSheet = false
+                    navController.navigate(Screen.Payment.createRoute(excursionId, amount))
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExcursionSummary(
+    excursion: com.asociacionciguena.app.domain.model.Excursion,
+    onLocationClick: () -> Unit,
+    paymentContent: @Composable () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(
+                text = excursion.title,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.CalendarToday, contentDescription = null)
+                    Column {
+                        Text("Fecha", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            formatDateRange(excursion.date, excursion.endDate),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                }
+            }
+            Text(
+                "Información de la excursión",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            if (excursion.description.isNotBlank()) {
+                Text(excursion.description, style = MaterialTheme.typography.bodyLarge)
+            }
+            Surface(
+                onClick = onLocationClick,
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Ubicación", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(excursion.location, style = MaterialTheme.typography.bodyLarge)
+                        Text("Abrir en mapas", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    }
+                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+            excursion.price?.let { price ->
+                HorizontalDivider()
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Payment, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column {
+                        Text("Precio por participante", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(String.format("%.2f €", price), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+            paymentContent()
         }
     }
 }

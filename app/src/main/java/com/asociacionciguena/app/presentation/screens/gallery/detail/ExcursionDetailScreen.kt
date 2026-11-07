@@ -10,17 +10,22 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -35,7 +40,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -58,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.asociacionciguena.app.domain.model.Photo
@@ -86,19 +93,10 @@ fun ExcursionDetailScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    when (val state = uiState) {
-                        is ExcursionDetailUiState.Success -> {
-                            if (selectionMode) {
-                                Text("${selectedPhotos.size} elementos seleccionados")
-                            } else {
-                                Text(
-                                    text = state.excursion.title,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-
-                        else -> Text("Detalle")
+                    if (selectionMode) {
+                        Text("${selectedPhotos.size} seleccionados")
+                    } else {
+                        Text("Álbum")
                     }
                 },
                 navigationIcon = {
@@ -138,10 +136,10 @@ fun ExcursionDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         },
@@ -149,11 +147,13 @@ fun ExcursionDetailScreen(
             when (val state = uiState) {
                 is ExcursionDetailUiState.Success -> {
                     if (state.isAdmin && !selectionMode) {
-                        FloatingActionButton(
-                            onClick = { onNavigateToUpload(state.excursion.id) }
-                        ) {
-                            Icon(Icons.Default.Add, "Subir archivos multimedia")
-                        }
+                        ExtendedFloatingActionButton(
+                            onClick = { onNavigateToUpload(state.excursion.id) },
+                            icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                            text = { Text("Añadir archivos") },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
                     }
                 }
 
@@ -163,7 +163,9 @@ fun ExcursionDetailScreen(
     ) { paddingValues ->
         when (val state = uiState) {
             is ExcursionDetailUiState.Loading -> {
-                ImageLoadingPlaceholder()
+                Box(Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
+                    ImageLoadingPlaceholder()
+                }
             }
 
             is ExcursionDetailUiState.Success -> {
@@ -185,6 +187,7 @@ fun ExcursionDetailScreen(
                     photos = state.photos,
                     selectionMode = selectionMode,
                     selectedPhotos = selectedPhotos,
+                    hasUploadAction = state.isAdmin && !selectionMode,
                     onPhotoClick = { index ->
                         if (selectionMode) {
                             val photo = state.photos[index]
@@ -273,78 +276,78 @@ private fun ExcursionDetailContent(
     photos: List<Photo>,
     selectionMode: Boolean,
     selectedPhotos: Set<String>,
+    hasUploadAction: Boolean,
     onPhotoClick: (Int) -> Unit,
     onPhotoLongPress: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
+    val videoCount = photos.count { it.mediaType == "video" }
+    val imageCount = photos.size - videoCount
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = if (hasUploadAction) 96.dp else 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = excursion.title,
-            style = MaterialTheme.typography.headlineSmall
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.CalendarToday,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = formatDate(excursion.date),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (photos.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+        item(key = "album_summary", span = { GridItemSpan(maxLineSpan) }) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PhotoLibrary,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "Aún no hay fotos ni vídeos",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        excursion.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold
                     )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text(formatDate(excursion.date), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ) {
+                        Text(
+                            "$imageCount ${if (imageCount == 1) "foto" else "fotos"} · $videoCount ${if (videoCount == 1) "vídeo" else "vídeos"}",
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        )
+                    }
+                }
+            }
+        }
+        if (photos.isEmpty()) {
+            item(key = "album_empty", span = { GridItemSpan(maxLineSpan) }) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text("Aún no hay fotos ni vídeos", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                itemsIndexed(items = photos, key = { _, photo -> photo.id }) { index, photo ->
-                    PhotoGridItem(
-                        photo = photo,
-                        isSelected = photo.id in selectedPhotos,
-                        selectionMode = selectionMode,
-                        onClick = { onPhotoClick(index) },
-                        onLongPress = { onPhotoLongPress(index) }
-                    )
-                }
+            itemsIndexed(items = photos, key = { _, photo -> photo.id }) { index, photo ->
+                PhotoGridItem(
+                    photo = photo,
+                    isSelected = photo.id in selectedPhotos,
+                    selectionMode = selectionMode,
+                    onClick = { onPhotoClick(index) },
+                    onLongPress = { onPhotoLongPress(index) }
+                )
             }
         }
     }
@@ -361,7 +364,9 @@ private fun PhotoGridItem(
 ) {
     Card(
         modifier = modifier.aspectRatio(1f),
-        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = if (isSelected) BorderStroke(3.dp, MaterialTheme.colorScheme.primary) else null
     ) {
         Box(
             modifier = Modifier
@@ -387,7 +392,7 @@ private fun PhotoGridItem(
                     modifier = Modifier
                         .padding(8.dp)
                         .align(Alignment.TopEnd),
-                    shape = MaterialTheme.shapes.small,
+                    shape = CircleShape,
                     color = if (isSelected) {
                         MaterialTheme.colorScheme.primary
                     } else {
@@ -400,7 +405,7 @@ private fun PhotoGridItem(
                         modifier = Modifier
                             .padding(6.dp)
                             .size(16.dp),
-                        tint = Color.White
+                        tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color.White
                     )
                 }
             }

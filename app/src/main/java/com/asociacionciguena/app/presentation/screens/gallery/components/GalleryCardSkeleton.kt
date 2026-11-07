@@ -1,8 +1,10 @@
 package com.asociacionciguena.app.presentation.screens.gallery.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -18,25 +20,15 @@ fun GalleryCardSkeleton(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Imagen thumbnail (cuadrado)
-            ShimmerBox(
-                modifier = Modifier.size(80.dp)
-            )
-
-            // Contenido
+        Column {
+            ShimmerBox(modifier = Modifier.fillMaxWidth().height(160.dp))
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Título
                 ShimmerText(
@@ -51,8 +43,6 @@ fun GalleryCardSkeleton(
                         .fillMaxWidth(0.4f)
                         .height(16.dp)
                 )
-
-                Spacer(modifier = Modifier.weight(1f))
 
                 // Contador de fotos
                 ShimmerText(

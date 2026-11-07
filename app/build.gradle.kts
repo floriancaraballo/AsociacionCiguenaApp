@@ -1,3 +1,4 @@
+import com.android.build.gradle.api.ApkVariantOutput
 import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -31,8 +32,8 @@ android {
         applicationId = "com.asociacionciguena.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.0"
+        versionCode = 3
+        versionName = "1.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["MAPS_API_KEY"] =
             localProperties.getProperty("MAPS_API_KEY", "")
@@ -109,6 +110,15 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+    // Nombrar el APK de release a partir de la version de la aplicacion.
+    applicationVariants.all {
+        if (buildType.name == "release") {
+            val releaseVersionName = versionName
+            outputs.withType<ApkVariantOutput>().configureEach {
+                outputFileName = "ciguena${releaseVersionName}.apk"
+            }
         }
     }
 }
