@@ -3,19 +3,18 @@ package com.asociacionciguena.app.presentation.screens.calendar
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -24,10 +23,12 @@ import com.asociacionciguena.app.presentation.components.ErrorMessage
 import com.asociacionciguena.app.presentation.components.AppSearchTopBarContent
 import com.asociacionciguena.app.presentation.screens.calendar.components.ExcursionCard
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import com.asociacionciguena.app.presentation.screens.calendar.components.ExcursionCardSkeleton
+import kotlinx.datetime.toJavaLocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,18 +41,12 @@ fun CalendarScreen(
     val availableYears by viewModel.availableYears.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
 
-    var isSearchActive by remember { mutableStateOf(false) }
-
-    // ✅ DESPUÉS:
-    // Añadir junto a las otras observaciones:
-    val isRefreshing by viewModel.isRefreshing.collectAsState()  // ← NUEVA LÍNEA
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     Scaffold(
         topBar = {
             CalendarTopBar(
-                isSearchActive = isSearchActive,
                 searchQuery = searchQuery,
-                onSearchActiveChange = { isSearchActive = it },
                 onSearchQueryChange = viewModel::onSearchQueryChange,
                 onClearSearch = viewModel::clearSearch
             )
@@ -74,7 +69,7 @@ fun CalendarScreen(
             // Contenido
             when (val state = uiState) {
                 is CalendarUiState.Loading -> {
-                    CalendarSkeletonContent(modifier = Modifier.padding(paddingValues))
+                    CalendarSkeletonContent(modifier = Modifier.weight(1f))
                 }
 
                 is CalendarUiState.Success -> {
@@ -83,6 +78,7 @@ fun CalendarScreen(
                         isRefreshing = isRefreshing,  // ← Usar la variable observada directamente
                         onRefresh = { viewModel.refresh() },
                         onExcursionClick = onNavigateToExcursionDetail,
+                        isSearching = searchQuery.isNotBlank(),
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -102,57 +98,55 @@ fun CalendarScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CalendarTopBar(
-    isSearchActive: Boolean,
     searchQuery: String,
-    onSearchActiveChange: (Boolean) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onClearSearch: () -> Unit
 ) {
-    val accentColor = MaterialTheme.colorScheme.tertiary
-
-    TopAppBar(
-        modifier = Modifier.drawBehind {
-            val strokeWidth = 2.dp.toPx()
-            val y = size.height - strokeWidth / 2
-            drawLine(accentColor, Offset(0f, y), Offset(size.width, y), strokeWidth)
-        },
-        title = {
-            if (isSearchActive) {
-                AppSearchTopBarContent(
-                    query = searchQuery,
-                    placeholder = "Buscar excursiones",
-                    onQueryChange = onSearchQueryChange,
-                    onClear = onClearSearch,
-                    onClose = {
-                        onSearchActiveChange(false)
-                        onClearSearch()
+    val focusManager = LocalFocusManager.current
+    var isSearchActive by remember { mutableStateOf(searchQuery.isNotBlank()) }
+    val closeSearch = {
+        isSearchActive = false
+        onClearSearch()
+        focusManager.clearFocus()
+    }
+    BackHandler(enabled = isSearchActive, onBack = closeSearch)
+    Column {
+        Surface(
+            color = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
+        ) {
+            Column(Modifier.fillMaxWidth().statusBarsPadding()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isSearchActive) {
+                        AppSearchTopBarContent(
+                            query = searchQuery,
+                            placeholder = "Buscar excursiones",
+                            onQueryChange = onSearchQueryChange,
+                            onClear = onClearSearch,
+                            onClose = closeSearch
+                        )
+                    } else {
+                        Column(Modifier.weight(1f)) {
+                            Text("ASOCIACIÓN CIGÜEÑA", style = MaterialTheme.typography.labelMedium)
+                            Text(
+                                "Calendario",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        IconButton(onClick = { isSearchActive = true }) {
+                            Icon(Icons.Default.Search, contentDescription = "Buscar excursiones")
+                        }
                     }
-                )
-            } else {
-                Text(
-                    text = "Calendario",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        },
-        actions = {
-            if (!isSearchActive) {
-                IconButton(onClick = { onSearchActiveChange(true) }) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Buscar"
-                    )
                 }
+                HorizontalDivider(thickness = 2.dp, color = MaterialTheme.colorScheme.tertiary)
             }
-        },
-        expandedHeight = if (isSearchActive) 72.dp else 56.dp,
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            titleContentColor = MaterialTheme.colorScheme.onPrimary,
-            actionIconContentColor = MaterialTheme.colorScheme.onPrimary
-        )
-    )
+        }
+    }
 }
 
 @Composable
@@ -172,12 +166,13 @@ private fun YearSelector(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        color = Color.Transparent
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(16.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -205,7 +200,8 @@ private fun YearSelector(
             // Año actual
             Text(
                 text = selectedYear.toString(),
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.primary
             )
 
@@ -240,6 +236,7 @@ private fun CalendarSuccessContent(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onExcursionClick: (String) -> Unit,
+    isSearching: Boolean,
     modifier: Modifier = Modifier
 ) {
 
@@ -256,7 +253,7 @@ private fun CalendarSuccessContent(
     ) {
         if (excursions.isEmpty()) {
             EmptyState(
-                message = "No hay excursiones en este año",
+                message = if (isSearching) "No hay excursiones que coincidan con tu búsqueda" else "No hay excursiones en este año",
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -265,19 +262,31 @@ private fun CalendarSuccessContent(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(
-                    items = excursions,
-                    key = { it.id }
-                ) { excursion ->
-                    ExcursionCard(
-                        excursion = excursion,
-                        onClick = { onExcursionClick(excursion.id) }
-                    )
+                excursions.groupBy { it.date.month }.forEach { (month, monthExcursions) ->
+                    item(key = "month_$month") {
+                        Text(
+                            text = monthExcursions.first().date.toJavaLocalDateTime()
+                                .format(calendarMonthFormatter)
+                                .replaceFirstChar { it.titlecase(calendarLocale) },
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    items(monthExcursions, key = { it.id }) { excursion ->
+                        ExcursionCard(
+                            excursion = excursion,
+                            onClick = { onExcursionClick(excursion.id) }
+                        )
+                    }
                 }
             }
         }
     }
 }
+
+private val calendarLocale = Locale.forLanguageTag("es-ES")
+private val calendarMonthFormatter = DateTimeFormatter.ofPattern("MMMM", calendarLocale)
 /**
  * Contenido skeleton mientras carga
  */
